@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import {
     Dimensions,
@@ -24,89 +24,40 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Colors } from '../src/shared/theme/Colors';
 import { formatTimeAgo } from '../utils/time';
+import { Comment } from '../src/shared/models/types';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-interface Comment {
-    id: string;
-    userName: string;
-    handle: string;
-    text: string;
-    timestamp: Date;
-    likes: number;
-    avatar: any;
-    verified?: boolean;
-    hasHammer?: boolean;
-    isLiked?: boolean;
-}
 
 interface CommentSheetProps {
     visible: boolean;
     onClose: () => void;
-    onCommentPosted?: () => void;
-    onCommentDeleted?: (hasUserCommentsLeft: boolean) => void;
+    comments?: Comment[];
+    onCommentPosted?: (text: string) => void;
+    onCommentDeleted?: (id: string) => void;
 }
 
-const INITIAL_DATE = new Date('2025-12-25T00:00:00');
-
-export default function CommentSheet({ visible, onClose, onCommentPosted, onCommentDeleted }: CommentSheetProps) {
+export default function CommentSheet({
+    visible,
+    onClose,
+    comments: initialComments = [],
+    onCommentPosted,
+    onCommentDeleted
+}: CommentSheetProps) {
     const translateY = useSharedValue(0);
     const context = useSharedValue({ y: 0 });
 
-    const [comments, setComments] = useState<Comment[]>([
-        {
-            id: '1',
-            userName: 'Kwaku',
-            handle: '@kwadub',
-            text: "This is the best thing I've ever seen!!! I'm super curious about how you made this?? I've always wanted to eat this many calories in one meal. Oh my days!",
-            timestamp: INITIAL_DATE,
-            likes: 100,
-            avatar: require('../assets/images/kwadub.jpg'),
-            verified: true,
-            hasHammer: true,
-            isLiked: false,
-        },
-        {
-            id: '2',
-            userName: 'Kwaku',
-            handle: '@kwadub',
-            text: "This is the best thing I've ever seen!!! I'm super curious about how you made this?? I've always wanted to eat this many calories in one meal. Oh my days!",
-            timestamp: INITIAL_DATE,
-            likes: 100,
-            avatar: require('../assets/images/hd2x.jpg'),
-            verified: true,
-            hasHammer: true,
-            isLiked: false,
-        },
-        {
-            id: '3',
-            userName: 'Kwaku',
-            handle: '@kwadub',
-            text: "This is the best thing I've ever seen!!! I'm super curious about how you made this?? I've always wanted to eat this many calories in one meal. Oh my days!",
-            timestamp: INITIAL_DATE,
-            likes: 100,
-            avatar: require('../assets/images/kwadub.jpg'),
-            verified: true,
-            hasHammer: true,
-            isLiked: false,
-        }
-    ]);
-
+    const [comments, setComments] = useState<Comment[]>(initialComments);
     const [inputText, setInputText] = useState('');
-    const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+    useEffect(() => {
+        setComments(initialComments);
+    }, [initialComments]);
 
     useEffect(() => {
         if (visible) {
             translateY.value = 0;
         }
     }, [visible]);
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setRefreshTrigger(prev => prev + 1);
-        }, 60000);
-        return () => clearInterval(interval);
-    }, []);
 
     const panGesture = Gesture.Pan()
         .onStart(() => {
@@ -127,11 +78,9 @@ export default function CommentSheet({ visible, onClose, onCommentPosted, onComm
             }
         });
 
-    const animatedStyle = useAnimatedStyle(() => {
-        return {
-            transform: [{ translateY: translateY.value }],
-        };
-    });
+    const animatedStyle = useAnimatedStyle(() => ({
+        transform: [{ translateY: translateY.value }],
+    }));
 
     const toggleLike = (commentId: string) => {
         setComments(current => current.map(comment => {
@@ -148,31 +97,32 @@ export default function CommentSheet({ visible, onClose, onCommentPosted, onComm
     };
 
     const deleteComment = (commentId: string) => {
-        setComments(current => {
-            const filtered = current.filter(c => c.id !== commentId);
-            const userCommentsLeft = filtered.some(c => c.userName === 'You');
-            if (onCommentDeleted) onCommentDeleted(userCommentsLeft);
-            return filtered;
-        });
+        setComments(current => current.filter(c => c.id !== commentId));
+        if (onCommentDeleted) onCommentDeleted(commentId);
     };
 
     const handleSubmit = () => {
         if (inputText.trim().length === 0) return;
 
-        const newComment: Comment = {
+        const fakeNewComment: Comment = {
             id: Date.now().toString(),
-            userName: 'You',
-            handle: '@user',
+            user: {
+                id: 'me',
+                name: 'You',
+                handle: '@me',
+                avatar: require('../assets/images/kwadub.jpg'), // Default avatar
+                status: 'natural',
+                verified: true
+            },
             text: inputText,
-            timestamp: new Date(),
+            timestamp: Date.now(),
             likes: 0,
-            avatar: require('../assets/images/kwadub.jpg'),
             isLiked: false,
         };
 
-        setComments([newComment, ...comments]);
+        setComments([fakeNewComment, ...comments]);
+        if (onCommentPosted) onCommentPosted(inputText);
         setInputText('');
-        if (onCommentPosted) onCommentPosted();
     };
 
     const SwipeableItem = ({ children, onRemove, isMine }: { children: React.ReactNode, onRemove: () => void, isMine: boolean }) => {
@@ -181,7 +131,7 @@ export default function CommentSheet({ visible, onClose, onCommentPosted, onComm
         const translateX = useSharedValue(0);
         const iconScale = useSharedValue(0.5);
 
-        const panGesture = Gesture.Pan()
+        const itemPan = Gesture.Pan()
             .activeOffsetX([-10, 10])
             .onUpdate((event) => {
                 translateX.value = Math.min(0, event.translationX);
@@ -218,7 +168,7 @@ export default function CommentSheet({ visible, onClose, onCommentPosted, onComm
                         <Ionicons name="trash" size={24} color={Colors.error} />
                     </Animated.View>
                 </TouchableOpacity>
-                <GestureDetector gesture={panGesture}>
+                <GestureDetector gesture={itemPan}>
                     <Animated.View style={[styles.swipeOuter, rStyle]}>
                         {children}
                     </Animated.View>
@@ -226,15 +176,26 @@ export default function CommentSheet({ visible, onClose, onCommentPosted, onComm
             </View>
         );
     };
+
     const renderComment = ({ item }: { item: Comment }) => (
-        <SwipeableItem isMine={item.userName === 'You'} onRemove={() => deleteComment(item.id)}>
+        <SwipeableItem isMine={item.user.handle === '@kwadub' || item.user.id === 'me'} onRemove={() => deleteComment(item.id)}>
             <View style={styles.commentRow}>
-                <Image source={typeof item.avatar === 'string' ? { uri: item.avatar } : item.avatar} style={styles.commentAvatar} />
+                <Image
+                    source={typeof item.user.avatar === 'string' ? { uri: item.user.avatar } : item.user.avatar}
+                    style={styles.commentAvatar}
+                />
                 <View style={styles.commentContent}>
                     <View style={styles.commentHeader}>
-                        <Text style={styles.handle}>{item.handle}</Text>
-                        {item.verified && <Ionicons name="leaf" size={12} color={Colors.success} style={styles.badge} />}
-                        {item.hasHammer && <Ionicons name="hammer" size={12} color={Colors.primary} style={styles.badge} />}
+                        <Text style={styles.handle}>{item.user.handle}</Text>
+                        {item.user.status && (item.user.status === 'natural' || item.user.status === 'enhanced') && (
+                            item.user.status === 'enhanced' ? (
+                                <MaterialCommunityIcons name="lightning-bolt" size={12} color="#FFD700" style={styles.badge} />
+                            ) : (
+                                <Ionicons name="leaf" size={12} color={Colors.success} style={styles.badge} />
+                            )
+                        )}
+                        {/* Hammer icon if applicable */}
+                        {item.user.handle === '@kwadub' && <Ionicons name="hammer" size={12} color={Colors.primary} style={styles.badge} />}
                     </View>
                     <Text style={styles.commentText}>{item.text}</Text>
                 </View>
@@ -243,11 +204,11 @@ export default function CommentSheet({ visible, onClose, onCommentPosted, onComm
                         <Ionicons
                             name={item.isLiked ? "heart" : "heart-outline"}
                             size={20}
-                            color={item.isLiked ? Colors.primary : "white"}
+                            color={item.isLiked ? Colors.primary : Colors.primary + '66'}
                         />
                         <Text style={styles.likeCount}>{item.likes}</Text>
                     </TouchableOpacity>
-                    <Text style={styles.timestamp}>{formatTimeAgo(item.timestamp)}</Text>
+                    <Text style={styles.timestamp}>{formatTimeAgo(new Date(item.timestamp))}</Text>
                 </View>
             </View>
         </SwipeableItem>
@@ -257,7 +218,7 @@ export default function CommentSheet({ visible, onClose, onCommentPosted, onComm
         <Modal
             visible={visible}
             transparent
-            animationType="slide"
+            animationType="none"
             onRequestClose={onClose}
         >
             <View style={styles.modalContainer}>
@@ -275,7 +236,6 @@ export default function CommentSheet({ visible, onClose, onCommentPosted, onComm
                                 </View>
                             </View>
                         </GestureDetector>
-
                         <FlatList
                             data={comments}
                             renderItem={renderComment}
@@ -283,14 +243,12 @@ export default function CommentSheet({ visible, onClose, onCommentPosted, onComm
                             contentContainerStyle={styles.listContent}
                             showsVerticalScrollIndicator={false}
                         />
-
                         <View style={styles.inputBar}>
-                            <Image source={require('../assets/images/kwadub.jpg')} style={styles.userAvatar} />
                             <View style={styles.inputWrapper}>
                                 <TextInput
                                     style={styles.input}
                                     placeholder="Comment..."
-                                    placeholderTextColor="#666"
+                                    placeholderTextColor={Colors.primary + '88'}
                                     value={inputText}
                                     onChangeText={setInputText}
                                     maxLength={150}
@@ -317,7 +275,7 @@ const styles = StyleSheet.create({
     },
     overlay: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(0,0,0,0.4)',
     },
     sheetContainer: {
         height: SCREEN_HEIGHT * 0.75,
@@ -325,24 +283,21 @@ const styles = StyleSheet.create({
     },
     sheetContent: {
         flex: 1,
-        backgroundColor: '#0a0a0a',
+        backgroundColor: Colors.background, // Beige theme
         borderTopLeftRadius: 30,
         borderTopRightRadius: 30,
-        borderWidth: 1,
-        borderBottomWidth: 0,
-        borderColor: Colors.secondaryDark,
         paddingHorizontal: 16,
     },
     gestureArea: {
         width: '100%',
         paddingTop: 12,
-        paddingBottom: 20,
+        paddingBottom: 10,
         alignItems: 'center',
     },
     dragIndicator: {
         width: 40,
         height: 4,
-        backgroundColor: '#333',
+        backgroundColor: Colors.primary + '44',
         borderRadius: 2,
         marginBottom: 8,
     },
@@ -351,28 +306,29 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingBottom: 10,
         borderBottomWidth: 1,
-        borderBottomColor: '#1a1a1a',
+        borderBottomColor: 'rgba(0,0,0,0.05)',
     },
     title: {
-        color: 'white',
+        color: Colors.primary,
         fontSize: 16,
         fontWeight: 'bold',
     },
     listContent: {
-        paddingBottom: 100,
+        paddingBottom: 120, // Extra space for input bar
     },
     commentRow: {
         flexDirection: 'row',
         paddingVertical: 16,
         borderBottomWidth: 0.5,
-        borderBottomColor: '#1a1a1a',
-        backgroundColor: '#0a0a0a',
+        borderBottomColor: 'rgba(0,0,0,0.05)',
+        backgroundColor: Colors.background,
     },
     commentAvatar: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        marginRight: 10,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        marginRight: 12,
+        backgroundColor: 'rgba(0,0,0,0.05)',
     },
     commentContent: {
         flex: 1,
@@ -383,8 +339,8 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     handle: {
-        color: 'white',
-        fontSize: 13,
+        color: Colors.primary,
+        fontSize: 14,
         fontWeight: 'bold',
         marginRight: 4,
     },
@@ -392,64 +348,57 @@ const styles = StyleSheet.create({
         marginLeft: 2,
     },
     commentText: {
-        color: '#ccc',
-        fontSize: 14,
-        lineHeight: 18,
+        color: Colors.primary,
+        fontSize: 15,
+        lineHeight: 20,
+        opacity: 0.9,
     },
     commentStats: {
         alignItems: 'center',
         justifyContent: 'center',
-        marginLeft: 10,
+        marginLeft: 12,
     },
     likeBtn: {
         alignItems: 'center',
         marginBottom: 4,
     },
     likeCount: {
-        color: '#666',
+        color: Colors.primary,
         fontSize: 12,
+        opacity: 0.6,
     },
     timestamp: {
-        color: '#666',
+        color: Colors.primary,
         fontSize: 10,
+        opacity: 0.4,
     },
     inputBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 10,
-        paddingBottom: 30,
-        backgroundColor: '#0a0a0a',
+        paddingVertical: 15,
+        paddingBottom: Platform.OS === 'ios' ? 35 : 20,
+        paddingHorizontal: 5,
+        backgroundColor: Colors.background,
         borderTopWidth: 1,
-        borderTopColor: '#1a1a1a',
-    },
-    userAvatar: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        marginRight: 10,
+        borderTopColor: 'rgba(0,0,0,0.05)',
     },
     inputWrapper: {
-        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#111',
-        borderRadius: 20,
-        paddingHorizontal: 15,
-        height: 40,
-        borderWidth: 1,
-        borderColor: '#333',
+        backgroundColor: 'rgba(0,0,0,0.05)',
+        borderRadius: 25,
+        paddingHorizontal: 20,
+        height: 50,
     },
     input: {
         flex: 1,
-        color: 'white',
-        fontSize: 14,
+        color: Colors.primary,
+        fontSize: 16,
     },
     sendButton: {
-        marginLeft: 5,
+        marginLeft: 8,
     },
     swipeContainer: {
         position: 'relative',
-        backgroundColor: '#0a0a0a',
+        backgroundColor: Colors.background,
     },
     deleteAction: {
         position: 'absolute',
@@ -462,6 +411,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     swipeOuter: {
-        backgroundColor: '#0a0a0a',
+        backgroundColor: Colors.background,
     }
 });

@@ -19,16 +19,14 @@ export default function RootLayout() {
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
-            <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-                <Stack>
-                    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                    <Stack.Screen name="scan" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
-                    <Stack.Screen name="scan-result" options={{ headerShown: false, presentation: 'transparentModal', animation: 'fade' }} />
-                    <Stack.Screen name="meal-entry" options={{ headerShown: false }} />
-                    <Stack.Screen name="weight-history" options={{ headerShown: false }} />
-                    <Stack.Screen name="camera-capture" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
+            <ThemeProvider value={DefaultTheme}>
+                <Stack screenOptions={{ headerShown: false }}>
+                    <Stack.Screen name="(tabs)" />
+                    <Stack.Screen name="scan" options={{ presentation: 'fullScreenModal' }} />
+                    <Stack.Screen name="scan-result" options={{ presentation: 'transparentModal', animation: 'fade' }} />
+                    <Stack.Screen name="camera-capture" options={{ presentation: 'fullScreenModal' }} />
                 </Stack>
-                <StatusBar style="light" />
+                <StatusBar style="dark" />
             </ThemeProvider>
         </GestureHandlerRootView>
     );

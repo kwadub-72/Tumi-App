@@ -1,21 +1,18 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Dimensions, Image, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Animated, Dimensions, Image, PanResponder, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FeedPost } from '../../src/shared/models/types';
 import { NutritionService } from '../../src/shared/services/NutritionService';
 import { Colors } from '../../src/shared/theme/Colors';
 import { PostStore } from '../../store/PostStore';
 import { WeightEntry, WeightStore } from '../../store/WeightStore';
+import { useUserStore } from '../../store/UserStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Mock Data
-const WEIGHT_VALUES = [245, 246, 247, 244, 255]; // Sun-Thu
-const WEIGHT_AVG = 247.4;
-const WEIGHT_TARGET = 245;
-
+// Mock Data for League
 const LEAGUE_DATA = [
     { name: 'kwadub', rank: 1, score: 45, change: 5, direction: 'up' },
     { name: 'Hud2x', rank: 2, score: 40, change: -3, direction: 'down' },
@@ -26,16 +23,11 @@ const LEAGUE_DATA = [
 
 export default function DashboardScreen() {
     const router = useRouter();
+    const userInfo = useUserStore();
     const [dailyTotals, setDailyTotals] = useState({ cals: 0, macros: { p: 0, c: 0, f: 0 } });
     const [isFlipped, setIsFlipped] = useState(false);
-    const [goals, setGoals] = useState({ p: 150, c: 200, f: 70 });
-    const [editingMacro, setEditingMacro] = useState<null | { key: 'p' | 'c' | 'f', label: string }>(null);
-    const [tempValue, setTempValue] = useState('');
     const [weights, setWeights] = useState<WeightEntry[]>([]);
-    const [weekStart, setWeekStart] = useState(() => {
-        const d = new Date('2025-12-21');
-        return d;
-    });
+    const [weekStart, setWeekStart] = useState(() => new Date('2025-12-21'));
 
     const translateX = useRef(new Animated.Value(0)).current;
     const [isAnimating, setIsAnimating] = useState(false);
@@ -44,7 +36,10 @@ export default function DashboardScreen() {
     const TARGET_WEIGHT = 250;
     const deviations = weights.map(w => Math.abs(w.weight - TARGET_WEIGHT));
     const maxDev = Math.max(10, ...deviations);
-    const calorieGoal = (goals.p * 4) + (goals.c * 4) + (goals.f * 9);
+
+    // Sync with UserStore
+    const goals = userInfo.macroTargets;
+    const calorieGoal = goals.calories;
 
     const getWeekDates = (start: Date) => {
         return Array.from({ length: 7 }, (_, i) => {
@@ -55,10 +50,7 @@ export default function DashboardScreen() {
     };
 
     const currentWeekDates = getWeekDates(weekStart);
-
-    // YYYY-MM-DD for storage
     const toDataDate = (date: Date) => date.toISOString().split('T')[0];
-    // MM/DD for display
     const toDisplayDate = (date: Date) => `${date.getMonth() + 1}/${date.getDate()}`;
 
     const weekDatesStrings = currentWeekDates.map(toDataDate);
@@ -76,109 +68,10 @@ export default function DashboardScreen() {
         return Math.max(0, Math.min(100, percentage));
     };
 
-    const sundayEntry = weights.find(w => w.date === weekDatesStrings[0]);
-    const sundayY = sundayEntry ? getYPos(sundayEntry.weight) : null;
-    const isSundayNearTarget = sundayY !== null && sundayY >= 35 && sundayY <= 65;
-
     const currentWeights = weights.filter(w => weekDatesStrings.includes(w.date));
-
     const currentWeekAverage = currentWeights.length > 0
         ? (currentWeights.reduce((sum, w) => sum + w.weight, 0) / currentWeights.length).toFixed(1)
         : null;
-
-    // Detect collisions with week label
-    const isSuMOverlap = currentWeights.some(w => {
-        const x = getXPos(w.date);
-        const y = getYPos(w.weight);
-        return x !== null && x < 35 && y < 35;
-    });
-    const isFSaOverlap = currentWeights.some(w => {
-        const x = getXPos(w.date);
-        const y = getYPos(w.weight);
-        return x !== null && x > 65 && y < 35;
-    });
-
-    const changeWeek = (direction: 'prev' | 'next') => {
-        if (isAnimating) return;
-        setIsAnimating(true);
-        setScrollEnabled(false);
-
-        const outValue = direction === 'prev' ? SCREEN_WIDTH : -SCREEN_WIDTH;
-        const inStartValue = direction === 'prev' ? -SCREEN_WIDTH : SCREEN_WIDTH;
-
-        // Slide out
-        Animated.timing(translateX, {
-            toValue: outValue,
-            duration: 100, // Faster slide out
-            useNativeDriver: true,
-        }).start(() => {
-            // Update state
-            setWeekStart(current => {
-                const nextDate = new Date(current);
-                nextDate.setDate(nextDate.getDate() + (direction === 'next' ? 7 : -7));
-                return nextDate;
-            });
-
-            // Reset and slide in
-            translateX.setValue(inStartValue);
-            Animated.spring(translateX, {
-                toValue: 0,
-                friction: 10,
-                tension: 80, // Snappier spring
-                useNativeDriver: true,
-            }).start(() => {
-                setIsAnimating(false);
-                setScrollEnabled(true);
-            });
-        });
-    };
-
-    const panResponder = useRef(
-        PanResponder.create({
-            onStartShouldSetPanResponder: () => false,
-            onMoveShouldSetPanResponder: (_, gestureState) => {
-                // Only capture if horizontal movement is dominant
-                return Math.abs(gestureState.dx) > 20 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
-            },
-            onPanResponderGrant: () => {
-                setScrollEnabled(false);
-            },
-            onPanResponderMove: (_, gestureState) => {
-                if (isAnimating) return;
-                translateX.setValue(gestureState.dx);
-            },
-            onPanResponderRelease: (_, gestureState) => {
-                if (isAnimating) return;
-
-                if (gestureState.dx > 40) { // Small stroke to commit
-                    changeWeek('prev');
-                } else if (gestureState.dx < -40) { // Small stroke to commit
-                    changeWeek('next');
-                } else {
-                    // Reset position
-                    Animated.spring(translateX, {
-                        toValue: 0,
-                        friction: 6,
-                        useNativeDriver: true,
-                    }).start(() => setScrollEnabled(true));
-                }
-            },
-            onPanResponderTerminate: () => {
-                Animated.spring(translateX, {
-                    toValue: 0,
-                    friction: 6,
-                    useNativeDriver: true,
-                }).start(() => setScrollEnabled(true));
-            },
-            onShouldBlockNativeResponder: () => true,
-        })
-    ).current;
-
-    const getWeekLabelPos = () => {
-        if (isSuMOverlap && isFSaOverlap) return { left: 0, top: 75 }; // Extreme case: move above chart
-        if (isSuMOverlap) return { right: 25, top: 100 }; // Move to right side
-        return { left: 0, top: 100 }; // Default: align left with axis labels
-    };
 
     useEffect(() => {
         const fetchAndCalculate = async () => {
@@ -187,8 +80,9 @@ export default function DashboardScreen() {
         };
 
         const calculate = (posts: FeedPost[]) => {
-            const userPosts = posts.filter(p => p.user.id === 'currentUser');
-            const totals = NutritionService.sumMacros(userPosts.map(p => p.meal));
+            const userPosts = posts.filter(p => p.user.handle === userInfo.handle);
+            const meals = userPosts.map(p => p.meal).filter(m => m !== undefined);
+            const totals = NutritionService.sumMacros(meals as any);
             setDailyTotals(totals);
         };
 
@@ -207,107 +101,110 @@ export default function DashboardScreen() {
             unsubPosts();
             unsubWeights();
         };
-    }, []);
+    }, [userInfo.handle]);
 
     const handleReset = async () => {
         await PostStore.clearPosts();
         await WeightStore.clearWeights();
+        await PostStore.clearPostLikes(userInfo.handle);
+        userInfo.setStatus('none');
     };
 
-    const handleUpdateGoal = () => {
-        if (!editingMacro) return;
-        const val = parseInt(tempValue);
-        if (!isNaN(val) && val >= 0) {
-            setGoals(prev => ({ ...prev, [editingMacro.key]: val }));
-            setEditingMacro(null);
-        } else {
-            Alert.alert('Invalid Input', 'Please enter a valid number');
-        }
+    const panResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => false,
+            onMoveShouldSetPanResponder: (_, gestureState) => {
+                return Math.abs(gestureState.dx) > 20 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+            },
+            onPanResponderGrant: () => {
+                setScrollEnabled(false);
+            },
+            onPanResponderMove: (_, gestureState) => {
+                if (isAnimating) return;
+                translateX.setValue(gestureState.dx);
+            },
+            onPanResponderRelease: (_, gestureState) => {
+                if (isAnimating) return;
+                if (Math.abs(gestureState.dx) > 50) {
+                    const direction = gestureState.dx > 0 ? 'prev' : 'next';
+                    changeWeek(direction);
+                } else {
+                    Animated.spring(translateX, { toValue: 0, friction: 6, useNativeDriver: true }).start(() => setScrollEnabled(true));
+                }
+            },
+        })
+    ).current;
+
+    const changeWeek = (direction: 'prev' | 'next') => {
+        setIsAnimating(true);
+        Animated.timing(translateX, {
+            toValue: direction === 'prev' ? SCREEN_WIDTH : -SCREEN_WIDTH,
+            duration: 200,
+            useNativeDriver: true,
+        }).start(() => {
+            setWeekStart(current => {
+                const nextDate = new Date(current);
+                nextDate.setDate(nextDate.getDate() + (direction === 'next' ? 7 : -7));
+                return nextDate;
+            });
+            translateX.setValue(direction === 'prev' ? -SCREEN_WIDTH : SCREEN_WIDTH);
+            Animated.spring(translateX, { toValue: 0, friction: 8, useNativeDriver: true }).start(() => {
+                setIsAnimating(false);
+                setScrollEnabled(true);
+            });
+        });
     };
 
-    const MacroRow = ({ icon, consumed, goal, color, unit = 'g', onAdjust }: any) => {
+    const MacroRow = ({ icon, consumed, goal, color, unit = 'g' }: any) => {
         const isOverflow = consumed > goal;
         const overflow = Math.max(0, consumed - goal);
-
-        if (isOverflow) {
-            return (
-                <View style={[styles.macroRow, { marginTop: 20 }]}>
-                    <TouchableOpacity style={styles.macroIconContainer} onPress={onAdjust} disabled={!onAdjust}>
-                        <MaterialCommunityIcons name={icon} size={32} color={color || 'white'} />
-                    </TouchableOpacity>
-                    <View style={[styles.sliderTrack, { backgroundColor: Colors.error, justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }]}>
-                        <Text style={styles.sliderText}>{consumed} / {goal} {unit}</Text>
-                        <Text style={[styles.sliderText, { fontStyle: 'italic', fontSize: 12 }]}> (+{overflow})</Text>
-                    </View>
-                </View>
-            );
-        }
-
         const displayedConsumed = Math.min(consumed, goal);
         const remaining = Math.max(0, goal - consumed);
-
         const total = goal || 1;
         const consumedWidth = (displayedConsumed / total) * 100;
-        const remainingWidth = (remaining / total) * 100;
-
-        // Threshold for "squished" remaining text
-        const useFloatingRemaining = remainingWidth > 0 && remainingWidth < 30;
+        const remainingWidth = Math.max(0, (remaining / total) * 100);
 
         return (
-            <View style={[styles.macroRow, useFloatingRemaining && { marginTop: 25 }]}>
-                <TouchableOpacity style={styles.macroIconContainer} onPress={onAdjust} disabled={!onAdjust}>
-                    <MaterialCommunityIcons name={icon} size={32} color={color || 'white'} />
-                </TouchableOpacity>
-                <View style={{ flex: 1, position: 'relative' }}>
-                    {useFloatingRemaining && (
-                        <View style={[styles.floatingRemainingContainer, { width: '100%', right: 0, alignItems: 'flex-end' }]}>
-                            <Text style={styles.floatingRemainingText} numberOfLines={1}>{remaining} {unit}</Text>
-                            <View style={[styles.bracket, { width: `${remainingWidth}%` }]} />
-                        </View>
-                    )}
-                    <View style={styles.sliderTrack}>
-                        {consumedWidth > 0 && (
-                            <View style={[styles.sliderFill, { width: `${consumedWidth}%`, backgroundColor: color || 'white' }]}>
-                                <Text style={[styles.sliderText, { color: color ? 'white' : 'black' }]}>
-                                    {displayedConsumed} {unit}
-                                </Text>
-                            </View>
-                        )}
-                        {remaining > 0 && (
-                            <View style={[styles.sliderFill, { width: `${remainingWidth}%`, backgroundColor: 'transparent' }]}>
-                                {!useFloatingRemaining && (
-                                    <Text style={styles.sliderText}>{remaining} {unit}</Text>
-                                )}
-                            </View>
-                        )}
+            <View style={styles.macroRow}>
+                <View style={styles.macroIconContainer}>
+                    <MaterialCommunityIcons name={icon} size={28} color={Colors.primary} />
+                </View>
+                <View style={styles.sliderTrack}>
+                    <View style={[styles.sliderFill, { width: `${consumedWidth}%`, backgroundColor: Colors.primary }]}>
+                        <Text style={styles.sliderText}>{displayedConsumed}{unit === 'cals' ? '' : unit}</Text>
+                    </View>
+                    <View style={[styles.sliderEmpty, { width: `${remainingWidth}%` }]}>
+                        <Text style={[styles.remainingText, isOverflow && { color: Colors.error }]}>
+                            {isOverflow ? `+${overflow}` : remaining}{unit === 'cals' ? '' : unit}
+                        </Text>
                     </View>
                 </View>
+                <Text style={styles.goalHint}>{goal}{unit === 'cals' ? ' cals' : unit}</Text>
             </View>
         );
     };
 
     return (
         <SafeAreaView style={styles.container}>
+            <View style={styles.topHeader}>
+                <TouchableOpacity onPress={handleReset} style={styles.iconBtn}>
+                    <Ionicons name="refresh" size={24} color={Colors.primary} />
+                </TouchableOpacity>
+                <Text style={styles.screenTitle}>Tumi</Text>
+                <View style={{ width: 44 }} />
+            </View>
+
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
                 scrollEnabled={scrollEnabled}
             >
-                <View style={styles.headerRow}>
-                    <TouchableOpacity onPress={handleReset} style={styles.resetButton}>
-                        <Ionicons name="refresh" size={24} color="#333" />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Tumi</Text>
-                    <View style={{ width: 44 }} />
-                </View>
-
-                {/* Macro Sliders */}
-                <View style={styles.macrosSection}>
+                {/* Macro Dashboard */}
+                <View style={styles.dashboardCard}>
                     <MacroRow
                         icon="fire"
                         consumed={dailyTotals.cals}
                         goal={calorieGoal}
-                        color={Colors.primary}
                         unit="cals"
                     />
                     <View style={styles.divider} />
@@ -315,150 +212,54 @@ export default function DashboardScreen() {
                         icon="food-drumstick"
                         consumed={dailyTotals.macros.p}
                         goal={goals.p}
-                        onAdjust={() => {
-                            setEditingMacro({ key: 'p', label: 'Protein' });
-                            setTempValue(goals.p.toString());
-                        }}
                     />
                     <MacroRow
                         icon="barley"
                         consumed={dailyTotals.macros.c}
                         goal={goals.c}
-                        onAdjust={() => {
-                            setEditingMacro({ key: 'c', label: 'Carbs' });
-                            setTempValue(goals.c.toString());
-                        }}
                     />
                     <MacroRow
                         icon="water"
                         consumed={dailyTotals.macros.f}
                         goal={goals.f}
-                        onAdjust={() => {
-                            setEditingMacro({ key: 'f', label: 'Fats' });
-                            setTempValue(goals.f.toString());
-                        }}
                     />
                 </View>
 
-                {/* Adjustment Modal */}
-                <Modal
-                    visible={!!editingMacro}
-                    transparent
-                    animationType="fade"
-                    onRequestClose={() => setEditingMacro(null)}
-                >
-                    <Pressable
-                        style={styles.modalOverlay}
-                        onPress={() => setEditingMacro(null)}
-                    >
-                        <Pressable style={styles.adjustmentCard} onPress={(e) => e.stopPropagation()}>
-                            <Text style={styles.adjustmentTitle}>Adjust {editingMacro?.label} Target</Text>
-                            <TextInput
-                                style={styles.adjustmentInput}
-                                value={tempValue}
-                                onChangeText={setTempValue}
-                                keyboardType="numeric"
-                                autoFocus
-                                selectTextOnFocus
-                                placeholderTextColor="#666"
-                            />
-                            <View style={styles.adjustmentActions}>
-                                <TouchableOpacity
-                                    style={styles.adjustCancelBtn}
-                                    onPress={() => setEditingMacro(null)}
-                                >
-                                    <Text style={styles.adjustBtnText}>Cancel</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.adjustSaveBtn}
-                                    onPress={handleUpdateGoal}
-                                >
-                                    <Text style={styles.adjustBtnText}>Save</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </Pressable>
-                    </Pressable>
-                </Modal>
-
-                {/* Weight Chart Section */}
+                {/* Weight Chart */}
                 <View style={styles.weightCard} {...panResponder.panHandlers}>
                     <Animated.View style={{ transform: [{ translateX }] }}>
-                        <Text style={[styles.weightWeekLabel, getWeekLabelPos()]}>Wk of {toDisplayDate(weekStart)}</Text>
-                        <TouchableOpacity
-                            style={styles.weightHeader}
-                            onPress={() => router.push('/weight-history')}
-                        >
-                            <Text style={styles.weightAverageLabel}>Average vs Target</Text>
+                        <View style={styles.weightHeader}>
+                            <Text style={styles.weightAvgTitle}>Average vs Target</Text>
                             <View style={styles.weightBadge}>
-                                <Text style={styles.weightBadgeText}>{currentWeekAverage ? `${currentWeekAverage} lbs` : '-- lbs'}</Text>
+                                <Text style={styles.weightBadgeText}>{currentWeekAverage || '--'} lbs</Text>
                             </View>
-                        </TouchableOpacity>
+                        </View>
 
-                        <View style={styles.weightChartBody}>
-                            <View style={styles.weightChartInner}>
-                                {/* Upper Bound Line */}
-                                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, backgroundColor: Colors.success, opacity: 0.6 }} />
+                        <View style={styles.chartArea}>
+                            <View style={styles.targetDashedLine} />
+                            <Text style={styles.targetLabel}>{TARGET_WEIGHT} lbs</Text>
 
-                                {/* Reference Lines */}
-                                <View style={[styles.referenceLineContainer, { top: '25%' }]}>
-                                    <View style={styles.referenceLine} />
-                                </View>
-                                <View style={[styles.referenceLineContainer, { top: '75%' }]}>
-                                    <View style={styles.referenceLine} />
-                                </View>
-
-                                {/* Y Axis Label & Target Line */}
-                                <View style={styles.targetLineContainer}>
-                                    {!isSundayNearTarget && <Text style={styles.weightYLabel}>{TARGET_WEIGHT} lbs</Text>}
-                                    <View style={styles.dashedTargetLine} />
-                                    {isSundayNearTarget && <Text style={[styles.weightYLabel, { marginTop: 2, marginBottom: 0 }]}>{TARGET_WEIGHT} lbs</Text>}
-                                </View>
-
-                                {/* Markers */}
-                                <View style={styles.markersContainer}>
-                                    {currentWeights.map((entry, i) => {
-                                        const x = getXPos(entry.date);
-                                        if (x === null) return null;
-                                        const y = getYPos(entry.weight);
-                                        const isAtTop = y <= 1;
-
-                                        return (
-                                            <View
-                                                key={i}
-                                                style={[
-                                                    styles.weightMarkerContainer,
-                                                    { left: `${x}%` as any, top: `${y}%` as any }
-                                                ]}
-                                            >
-                                                <View style={styles.markerLabelWrapper}>
-                                                    {!isAtTop && <Text style={styles.weightMarkerLabel}>{entry.weight}</Text>}
-                                                </View>
-                                                <Text style={styles.weightMarkerX}>✕</Text>
-                                                <View style={styles.markerLabelWrapper}>
-                                                    {isAtTop && <Text style={styles.weightMarkerLabel}>{entry.weight}</Text>}
-                                                </View>
-                                            </View>
-                                        );
-                                    })}
-                                </View>
+                            <View style={styles.markersLayer}>
+                                {currentWeights.map((w, i) => {
+                                    const x = getXPos(w.date);
+                                    if (x === null) return null;
+                                    return (
+                                        <View key={i} style={[styles.marker, { left: `${x}%`, top: `${getYPos(w.weight)}%` }]}>
+                                            <Text style={styles.markerText}>{w.weight}</Text>
+                                            <Text style={styles.markerX}>✕</Text>
+                                        </View>
+                                    );
+                                })}
                             </View>
                         </View>
 
                         <View style={styles.weightFooter}>
-                            <View style={styles.footerSeparator} />
-                            <View style={styles.weightDaysRow}>
-                                {[
-                                    { day: 'Su', date: weekDisplayStrings[0] },
-                                    { day: 'M', date: weekDisplayStrings[1] },
-                                    { day: 'T', date: weekDisplayStrings[2] },
-                                    { day: 'W', date: weekDisplayStrings[3] },
-                                    { day: 'Th', date: weekDisplayStrings[4] },
-                                    { day: 'F', date: weekDisplayStrings[5] },
-                                    { day: 'S', date: weekDisplayStrings[6] },
-                                ].map((item, i) => (
-                                    <View key={i} style={styles.weightDayContainer}>
-                                        <Text style={styles.weightDayText}>{item.day}</Text>
-                                        <Text style={styles.weightDateText}>{item.date}</Text>
+                            <View style={[styles.divider, { backgroundColor: 'white', opacity: 0.3 }]} />
+                            <View style={styles.daysRow}>
+                                {['Su', 'M', 'T', 'W', 'Th', 'F', 'S'].map((day, i) => (
+                                    <View key={i} style={styles.dayCol}>
+                                        <Text style={styles.dayName}>{day}</Text>
+                                        <Text style={styles.dayDate}>{weekDisplayStrings[i]}</Text>
                                     </View>
                                 ))}
                             </View>
@@ -466,29 +267,26 @@ export default function DashboardScreen() {
                     </Animated.View>
                 </View>
 
-                {/* League Section */}
-                <Pressable
-                    style={styles.leagueCard}
-                    onPress={() => setIsFlipped(!isFlipped)}
-                >
+                {/* League / Flip Card */}
+                <TouchableOpacity activeOpacity={0.9} style={styles.leagueCard} onPress={() => setIsFlipped(!isFlipped)}>
                     {!isFlipped ? (
                         <>
                             <Text style={styles.leagueTitle}>Harvard Alum League</Text>
-                            <View style={styles.leagueHeader}>
-                                <Text style={styles.leagueHeaderText}>Weekly Rank</Text>
-                                <Text style={styles.leagueHeaderText}>Score</Text>
+                            <View style={styles.leagueTableHeader}>
+                                <Text style={styles.tableHead}>Weekly Rank</Text>
+                                <Text style={styles.tableHead}>Score</Text>
                             </View>
                             {LEAGUE_DATA.map((item, i) => (
                                 <View key={i} style={styles.leagueRow}>
-                                    <View style={styles.rankInfo}>
-                                        <Text style={styles.rankText}>{item.rank}. {item.name}</Text>
+                                    <View style={styles.leagueUser}>
+                                        <Text style={styles.rankNum}>{item.rank}.</Text>
+                                        <Text style={styles.userName}>{item.name}</Text>
                                         {item.direction === 'up' && <Ionicons name="arrow-up" size={14} color="#4ADE80" />}
                                         {item.direction === 'down' && <Ionicons name="arrow-down" size={14} color={Colors.error} />}
-                                        {item.direction === 'none' && <Text style={{ color: '#666' }}>—</Text>}
                                     </View>
-                                    <View style={styles.scoreInfo}>
-                                        <Text style={styles.scoreMain}>{item.score}</Text>
-                                        <Text style={[styles.scoreChange, { color: item.change > 0 ? '#4ADE80' : Colors.error }]}>
+                                    <View style={styles.scoreGroup}>
+                                        <Text style={styles.leagueScore}>{item.score}</Text>
+                                        <Text style={[styles.scoreDiff, { color: item.change > 0 ? '#4ADE80' : Colors.error }]}>
                                             ({item.change > 0 ? '+' : ''}{item.change})
                                         </Text>
                                     </View>
@@ -496,58 +294,48 @@ export default function DashboardScreen() {
                             ))}
                         </>
                     ) : (
-                        <View style={styles.matchupContainer}>
+                        <View style={styles.matchupView}>
                             <View style={styles.matchupHeader}>
-                                <MaterialCommunityIcons name="fire" size={32} color={Colors.primary} />
-                                <Text style={styles.matchupTitle}>Harvard Alum League</Text>
-                                <View style={styles.matchupIcons}>
-                                    <MaterialCommunityIcons name="hammer" size={24} color={Colors.primary} />
-                                    <MaterialCommunityIcons name="leaf" size={24} color="#4ADE80" />
+                                <MaterialCommunityIcons name="fire" size={28} color={Colors.primary} />
+                                <Text style={styles.leagueTitleInline}>Harvard Alum League</Text>
+                                <View style={styles.badgeIcons}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                                        <MaterialCommunityIcons
+                                            name={userInfo.activityIcon as any}
+                                            size={20}
+                                            color={userInfo.activity === 'Glute Growth' ? '#FFB07C' : Colors.primary}
+                                        />
+                                        {userInfo.activity.toLowerCase().includes('bulk') && (
+                                            <Text style={{ color: Colors.primary, fontSize: 13, fontWeight: 'bold', marginLeft: 1, marginTop: -2 }}>+</Text>
+                                        )}
+                                        {userInfo.activity.toLowerCase().includes('cut') && (
+                                            <Text style={{ color: Colors.primary, fontSize: 13, fontWeight: 'bold', marginLeft: 1, marginTop: -2 }}>-</Text>
+                                        )}
+                                    </View>
+                                    <MaterialCommunityIcons name="leaf" size={20} color="#4ADE80" />
                                 </View>
                             </View>
-                            <View style={styles.matchupContent}>
-                                <View style={styles.playerUnit}>
-                                    <View style={styles.playerInfo}>
-                                        <Image
-                                            source={require('../../assets/images/kwadub.jpg')}
-                                            style={styles.matchupAvatar}
-                                        />
-                                        <Text style={styles.playerRankName}>
-                                            <Text style={{ color: '#4ADE80' }}>1st</Text> Kwaku
-                                        </Text>
-                                        <View style={styles.handleRow}>
-                                            <Text style={styles.playerHandle}>@kwadub</Text>
-                                            <MaterialCommunityIcons name="leaf" size={12} color="#4ADE80" />
-                                        </View>
-                                        <Text style={styles.playerRecord}>
-                                            6-3 <Text style={{ color: '#4ADE80' }}>(W3)</Text>
-                                        </Text>
-                                    </View>
-                                    <Text style={styles.matchupScore}>23</Text>
+                            <View style={styles.matchupGrid}>
+                                <View style={styles.matchupPlayer}>
+                                    <Image source={{ uri: userInfo.avatar }} style={styles.matchAvatar} />
+                                    <Text style={styles.matchName}><Text style={{ color: '#4ADE80' }}>1st</Text> {userInfo.name.split(' ')[0]}</Text>
+                                    <Text style={styles.matchHandle}>@kwadub</Text>
+                                    <Text style={styles.matchRecord}>6-3 <Text style={{ color: '#4ADE80' }}>(W3)</Text></Text>
+                                    <Text style={styles.matchBigScore}>23</Text>
                                 </View>
-                                <View style={styles.playerUnit}>
-                                    <View style={styles.playerInfo}>
-                                        <Image
-                                            source={require('../../assets/images/hd2x.jpg')}
-                                            style={styles.matchupAvatar}
-                                        />
-                                        <Text style={styles.playerRankName}>
-                                            <Text style={{ color: 'white' }}>2nd</Text> Matt
-                                        </Text>
-                                        <View style={styles.handleRow}>
-                                            <Text style={styles.playerHandle}>@Hud2x</Text>
-                                            <MaterialCommunityIcons name="leaf" size={12} color="#4ADE80" />
-                                        </View>
-                                        <Text style={styles.playerRecord}>
-                                            6-3 <Text style={{ color: Colors.error }}>(L1)</Text>
-                                        </Text>
-                                    </View>
-                                    <Text style={styles.matchupScore}>21</Text>
+                                <Text style={styles.vsText}>VS</Text>
+                                <View style={styles.matchupPlayer}>
+                                    <View style={[styles.matchAvatar, { backgroundColor: '#ccc' }]} />
+                                    <Text style={styles.matchName}>Matt</Text>
+                                    <Text style={styles.matchHandle}>@Hud2x</Text>
+                                    <Text style={styles.matchRecord}>6-3 <Text style={{ color: Colors.error }}>(L1)</Text></Text>
+                                    <Text style={styles.matchBigScore}>21</Text>
                                 </View>
                             </View>
                         </View>
                     )}
-                </Pressable>
+                </TouchableOpacity>
+
             </ScrollView>
         </SafeAreaView>
     );
@@ -556,413 +344,302 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#000',
+        backgroundColor: Colors.background,
     },
-    scrollContent: {
-        padding: 20,
-        paddingBottom: 100,
-    },
-    headerTitle: {
-        color: 'white',
-        fontSize: 32,
-        fontWeight: 'bold',
-        textAlign: 'center',
-    },
-    headerRow: {
+    topHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 40,
+        paddingHorizontal: 20,
+        paddingVertical: 10,
     },
-    resetButton: {
+    iconBtn: {
         width: 44,
         height: 44,
-        borderRadius: 22,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    macrosSection: {
-        gap: 20,
-        marginBottom: 40,
+    screenTitle: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: Colors.primary,
+        textAlign: 'center',
+    },
+    scrollContent: {
+        paddingHorizontal: 20,
+        paddingBottom: 100,
+    },
+    dashboardCard: {
+        backgroundColor: 'rgba(79, 99, 82, 0.1)',
+        borderRadius: 35,
+        padding: 20,
+        marginBottom: 25,
+        borderWidth: 1,
+        borderColor: 'rgba(79, 99, 82, 0.2)',
     },
     macroRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        marginBottom: 12,
+        gap: 10,
     },
     macroIconContainer: {
-        width: 32,
+        width: 30,
         alignItems: 'center',
     },
     sliderTrack: {
         flex: 1,
-        height: 44,
-        backgroundColor: '#111',
-        borderRadius: 22,
+        height: 36,
+        backgroundColor: 'white',
+        borderRadius: 18,
         flexDirection: 'row',
         overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: '#333',
+        borderWidth: 1.5,
+        borderColor: Colors.primary,
     },
     sliderFill: {
         height: '100%',
         justifyContent: 'center',
         alignItems: 'center',
-        borderRadius: 22,
+    },
+    sliderEmpty: {
+        height: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     sliderText: {
         color: 'white',
-        fontSize: 14,
+        fontSize: 12,
+        fontWeight: 'bold',
+    },
+    remainingText: {
+        color: Colors.primary,
+        fontSize: 12,
         fontWeight: '600',
+    },
+    goalHint: {
+        width: 55,
+        fontSize: 10,
+        color: Colors.primary,
+        opacity: 0.6,
+        fontWeight: 'bold',
     },
     divider: {
         height: 1,
-        backgroundColor: '#333',
-        marginVertical: 10,
-        width: '100%',
+        backgroundColor: Colors.primary,
+        opacity: 0.2,
+        marginVertical: 8,
     },
-    // New Weight Card Styles
     weightCard: {
-        backgroundColor: '#0a0a0a',
-        borderRadius: 40,
-        borderWidth: 1,
-        borderColor: Colors.secondary,
-        padding: 24,
-        paddingTop: 12,
-        marginBottom: 30,
-        position: 'relative',
-        overflow: 'hidden', // Contain the animated inner view
-    },
-    weightWeekLabel: {
-        position: 'absolute',
-        color: '#666',
-        fontSize: 12,
-        fontWeight: '500',
-        zIndex: 1,
+        backgroundColor: Colors.primary,
+        borderRadius: 35,
+        padding: 20,
+        marginBottom: 25,
     },
     weightHeader: {
-        flexDirection: 'column',
+        flexDirection: 'row',
+        justifyContent: 'center',
         alignItems: 'center',
-        gap: 12,
-        marginBottom: 10,
+        gap: 15,
+        marginBottom: 15,
     },
-    weightAverageLabel: {
-        color: Colors.theme.olive,
-        fontSize: 19,
+    weightAvgTitle: {
+        color: 'white',
+        fontSize: 18,
         fontWeight: 'bold',
     },
     weightBadge: {
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: Colors.secondary,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 15,
     },
     weightBadgeText: {
-        color: Colors.success,
-        fontSize: 19,
-        fontWeight: '600',
+        color: 'white',
+        fontWeight: 'bold',
     },
-    weightChartBody: {
-        height: 150,
-        marginBottom: 20,
+    chartArea: {
+        height: 120,
+        position: 'relative',
         justifyContent: 'center',
     },
-    weightChartInner: {
-        flex: 1,
-        position: 'relative',
-    },
-    targetLineContainer: {
-        position: 'absolute',
-        top: '50%',
-        left: 0,
-        right: 0,
-        flexDirection: 'column',
-        alignItems: 'flex-start',
-        zIndex: 1,
-    },
-    referenceLineContainer: {
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        height: 1,
-    },
-    referenceLine: {
-        flex: 1,
-        height: 1,
-        backgroundColor: Colors.theme.sage,
-        opacity: 0.15,
-    },
-    weightYLabel: {
-        color: 'white',
-        fontSize: 10,
-        marginBottom: 2,
-    },
-    dashedTargetLine: {
+    targetDashedLine: {
         width: '100%',
-        height: 0,
-        borderTopWidth: 2,
-        borderColor: 'white',
+        height: 1,
+        borderTopWidth: 1,
+        borderColor: 'rgba(255,255,255,0.5)',
         borderStyle: 'dashed',
     },
-    markersContainer: {
+    targetLabel: {
+        position: 'absolute',
+        left: 0,
+        top: '40%',
+        color: 'rgba(255,255,255,0.7)',
+        fontSize: 10,
+    },
+    markersLayer: {
         ...StyleSheet.absoluteFillObject,
     },
-    weightMarkerContainer: {
+    marker: {
         position: 'absolute',
-        width: 60,
-        height: 60,
         alignItems: 'center',
-        justifyContent: 'center',
-        transform: [{ translateX: -30 }, { translateY: -30 }],
-        zIndex: 5,
+        transform: [{ translateX: -15 }, { translateY: -15 }],
     },
-    markerLabelWrapper: {
-        height: 15,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    weightMarkerX: {
-        color: Colors.success,
-        fontSize: 14,
-        fontWeight: 'bold',
-        height: 14,
-        lineHeight: 14,
-        textAlign: 'center',
-        textAlignVertical: 'center',
-    },
-    weightMarkerLabel: {
-        color: Colors.success,
+    markerText: {
+        color: 'white',
         fontSize: 10,
         fontWeight: '600',
     },
+    markerX: {
+        color: 'white',
+        fontWeight: 'bold',
+    },
     weightFooter: {
-        paddingTop: 10,
+        marginTop: 10,
     },
-    footerSeparator: {
-        height: 1,
-        backgroundColor: Colors.secondary,
-        marginBottom: 10,
-    },
-    weightDaysRow: {
+    daysRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        paddingHorizontal: 10,
+        marginTop: 10,
     },
-    weightDayText: {
-        color: Colors.theme.leafGreen,
-        fontSize: 18,
-        fontWeight: '500',
-    },
-    weightDayContainer: {
+    dayCol: {
         alignItems: 'center',
     },
-    weightDateText: {
-        color: '#666',
-        fontSize: 10,
-        fontStyle: 'italic',
-        marginTop: 2,
+    dayName: {
+        color: 'white',
+        fontSize: 14,
+        fontWeight: 'bold',
     },
-    // Keep or remove old chart styles as needed
+    dayDate: {
+        color: 'rgba(255,255,255,0.6)',
+        fontSize: 9,
+    },
     leagueCard: {
-        backgroundColor: '#0a0a0a',
-        borderRadius: 30,
-        borderWidth: 1,
-        borderColor: Colors.primary,
+        backgroundColor: 'white',
+        borderRadius: 35,
         padding: 20,
+        borderWidth: 1.5,
+        borderColor: Colors.primary,
     },
     leagueTitle: {
-        color: Colors.primary,
         fontSize: 20,
         fontWeight: 'bold',
+        color: Colors.primary,
         textAlign: 'center',
         textDecorationLine: 'underline',
-        marginBottom: 20,
+        marginBottom: 15,
     },
-    leagueHeader: {
+    leagueTableHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginBottom: 10,
+        marginBottom: 8,
     },
-    leagueHeaderText: {
+    tableHead: {
         color: Colors.primary,
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: 'bold',
+        opacity: 0.6,
     },
     leagueRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingVertical: 8,
+        paddingVertical: 6,
     },
-    rankInfo: {
+    leagueUser: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
     },
-    rankText: {
-        color: 'white',
-        fontSize: 18,
-    },
-    scoreInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    scoreMain: {
-        color: 'white',
-        fontSize: 18,
+    rankNum: {
         fontWeight: 'bold',
+        color: Colors.primary,
     },
-    scoreChange: {
+    userName: {
         fontSize: 16,
+        color: Colors.primary,
+        fontWeight: '600',
     },
-    matchupContainer: {
-        flex: 1,
+    scoreGroup: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    leagueScore: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: Colors.primary,
+    },
+    scoreDiff: {
+        fontSize: 14,
+    },
+    matchupView: {
+        alignItems: 'center',
     },
     matchupHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 20,
         gap: 10,
+        marginBottom: 20,
+        width: '100%',
+        justifyContent: 'center',
     },
-    matchupTitle: {
-        color: Colors.primary,
-        fontSize: 20,
+    leagueTitleInline: {
+        fontSize: 18,
         fontWeight: 'bold',
+        color: Colors.primary,
         textDecorationLine: 'underline',
     },
-    matchupIcons: {
+    badgeIcons: {
         flexDirection: 'row',
-        gap: 5,
+        gap: 4,
         position: 'absolute',
         right: 0,
     },
-    matchupContent: {
+    matchupGrid: {
         flexDirection: 'row',
+        alignItems: 'center',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        width: '100%',
     },
-    playerUnit: {
-        flexDirection: 'row',
-        alignItems: 'center',
+    matchupPlayer: {
         flex: 1,
-    },
-    playerInfo: {
         alignItems: 'center',
-        gap: 2,
     },
-    matchupAvatar: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
+    matchAvatar: {
+        width: 70,
+        height: 70,
+        borderRadius: 35,
+        marginBottom: 8,
         borderWidth: 2,
-        borderColor: '#333',
-        marginBottom: 5,
+        borderColor: Colors.primary,
     },
-    playerRankName: {
-        color: 'white',
-        fontSize: 14,
+    matchName: {
+        fontSize: 16,
         fontWeight: 'bold',
+        color: Colors.primary,
     },
-    handleRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    playerHandle: {
-        color: '#ccc',
+    matchHandle: {
         fontSize: 12,
+        color: Colors.primary,
+        opacity: 0.6,
     },
-    playerRecord: {
-        color: 'white',
+    matchRecord: {
         fontSize: 12,
-        fontWeight: '600',
+        fontWeight: 'bold',
+        marginTop: 4,
     },
-    matchupScore: {
-        color: 'white',
+    matchBigScore: {
         fontSize: 48,
         fontWeight: 'bold',
-        marginLeft: 10,
+        color: Colors.primary,
+        marginTop: 5,
     },
-    floatingRemainingContainer: {
-        position: 'absolute',
-        bottom: '100%',
-        alignItems: 'center',
-        marginBottom: 4,
-    },
-    floatingRemainingText: {
-        color: 'white',
-        fontSize: 11,
-        fontWeight: '700',
-        marginBottom: 2,
-    },
-    bracket: {
-        width: '100%',
-        height: 6,
-        borderLeftWidth: 1,
-        borderRightWidth: 1,
-        borderTopWidth: 1,
-        borderColor: 'white',
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.8)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    adjustmentCard: {
-        width: '80%',
-        backgroundColor: '#111',
-        borderRadius: 20,
-        padding: 25,
-        borderWidth: 1,
-        borderColor: Colors.primary,
-        alignItems: 'center',
-    },
-    adjustmentTitle: {
-        color: 'white',
-        fontSize: 20,
-        fontWeight: 'bold',
-        marginBottom: 20,
-    },
-    adjustmentInput: {
-        width: '100%',
-        height: 50,
-        backgroundColor: '#000',
-        borderRadius: 10,
-        color: 'white',
+    vsText: {
         fontSize: 24,
-        textAlign: 'center',
-        borderWidth: 1,
-        borderColor: '#333',
-        marginBottom: 20,
-    },
-    adjustmentActions: {
-        flexDirection: 'row',
-        gap: 15,
-        width: '100%',
-    },
-    adjustCancelBtn: {
-        flex: 1,
-        height: 45,
-        backgroundColor: '#222',
-        borderRadius: 10,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    adjustSaveBtn: {
-        flex: 1,
-        height: 45,
-        backgroundColor: Colors.primary,
-        borderRadius: 10,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    adjustBtnText: {
-        color: 'white',
         fontWeight: 'bold',
-    },
+        color: Colors.primary,
+        opacity: 0.3,
+        marginHorizontal: 10,
+    }
 });

@@ -1,218 +1,150 @@
 import { Ionicons } from '@expo/vector-icons';
-import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import FeedItem from '../../src/features/feed/components/FeedItem'; // Reusing existing FeedItem as it matches the card requirement
-import { FeedPost } from '../../src/shared/models/types';
-import { Colors } from '../../src/shared/theme/Colors';
+import { Colors } from '@/src/shared/theme/Colors';
 
-// Reuse the mock data structure but ensure it matches the "Feed" aesthetic
-const FEED_DATA: FeedPost[] = [
-    {
-        id: '1',
-        user: {
-            id: 'u1', // Added ID
-            name: 'Kwaku',
-            handle: '@kwadub',
-            avatar: require('../../assets/images/kwadub.jpg'),
-            verified: true,
-        },
-        timeAgo: '10 mins ago',
-        meal: {
-            id: 'm1', // Added ID
-            title: 'Cheatiest of cheat meals, pre-lift lol, very full',
-            calories: 1000,
-            macros: { p: 54, c: 80, f: 20 },
-            ingredients: [
-                { id: 'i1', name: 'Rice', amount: '10 oz', cals: 500, macros: { p: 54, c: 80, f: 20 } },
-                { id: 'i2', name: 'Chicken', amount: '10 oz', cals: 500, macros: { p: 54, c: 80, f: 20 } },
-                { id: 'i3', name: 'Chipotle Sauce', amount: '10 oz', cals: 500, macros: { p: 54, c: 80, f: 20 } },
-            ]
-        },
-        stats: { likes: 700, shares: 49, comments: 11, saves: 11 },
-        mediaUrl: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=1000',
-        mediaType: 'image',
-    },
-    {
-        id: '2',
-        user: {
-            id: 'u2',
-            name: 'HD',
-            handle: '@hd2x',
-            avatar: require('../../assets/images/hd2x.jpg'),
-            verified: true,
-        },
-        timeAgo: '10 mins ago',
-        meal: {
-            id: 'm2', // Added ID
-            title: 'Cheatiest of cheat meals, pre-lift lol, very full',
-            calories: 1000,
-            macros: { p: 54, c: 80, f: 20 },
-            ingredients: [
-                { id: 'i4', name: 'Rice', amount: '10 oz', cals: 500, macros: { p: 54, c: 80, f: 20 } },
-                { id: 'i5', name: 'Chicken', amount: '10 oz', cals: 500, macros: { p: 54, c: 80, f: 20 } },
-                { id: 'i6', name: 'Chipotle Sauce', amount: '10 oz', cals: 500, macros: { p: 54, c: 80, f: 20 } },
-            ]
-        },
-        stats: { likes: 700, shares: 49, comments: 11, saves: 11 }
-    }
-];
+// Views
+import DiaryView from '@/src/features/home/components/DiaryView';
+import FollowingView from '@/src/features/home/components/FollowingView';
+import TribeView from '@/src/features/home/components/TribeView';
 
-import { useEffect, useState } from 'react';
-import CommentSheet from '../../components/CommentSheet';
-import HammerModal from '../../components/HammerModal';
-import VerifiedModal from '../../components/VerifiedModal';
-import { PostStore } from '../../store/PostStore';
+// Components
+import TribeSelectionModal from '@/src/features/home/components/TribeSelectionModal';
+
+type NavTab = 'Following' | 'Diary' | 'Tribe';
 
 export default function HomeScreen() {
-    const [posts, setPosts] = useState<FeedPost[]>([]);
+    const [currentTab, setCurrentTab] = useState<NavTab>('Following');
+    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [viewDate, setViewDate] = useState(new Date());
+    const [isCalendarVisible, setIsCalendarVisible] = useState(false);
+    const [isTribeModalVisible, setIsTribeModalVisible] = useState(false);
 
-    useEffect(() => {
-        const init = async () => {
-            const stored = await PostStore.loadPosts();
-            setPosts([...stored, ...FEED_DATA]);
-        };
-        init();
+    // Format date for button (e.g., "Dec 29, 2025")
+    const formattedDate = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-        return PostStore.subscribe((newPosts: FeedPost[]) => {
-            setPosts([...newPosts, ...FEED_DATA]);
-        });
-    }, []);
-
-    const [isVerifiedModalVisible, setVerifiedModalVisible] = useState(false);
-    const [isHammerModalVisible, setHammerModalVisible] = useState(false);
-    const [isCommentSheetVisible, setCommentSheetVisible] = useState(false);
-    const [activePostId, setActivePostId] = useState<string | null>(null);
-
-    const toggleLike = (postId: string) => {
-        setPosts(current => current.map(post => {
-            if (post.id === postId) {
-                const isLiked = !post.isLiked;
-                return {
-                    ...post,
-                    isLiked,
-                    stats: {
-                        ...post.stats,
-                        likes: isLiked ? post.stats.likes + 1 : post.stats.likes - 1
-                    }
-                };
-            }
-            return post;
-        }));
+    const handleTabPress = (tab: NavTab) => {
+        if (tab === 'Tribe' && currentTab === 'Tribe') {
+            setIsTribeModalVisible(true);
+        } else {
+            setCurrentTab(tab);
+        }
     };
 
-    const toggleShare = (postId: string) => {
-        setPosts(current => current.map(post => {
-            if (post.id === postId) {
-                const isShared = !post.isShared;
-                return {
-                    ...post,
-                    isShared,
-                    stats: {
-                        ...post.stats,
-                        shares: isShared ? post.stats.shares + 1 : post.stats.shares - 1
-                    }
-                };
-            }
-            return post;
-        }));
+    const renderContent = () => {
+        switch (currentTab) {
+            case 'Following': return <FollowingView />;
+            case 'Diary': return <DiaryView />;
+            case 'Tribe': return <TribeView />;
+            default: return <FollowingView />;
+        }
     };
 
-    const toggleSave = (postId: string) => {
-        setPosts(current => current.map(post => {
-            if (post.id === postId) {
-                const isSaved = !post.isSaved;
-                return {
-                    ...post,
-                    isSaved,
-                    stats: {
-                        ...post.stats,
-                        saves: isSaved ? post.stats.saves + 1 : post.stats.saves - 1
-                    }
-                };
-            }
-            return post;
-        }));
+    const generateCalendarDays = () => {
+        const year = viewDate.getFullYear();
+        const month = viewDate.getMonth();
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const days = [];
+        for (let i = 0; i < firstDay; i++) days.push(null);
+        for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i));
+        return days;
     };
-
-    const handleCommentPosted = () => {
-        if (!activePostId) return;
-        setPosts(current => current.map(post => {
-            if (post.id === activePostId) {
-                return {
-                    ...post,
-                    hasCommented: true,
-                    stats: {
-                        ...post.stats,
-                        comments: post.stats.comments + 1
-                    }
-                };
-            }
-            return post;
-        }));
-    };
-
-    const handleCommentDeleted = (hasMyCommentsLeft: boolean) => {
-        if (!activePostId) return;
-        setPosts(current => current.map(post => {
-            if (post.id === activePostId) {
-                return {
-                    ...post,
-                    hasCommented: hasMyCommentsLeft,
-                    stats: {
-                        ...post.stats,
-                        comments: Math.max(0, post.stats.comments - 1)
-                    }
-                };
-            }
-            return post;
-        }));
-    };
+    const calendarHolders = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    const monthName = viewDate.toLocaleString('default', { month: 'long' });
 
     return (
         <SafeAreaView style={styles.container}>
-            <VerifiedModal
-                visible={isVerifiedModalVisible}
-                onClose={() => setVerifiedModalVisible(false)}
-            />
-            <HammerModal
-                visible={isHammerModalVisible}
-                onClose={() => setHammerModalVisible(false)}
-            />
-            <CommentSheet
-                visible={isCommentSheetVisible}
-                onClose={() => setCommentSheetVisible(false)}
-                onCommentPosted={handleCommentPosted}
-                onCommentDeleted={handleCommentDeleted}
-            />
-            <View style={styles.header}>
-                <Image
-                    source={{ uri: 'https://via.placeholder.com/40' }} // User avatar placeholder
-                    style={styles.headerAvatar}
-                />
-                <View style={styles.headerTitleContainer}>
-                    <Text style={styles.headerTitle}>Home</Text>
+            {/* Top Navigation */}
+            <View style={styles.topNavWrapper}>
+                <View style={styles.tabsContainer}>
+                    {(['Following', 'Diary', 'Tribe'] as NavTab[]).map((tab) => (
+                        <TouchableOpacity
+                            key={tab}
+                            style={[
+                                styles.tabButton,
+                                currentTab === tab && styles.tabButtonActive
+                            ]}
+                            onPress={() => handleTabPress(tab)}
+                        >
+                            <Text style={[
+                                styles.tabText,
+                                currentTab === tab && styles.tabTextActive
+                            ]}>
+                                {tab}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
                 </View>
-                <Ionicons name="notifications-outline" size={24} color={Colors.white} />
+
+                <TouchableOpacity
+                    style={styles.dateButton}
+                    onPress={() => setIsCalendarVisible(true)}
+                >
+                    <Text style={styles.dateButtonText}>{formattedDate}</Text>
+                </TouchableOpacity>
             </View>
-            <FlatList
-                data={posts}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                    <FeedItem
-                        post={item}
-                        onPressVerified={() => setVerifiedModalVisible(true)}
-                        onPressHammer={() => setHammerModalVisible(true)}
-                        onPressComment={() => {
-                            setActivePostId(item.id);
-                            setCommentSheetVisible(true);
-                        }}
-                        onPressLike={() => toggleLike(item.id)}
-                        onPressShare={() => toggleShare(item.id)}
-                        onPressSave={() => toggleSave(item.id)}
-                    />
-                )}
-                contentContainerStyle={styles.list}
+
+            {/* Content View */}
+            <View style={styles.contentContainer}>
+                {renderContent()}
+            </View>
+
+            <TribeSelectionModal
+                visible={isTribeModalVisible}
+                onClose={() => setIsTribeModalVisible(false)}
             />
+
+            {/* Calendar Modal */}
+            <Modal
+                visible={isCalendarVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setIsCalendarVisible(false)}
+            >
+                <Pressable style={styles.modalOverlay} onPress={() => setIsCalendarVisible(false)}>
+                    <Pressable style={styles.calendarCard}>
+                        <View style={styles.calendarHeader}>
+                            <TouchableOpacity onPress={() => {
+                                const d = new Date(viewDate);
+                                d.setMonth(d.getMonth() - 1);
+                                setViewDate(d);
+                            }}>
+                                <Ionicons name="chevron-back" size={20} color="white" />
+                            </TouchableOpacity>
+                            <Text style={styles.calendarMonthText}>{monthName} {viewDate.getFullYear()}</Text>
+                            <TouchableOpacity onPress={() => {
+                                const d = new Date(viewDate);
+                                d.setMonth(d.getMonth() + 1);
+                                setViewDate(d);
+                            }}>
+                                <Ionicons name="chevron-forward" size={20} color="white" />
+                            </TouchableOpacity>
+                        </View>
+                        <View style={styles.calendarGrid}>
+                            {calendarHolders.map((h, idx) => <Text key={idx} style={styles.dayHeader}>{h}</Text>)}
+                            {generateCalendarDays().map((day, i) => {
+                                if (!day) return <View key={i} style={styles.dayButton} />;
+                                const dateStr = day.toISOString().split('T')[0];
+                                const isSelected = selectedDate.toISOString().split('T')[0] === dateStr;
+                                return (
+                                    <TouchableOpacity
+                                        key={dateStr}
+                                        style={[styles.dayButton, isSelected && styles.dayButtonActive]}
+                                        onPress={() => {
+                                            setSelectedDate(day);
+                                            setIsCalendarVisible(false);
+                                        }}
+                                    >
+                                        <Text style={[styles.dayText, isSelected && styles.dayTextActive]}>{day.getDate()}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+                    </Pressable>
+                </Pressable>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -220,34 +152,103 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#000000', // Pure black as requested
+        backgroundColor: Colors.background,
     },
-    header: {
+    topNavWrapper: {
+        alignItems: 'center',
+        paddingTop: 15,
+        paddingBottom: 5,
+        backgroundColor: Colors.background,
+    },
+    tabsContainer: {
         flexDirection: 'row',
+        backgroundColor: Colors.topNavBackground,
+        borderRadius: 25,
+        padding: 5,
+        width: '80%',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#333',
     },
-    headerAvatar: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: '#333',
-    },
-    headerTitleContainer: {
+    tabButton: {
         flex: 1,
+        paddingVertical: 10,
         alignItems: 'center',
+        borderRadius: 20,
     },
-    headerTitle: {
-        fontSize: 18,
+    tabButtonActive: {
+        backgroundColor: Colors.primary,
+    },
+    tabText: {
+        fontSize: 14,
         fontWeight: 'bold',
+        color: '#6E7A66', // Sage dark muted
+    },
+    tabTextActive: {
         color: 'white',
     },
-    list: {
-        paddingHorizontal: 8,
-        paddingVertical: 16,
+    dateButton: {
+        backgroundColor: Colors.primary,
+        paddingVertical: 6,
+        paddingHorizontal: 16,
+        borderRadius: 15,
+        marginTop: 10,
+    },
+    dateButtonText: {
+        color: 'white',
+        fontSize: 13,
+        fontWeight: 'bold',
+    },
+    contentContainer: {
+        flex: 1,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    calendarCard: {
+        width: '85%',
+        backgroundColor: Colors.primary,
+        borderRadius: 30,
+        padding: 20,
+    },
+    calendarHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 15,
+    },
+    calendarMonthText: {
+        color: 'white',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    calendarGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+    },
+    dayHeader: {
+        width: `${100 / 7}%`,
+        textAlign: 'center',
+        color: 'rgba(255,255,255,0.4)',
+        fontWeight: 'bold',
+        marginBottom: 10,
+    },
+    dayButton: {
+        width: `${100 / 7}%`,
+        height: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    dayButtonActive: {
+        backgroundColor: 'white',
+        borderRadius: 10,
+    },
+    dayText: {
+        color: 'white',
+        fontSize: 14,
+    },
+    dayTextActive: {
+        color: Colors.primary,
+        fontWeight: 'bold',
     },
 });

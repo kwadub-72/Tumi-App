@@ -5,6 +5,7 @@ import { Alert, Keyboard, Modal, Pressable, StyleSheet, Text, TextInput, Touchab
 
 import { Colors } from '../../src/shared/theme/Colors';
 import { WeightStore } from '../../store/WeightStore';
+import { useUserStore } from '../../store/UserStore';
 
 export default function TabLayout() {
     const pathname = usePathname();
@@ -13,33 +14,25 @@ export default function TabLayout() {
     const [isWeightModalVisible, setIsWeightModalVisible] = useState(false);
     const [tempWeight, setTempWeight] = useState('253.1');
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-    const [viewDate, setViewDate] = useState(new Date()); // For calendar navigation
+    const [viewDate, setViewDate] = useState(new Date());
+
+    const { units } = useUserStore();
 
     const generateCalendarDays = () => {
         const year = viewDate.getFullYear();
         const month = viewDate.getMonth();
         const firstDay = new Date(year, month, 1).getDay();
         const daysInMonth = new Date(year, month + 1, 0).getDate();
-
         const days = [];
-        // Padding for start of month
-        for (let i = 0; i < firstDay; i++) {
-            days.push(null);
-        }
-        // Actual days
-        for (let i = 1; i <= daysInMonth; i++) {
-            days.push(new Date(year, month, i));
-        }
+        for (let i = 0; i < firstDay; i++) days.push(null);
+        for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i));
         return days;
     };
 
     const calendarHolders = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
     const monthName = viewDate.toLocaleString('default', { month: 'long' });
 
-    const showFAB = pathname !== '/profile' && pathname !== '/add';
-
     const handleSaveWeight = async () => {
-        // If empty, delete the entry
         if (tempWeight.trim() === '') {
             await WeightStore.deleteWeight(selectedDate);
             setIsWeightModalVisible(false);
@@ -48,11 +41,14 @@ export default function TabLayout() {
         }
 
         const weightNum = parseFloat(tempWeight);
-        const TARGET_WEIGHT = 250;
+        // Basic range check (lbs or kgs)
+        const isImperial = units === 'imperial';
+        const minWeight = isImperial ? 50 : 20;
+        const maxWeight = isImperial ? 800 : 400;
 
         if (!isNaN(weightNum)) {
-            if (Math.abs(weightNum - TARGET_WEIGHT) > 50) {
-                Alert.alert('Error', 'Extreme weight fluctuation, consult medical professional immediately');
+            if (weightNum < minWeight || weightNum > maxWeight) {
+                Alert.alert('Error', 'Please enter a realistic weight');
                 return;
             }
 
@@ -61,6 +57,13 @@ export default function TabLayout() {
                 weight: weightNum,
                 timestamp: Date.now(),
             });
+
+            // Update bio if it's the current date
+            const todayStr = new Date().toISOString().split('T')[0];
+            if (selectedDate === todayStr) {
+                useUserStore.getState().setProfile({ weight: weightNum });
+            }
+
             setIsWeightModalVisible(false);
             setIsMenuOpen(false);
         } else {
@@ -68,7 +71,6 @@ export default function TabLayout() {
         }
     };
 
-    // Load existing weight when date changes
     useEffect(() => {
         if (isWeightModalVisible) {
             const loadCurrent = async () => {
@@ -81,27 +83,27 @@ export default function TabLayout() {
     }, [selectedDate, isWeightModalVisible]);
 
     return (
-        <View style={{ flex: 1, backgroundColor: '#000' }}>
+        <View style={{ flex: 1, backgroundColor: Colors.background }}>
             <Tabs
                 screenOptions={{
                     headerShown: false,
                     tabBarStyle: {
                         backgroundColor: Colors.tabBar,
-                        borderTopWidth: 1, // Assuming a border width of 1 to make borderTopColor visible
-                        borderTopColor: '#333',
-                        height: 70,
-                        paddingBottom: 10,
+                        borderTopWidth: 0,
+                        height: 90,
+                        paddingBottom: 25,
                         paddingTop: 10,
+                        elevation: 0,
                     },
                     tabBarShowLabel: false,
-                    tabBarActiveTintColor: Colors.tabIconSelected,
-                    tabBarInactiveTintColor: Colors.tabIconDefault,
+                    tabBarActiveTintColor: Colors.white,
+                    tabBarInactiveTintColor: 'rgba(255,255,255,0.6)',
                 }}>
                 <Tabs.Screen
                     name="index"
                     options={{
                         tabBarIcon: ({ color, focused }) => (
-                            <Ionicons name={focused ? "home" : "home-outline"} size={28} color={color} />
+                            <MaterialCommunityIcons name="home" size={36} color={color} />
                         ),
                     }}
                 />
@@ -109,15 +111,7 @@ export default function TabLayout() {
                     name="search"
                     options={{
                         tabBarIcon: ({ color, focused }) => (
-                            <Ionicons name="search" size={28} color={color} />
-                        ),
-                    }}
-                />
-                <Tabs.Screen
-                    name="activity"
-                    options={{
-                        tabBarIcon: ({ color, focused }) => (
-                            <MaterialCommunityIcons name="finance" size={28} color={color} />
+                            <Ionicons name="search" size={32} color={color} />
                         ),
                     }}
                 />
@@ -125,7 +119,36 @@ export default function TabLayout() {
                     name="add"
                     options={{
                         tabBarIcon: ({ color, focused }) => (
-                            <MaterialCommunityIcons name={focused ? "fire" : "fire"} size={28} color={color} />
+                            <View style={{
+                                width: 64,
+                                height: 64,
+                                borderRadius: 32,
+                                backgroundColor: Colors.primary,
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                marginTop: -30,
+                                shadowColor: "#000",
+                                shadowOffset: { width: 0, height: 4 },
+                                shadowOpacity: 0.3,
+                                shadowRadius: 4,
+                                elevation: 5,
+                            }}>
+                                <Ionicons name="add" size={40} color="white" />
+                            </View>
+                        ),
+                    }}
+                    listeners={() => ({
+                        tabPress: (e) => {
+                            e.preventDefault();
+                            setIsMenuOpen(!isMenuOpen);
+                        }
+                    })}
+                />
+                <Tabs.Screen
+                    name="activity"
+                    options={{
+                        tabBarIcon: ({ color, focused }) => (
+                            <Ionicons name="stats-chart" size={32} color={color} />
                         ),
                     }}
                 />
@@ -133,49 +156,67 @@ export default function TabLayout() {
                     name="profile"
                     options={{
                         tabBarIcon: ({ color, focused }) => (
-                            <Ionicons name={focused ? "person" : "person-outline"} size={28} color={color} />
+                            <Ionicons name="person" size={32} color={color} />
                         ),
                     }}
                 />
             </Tabs>
 
-            {showFAB && (
-                <View style={styles.fabContainer}>
-                    {isMenuOpen && (
-                        <>
-                            {/* Scale Button */}
-                            <TouchableOpacity
-                                style={[styles.subFab, styles.scaleFab]}
-                                onPress={() => {
-                                    setIsWeightModalVisible(true);
-                                }}
-                            >
-                                <MaterialCommunityIcons name="scale-bathroom" size={40} color="white" />
-                            </TouchableOpacity>
+            {isMenuOpen && (
+                <Pressable style={styles.menuOverlay} onPress={() => setIsMenuOpen(false)}>
+                    <View style={styles.fabContainer}>
+                        {/* Workout/Run Button */}
+                        <TouchableOpacity
+                            style={[styles.subFab, styles.workoutFab]}
+                            onPress={() => {
+                                setIsMenuOpen(false);
+                                router.push('/add-exercise');
+                            }}
+                        >
+                            <MaterialCommunityIcons name="run" size={40} color="white" />
+                        </TouchableOpacity>
 
-                            {/* Tumi Button */}
-                            <TouchableOpacity
-                                style={[styles.subFab, styles.tumiFab]}
-                                onPress={() => {
-                                    setIsMenuOpen(false);
-                                    router.push('/(tabs)/add');
-                                }}
-                            >
-                                <MaterialCommunityIcons name="fire" size={45} color="white" />
-                            </TouchableOpacity>
-                        </>
-                    )}
+                        {/* Fire/Food Button */}
+                        <TouchableOpacity
+                            style={[styles.subFab, styles.tumiFab]}
+                            onPress={() => {
+                                setIsMenuOpen(false);
+                                router.push('/(tabs)/add');
+                            }}
+                        >
+                            <MaterialCommunityIcons name="fire" size={45} color="white" />
+                        </TouchableOpacity>
 
-                    <TouchableOpacity
-                        style={[styles.fab, isMenuOpen && styles.fabOpen]}
-                        onPress={() => setIsMenuOpen(!isMenuOpen)}
-                    >
-                        <Ionicons name={isMenuOpen ? "close" : "add"} size={isMenuOpen ? 30 : 40} color="white" />
-                    </TouchableOpacity>
-                </View>
+                        {/* Macro Update Button (New) */}
+                        <TouchableOpacity
+                            style={[styles.subFab, styles.macroFab]}
+                            onPress={() => {
+                                setIsMenuOpen(false);
+                                router.push('/macro-update');
+                            }}
+                        >
+                            <View>
+                                <MaterialCommunityIcons name="chart-areaspline-variant" size={32} color="white" />
+                                <MaterialCommunityIcons
+                                    name="plus"
+                                    size={16}
+                                    color="white"
+                                    style={{ position: 'absolute', top: -4, right: -4 }}
+                                />
+                            </View>
+                        </TouchableOpacity>
+
+                        {/* Scale Button */}
+                        <TouchableOpacity
+                            style={[styles.subFab, styles.scaleFab]}
+                            onPress={() => setIsWeightModalVisible(true)}
+                        >
+                            <MaterialCommunityIcons name="scale-bathroom" size={40} color="white" />
+                        </TouchableOpacity>
+                    </View>
+                </Pressable>
             )}
 
-            {/* Weight Input Modal */}
             <Modal
                 visible={isWeightModalVisible}
                 transparent
@@ -190,7 +231,7 @@ export default function TabLayout() {
                         style={styles.adjustmentCard}
                         onPress={() => Keyboard.dismiss()}
                     >
-                        <Text style={styles.adjustmentTitle}>Update Weight</Text>
+                        <Text style={styles.adjustmentTitle}>Update Weight ({units === 'imperial' ? 'lbs' : 'kg'})</Text>
                         <TextInput
                             style={styles.adjustmentInput}
                             value={tempWeight}
@@ -200,8 +241,6 @@ export default function TabLayout() {
                             selectTextOnFocus
                             placeholderTextColor="#666"
                         />
-
-
                         <Text style={styles.sectionLabel}>Select Date</Text>
                         <View style={styles.calendarContainer}>
                             <View style={styles.calendarHeader}>
@@ -221,23 +260,16 @@ export default function TabLayout() {
                                     <Ionicons name="chevron-forward" size={20} color="white" />
                                 </TouchableOpacity>
                             </View>
-
                             <View style={styles.calendarGrid}>
-                                {calendarHolders.map((h, idx) => <Text key={`${h}-${idx}`} style={styles.dayHeader}>{h}</Text>)}
+                                {calendarHolders.map((h, idx) => <Text key={idx} style={styles.dayHeader}>{h}</Text>)}
                                 {generateCalendarDays().map((day, i) => {
-                                    if (!day) return <View key={`empty-${i}`} style={styles.dayButton} />;
+                                    if (!day) return <View key={i} style={styles.dayButton} />;
                                     const dateStr = day.toISOString().split('T')[0];
                                     const isSelected = selectedDate === dateStr;
-                                    const isToday = new Date().toISOString().split('T')[0] === dateStr;
-
                                     return (
                                         <TouchableOpacity
                                             key={dateStr}
-                                            style={[
-                                                styles.dayButton,
-                                                isSelected && styles.dayButtonActive,
-                                                isToday && !isSelected && styles.dayButtonToday
-                                            ]}
+                                            style={[styles.dayButton, isSelected && styles.dayButtonActive]}
                                             onPress={() => setSelectedDate(dateStr)}
                                         >
                                             <Text style={[styles.dayText, isSelected && styles.dayTextActive]}>
@@ -270,37 +302,29 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
+    menuOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 10,
+        backgroundColor: 'rgba(0,0,0,0.3)',
+    },
     fabContainer: {
         position: 'absolute',
-        right: 20,
-        bottom: 90,
+        bottom: 120,
         alignItems: 'center',
         justifyContent: 'center',
-    },
-    fab: {
-        width: 70,
-        height: 70,
-        borderRadius: 35,
-        backgroundColor: Colors.theme.sage,
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 8,
-    },
-    fabOpen: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+        left: '50%',
+        marginLeft: -40,
     },
     subFab: {
         position: 'absolute',
         width: 70,
         height: 70,
         borderRadius: 35,
-        backgroundColor: Colors.theme.sage,
+        backgroundColor: Colors.primary,
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: "#000",
@@ -310,31 +334,33 @@ const styles = StyleSheet.create({
         elevation: 8,
     },
     scaleFab: {
-        bottom: 80, // Positioned above
+        bottom: 20,
+        left: -115,
+    },
+    macroFab: {
+        bottom: 50,
+        left: -40,
     },
     tumiFab: {
-        right: 80, // Positioned to the left
+        bottom: 50,
+        left: 40,
+    },
+    workoutFab: {
+        bottom: 20,
+        left: 115,
     },
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.8)',
-        justifyContent: 'flex-start',
+        justifyContent: 'center',
         alignItems: 'center',
-        paddingTop: 80,
     },
     adjustmentCard: {
         width: '85%',
-        backgroundColor: '#111',
+        backgroundColor: '#2D3A26',
         borderRadius: 30,
         padding: 25,
-        borderWidth: 1,
-        borderColor: Colors.primary,
         alignItems: 'center',
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.5,
-        shadowRadius: 15,
-        elevation: 20,
     },
     adjustmentTitle: {
         color: 'white',
@@ -345,29 +371,13 @@ const styles = StyleSheet.create({
     adjustmentInput: {
         width: '100%',
         height: 60,
-        backgroundColor: '#000',
+        backgroundColor: 'rgba(255,255,255,0.1)',
         borderRadius: 15,
         color: 'white',
         fontSize: 32,
         fontWeight: 'bold',
         textAlign: 'center',
-        borderWidth: 1,
-        borderColor: '#333',
         marginBottom: 20,
-    },
-    logWeightButton: {
-        width: 70,
-        height: 70,
-        borderRadius: 35,
-        backgroundColor: Colors.primary,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: 10,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 8,
     },
     adjustmentActions: {
         flexDirection: 'row',
@@ -377,7 +387,7 @@ const styles = StyleSheet.create({
     adjustCancelBtn: {
         flex: 1,
         height: 45,
-        backgroundColor: '#222',
+        backgroundColor: 'rgba(255,255,255,0.1)',
         borderRadius: 10,
         justifyContent: 'center',
         alignItems: 'center',
@@ -385,39 +395,35 @@ const styles = StyleSheet.create({
     adjustSaveBtn: {
         flex: 1,
         height: 45,
-        backgroundColor: Colors.primary,
+        backgroundColor: Colors.white,
         borderRadius: 10,
         justifyContent: 'center',
         alignItems: 'center',
     },
     adjustBtnText: {
-        color: 'white',
+        color: 'black',
         fontWeight: 'bold',
     },
     sectionLabel: {
-        color: '#666',
+        color: 'rgba(255,255,255,0.6)',
         fontSize: 12,
         fontWeight: 'bold',
         textTransform: 'uppercase',
         alignSelf: 'flex-start',
-        marginBottom: 15,
-        marginTop: 5,
+        marginBottom: 10,
     },
     calendarContainer: {
         width: '100%',
-        backgroundColor: '#000',
+        backgroundColor: 'rgba(255,255,255,0.05)',
         borderRadius: 15,
         padding: 10,
         marginBottom: 20,
-        borderWidth: 1,
-        borderColor: '#222',
     },
     calendarHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 15,
-        paddingHorizontal: 10,
     },
     calendarMonthText: {
         color: 'white',
@@ -431,9 +437,8 @@ const styles = StyleSheet.create({
     dayHeader: {
         width: `${100 / 7}%`,
         textAlign: 'center',
-        color: '#444',
+        color: 'rgba(255,255,255,0.4)',
         fontSize: 12,
-        fontWeight: 'bold',
         marginBottom: 10,
     },
     dayButton: {
@@ -441,21 +446,16 @@ const styles = StyleSheet.create({
         height: 35,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 5,
-        borderRadius: 8,
     },
     dayButtonActive: {
-        backgroundColor: Colors.primary,
-    },
-    dayButtonToday: {
-        borderWidth: 1,
-        borderColor: Colors.primary,
+        backgroundColor: Colors.white,
+        borderRadius: 8,
     },
     dayText: {
         color: 'white',
-        fontSize: 14,
     },
     dayTextActive: {
+        color: 'black',
         fontWeight: 'bold',
     },
 });

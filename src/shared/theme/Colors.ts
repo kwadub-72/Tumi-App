@@ -1,11 +1,18 @@
 const Palette = {
     sage: '#A4B69D',
-    olive: '#6E7A66', // Deep olive
-    blueGreen: '#86A293',
-    beige: '#CED6B2',
-    leafGreen: '#859F74', // Primary Action
+    sageLight: '#B7C4B0',
+    sageDark: '#4F6352', // Active tab green from image
+    olive: '#6E7A66',
+    blueGreen: '#A4B69D',
+    beige: '#E3E3CC', // Main background from image
+    beigeLight: '#EFF0E1', // Nav bubble
+    leafGreen: '#789370',
+    darkGreen: '#2D3A26',
+    white: '#FFFFFF',
+
     // Computed variants
-    cardBackground: '#131613', // Very dark green-black for cards
+    cardBackground: '#A4B69D',
+    mainBackground: '#E3E3CC',
 };
 
 export const Colors = {
@@ -13,27 +20,29 @@ export const Colors = {
     theme: Palette,
 
     // Semantic Roles
-    primary: Palette.leafGreen,
-    background: '#0a0a0a', // Keeping it mostly black for contrast
+    primary: Palette.darkGreen,
+    background: Palette.mainBackground,
     card: Palette.cardBackground,
 
     text: '#FFFFFF',
-    textDim: '#A0A0A0',
+    textDark: Palette.sageDark,
+    textDim: 'rgba(255,255,255,0.7)',
 
     // UI Elements
-    tint: Palette.leafGreen,
-    tabIconDefault: '#555',
-    tabIconSelected: Palette.beige,
-    tabBar: '#0a0a0a',
+    tint: Palette.sageDark,
+    tabIconDefault: 'rgba(255,255,255,0.5)',
+    tabIconSelected: '#FFFFFF',
+    tabBar: '#A4B69D',
 
     white: '#FFFFFF',
     black: '#000000',
 
     // Status
-    success: Palette.sage,
-    error: '#EF4444', // Keep red for errors, or maybe mute it? Keeping standard for now.
+    success: '#789370',
+    error: '#EF4444',
 
-    // Legacy support (mapping old keys if necessary)
-    secondary: Palette.blueGreen,
-    secondaryDark: Palette.olive,
+    // Feature specific
+    pillBackground: Palette.sageDark,
+    pillText: '#FFFFFF',
+    topNavBackground: '#EFF0E1',
 };

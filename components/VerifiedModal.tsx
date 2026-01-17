@@ -1,13 +1,20 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '../src/shared/theme/Colors';
 
 interface VerifiedModalProps {
     visible: boolean;
     onClose: () => void;
+    status?: 'natural' | 'enhanced' | 'natural-pending' | 'none';
 }
 
-export default function VerifiedModal({ visible, onClose }: VerifiedModalProps) {
+export default function VerifiedModal({ visible, onClose, status }: VerifiedModalProps) {
+    const isEnhanced = status === 'enhanced';
+    const text = isEnhanced ? 'Self-declared Enhanced' : 'Tribe-verified natural';
+    const IconComponent = isEnhanced ? MaterialCommunityIcons : Ionicons;
+    const iconName = isEnhanced ? 'lightning-bolt' : 'leaf';
+    const iconColor = isEnhanced ? '#FFD700' : Colors.success;
+
     return (
         <Modal
             visible={visible}
@@ -19,8 +26,8 @@ export default function VerifiedModal({ visible, onClose }: VerifiedModalProps) 
                 <View style={styles.modalContent}>
                     {/* The Pill */}
                     <View style={styles.pill}>
-                        <Ionicons name="leaf" size={24} color={Colors.success} style={styles.icon} />
-                        <Text style={styles.text}>Verified natural</Text>
+                        <IconComponent name={iconName as any} size={24} color={iconColor} style={styles.icon} />
+                        <Text style={styles.text}>{text}</Text>
                     </View>
                 </View>
             </Pressable>
@@ -41,16 +48,14 @@ const styles = StyleSheet.create({
     },
     pill: {
         flexDirection: 'row',
-        backgroundColor: 'black',
+        backgroundColor: '#4F6352', // Dark Green
         paddingHorizontal: 32,
         paddingVertical: 16,
         borderRadius: 40,
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#333',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.5,
+        shadowOpacity: 0.3,
         shadowRadius: 10,
         elevation: 10,
     },
@@ -58,7 +63,7 @@ const styles = StyleSheet.create({
         marginRight: 12,
     },
     text: {
-        color: 'white',
+        color: '#F5F5DC', // Beige
         fontSize: 20,
         fontStyle: 'italic',
         fontWeight: '600',

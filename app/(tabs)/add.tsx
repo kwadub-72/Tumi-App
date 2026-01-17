@@ -19,6 +19,7 @@ import { NutritionService } from '../../src/shared/services/NutritionService';
 import { Colors } from '../../src/shared/theme/Colors';
 import { useMealLogStore } from '../../src/store/useMealLogStore';
 import { PostStore } from '../../store/PostStore';
+import { useUserStore } from '../../store/UserStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -138,9 +139,22 @@ export default function AddMealScreen() {
         }
     }, [cartItems.length]);
 
+    const userInfo = useUserStore();
+    const syncedMockMeals = MOCK_MEALS.map(m => {
+        if (m.handle === '@kwadub') {
+            return {
+                ...m,
+                userName: userInfo.name,
+                avatar: userInfo.avatar,
+                status: userInfo.status
+            };
+        }
+        return m;
+    });
+
     const filteredMeals = activeTab === 'Mealbook'
         ? SYSTEM_MEALS
-        : MOCK_MEALS.filter((meal) =>
+        : syncedMockMeals.filter((meal) =>
             meal.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (meal.description && meal.description.toLowerCase().includes(searchQuery.toLowerCase()))
         );
@@ -162,11 +176,12 @@ export default function AddMealScreen() {
         const newPost: FeedPost = {
             id: Date.now().toString(),
             user: {
-                id: 'currentUser', // Added ID
-                name: 'Kwaku',
-                handle: '@kwadub',
-                avatar: require('../../assets/images/kwadub.jpg'),
-                verified: true,
+                id: userInfo.handle === '@kwadub' ? 'u1' : userInfo.handle,
+                name: userInfo.name,
+                handle: userInfo.handle,
+                avatar: userInfo.avatar,
+                status: userInfo.status,
+                verified: true
             },
             timeAgo: 'Just now',
             meal: {
@@ -261,7 +276,16 @@ export default function AddMealScreen() {
                     <View style={styles.userSection}>
                         <Image source={typeof item.avatar === 'string' ? { uri: item.avatar } : item.avatar} style={styles.avatar} />
                         <View style={styles.userColumn}>
-                            <Text style={styles.userName}>{item.userName}</Text>
+                            <View style={styles.nameRow}>
+                                <Text style={styles.userName}>{item.userName}</Text>
+                                {(item as any).status && ((item as any).status === 'natural' || (item as any).status === 'enhanced') && (
+                                    (item as any).status === 'enhanced' ? (
+                                        <MaterialCommunityIcons name="lightning-bolt" size={12} color="#FFD700" style={{ marginLeft: 2 }} />
+                                    ) : (
+                                        <MaterialCommunityIcons name="leaf" size={12} color={Colors.success} style={{ marginLeft: 2 }} />
+                                    )
+                                )}
+                            </View>
                             <Text style={styles.handle}>{item.handle}</Text>
                         </View>
                     </View>
@@ -415,7 +439,7 @@ export default function AddMealScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#000',
+        backgroundColor: Colors.background,
     },
     header: {
         flexDirection: 'row',
@@ -428,11 +452,11 @@ const styles = StyleSheet.create({
         width: 44,
         height: 44,
         borderRadius: 12,
-        backgroundColor: '#111',
+        backgroundColor: 'rgba(164, 182, 157, 0.2)', // Light sage
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: '#333',
+        borderColor: Colors.primary,
     },
     cameraButton: {
         width: 44,
@@ -449,14 +473,14 @@ const styles = StyleSheet.create({
         borderWidth: 1.5,
         borderColor: Colors.primary,
         paddingHorizontal: 12,
-        backgroundColor: '#000',
+        backgroundColor: Colors.background,
     },
     searchIcon: {
         marginRight: 8,
     },
     searchInput: {
         flex: 1,
-        color: 'white',
+        color: Colors.textDark,
         fontSize: 16,
     },
     modeButton: {
@@ -470,9 +494,9 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.primary,
     },
     modeButtonLocked: {
-        backgroundColor: '#1A1A1A',
+        backgroundColor: 'rgba(164, 182, 157, 0.2)',
         borderWidth: 1,
-        borderColor: '#333',
+        borderColor: Colors.primary,
     },
     tabsRow: {
         flexDirection: 'row',
@@ -484,8 +508,8 @@ const styles = StyleSheet.create({
         flex: 1,
         height: 36,
         borderRadius: 18,
-        borderWidth: 1,
-        borderColor: Colors.primary,
+        borderWidth: 1, // Add border to match design
+        borderColor: 'transparent',
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -493,19 +517,20 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.primary,
     },
     tabText: {
-        color: 'white',
+        color: Colors.textDark,
         fontSize: 13,
         fontWeight: '500',
     },
     tabTextActive: {
         fontWeight: 'bold',
+        color: 'white',
     },
     listContent: {
         paddingHorizontal: 12,
         paddingBottom: 20,
     },
     mealCard: {
-        backgroundColor: '#111',
+        backgroundColor: Colors.card, // Sage Green
         borderRadius: 24,
         padding: 12,
         marginBottom: 12,
@@ -532,13 +557,17 @@ const styles = StyleSheet.create({
     userColumn: {
         width: 60,
     },
+    nameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
     userName: {
         color: 'white',
         fontSize: 12,
         fontWeight: 'bold',
     },
     handle: {
-        color: '#666',
+        color: 'rgba(255,255,255,0.7)',
         fontSize: 10,
     },
     contentColumn: {
@@ -551,7 +580,7 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     mealDescription: {
-        color: '#888',
+        color: 'rgba(255,255,255,0.7)',
         fontSize: 12,
     },
     actionColumn: {
@@ -563,8 +592,7 @@ const styles = StyleSheet.create({
         width: 32,
         height: 32,
         borderRadius: 16,
-        borderWidth: 1.5,
-        borderColor: Colors.primary,
+        backgroundColor: 'white', // White button for green card
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 4,
@@ -573,7 +601,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     timestampText: {
-        color: '#666',
+        color: 'rgba(255,255,255,0.6)',
         fontSize: 8,
         textAlign: 'center',
         lineHeight: 10,
@@ -596,7 +624,8 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     systemMealCard: {
-        backgroundColor: '#8ca07a', // Sage green from image
+        backgroundColor: Colors.card, // System cards match regular cards now? Or different shade?
+        // Let's stick to consistent sage green for visual unity unless specific requirement.
         borderRadius: 24,
         padding: 16,
         marginBottom: 12,
@@ -641,7 +670,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         position: 'absolute',
         right: 16,
-        top: 34, // (100 total height - 32 button height) / 2
+        top: 34,
     },
     systemStatsRow: {
         flexDirection: 'row',
