@@ -21,6 +21,7 @@ export default function RootLayout() {
         <GestureHandlerRootView style={{ flex: 1 }}>
             <ThemeProvider value={DefaultTheme}>
                 <Stack screenOptions={{ headerShown: false }}>
+                    <Stack.Screen name="index" />
                     <Stack.Screen name="(tabs)" />
                     <Stack.Screen name="scan" options={{ presentation: 'fullScreenModal' }} />
                     <Stack.Screen name="scan-result" options={{ presentation: 'transparentModal', animation: 'fade' }} />

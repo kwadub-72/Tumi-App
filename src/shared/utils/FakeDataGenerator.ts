@@ -177,3 +177,61 @@ export function generateFakePosts(count: number): FeedPost[] {
 
     return posts;
 }
+
+export function generateFakeTribes(): any[] {
+    const chief = generateFakeUsers(1)[0];
+    return [
+        {
+            id: 't1',
+            name: 'Harvard alum league',
+            avatar: 'https://i.pravatar.cc/150?u=100',
+            themeColor: '#9FB89F', // Light Sage
+            type: 'accountability', // Changed to accountability based on icons in Image 1 (Target/Bullseye)
+            privacy: 'public',
+            memberCount: 45,
+            description: 'For the alums.',
+            tags: ['natural', 'active'],
+            joinStatus: 'none',
+            chief,
+        },
+        {
+            id: 't2',
+            name: 'They love dookie wookie',
+            avatar: 'https://i.pravatar.cc/150?u=101',
+            themeColor: '#3E0000', // Dark Brownish
+            type: 'head-to-head', // Shield VS (Image 1)
+            privacy: 'private',
+            memberCount: 12,
+            description: 'Dookie wookie lovers only.',
+            tags: ['natural', 'active'],
+            joinStatus: 'none',
+            chief,
+        },
+        {
+            id: 't3',
+            name: 'Team Flex',
+            avatar: 'https://i.pravatar.cc/150?u=102',
+            themeColor: '#E6A8A8', // Pastel Pink approx
+            type: 'head-to-head',
+            privacy: 'public',
+            memberCount: 45,
+            description: 'Getting big every day.',
+            tags: ['active'],
+            joinStatus: 'joined',
+            chief: { ...chief, handle: '@Hud2x' },
+        },
+        {
+            id: 't4',
+            name: 'Friends!',
+            avatar: 'https://i.pravatar.cc/150?u=103',
+            themeColor: '#007AFF',
+            type: 'tribe-vs-tribe', // Trophy with balls
+            privacy: 'public',
+            memberCount: 6,
+            description: 'Friendly competition.',
+            tags: ['active'],
+            joinStatus: 'joined', // Wait, image 1 shows checkmark... so joined.
+            chief,
+        }
+    ];
+}

@@ -7,15 +7,37 @@ import RangeSlider from './RangeSlider';
 import RolodexPicker from './RolodexPicker';
 import HeightRolodex from './HeightRolodex';
 
+const TRIBE_FOCUS_OPTIONS = [
+    { name: 'Accountability', icon: 'calendar' },
+    { name: 'Head-to-Head', icon: 'shield-outline' },
+    { name: 'Tribe vs Tribe', icon: 'trophy-outline' }
+];
+
+const VISIBILITY_OPTIONS = [
+    { name: 'Public', icon: 'earth' },
+    { name: 'Private', icon: 'lock-outline' }
+];
+
 interface FilterModalProps {
     visible: boolean;
     onClose: () => void;
     onApply: (filters: any) => void;
+    mode: 'Profiles' | 'Tribes' | 'Similar';
 }
 
-export default function FilterModal({ visible, onClose, onApply }: FilterModalProps) {
+export default function FilterModal({ visible, onClose, onApply, mode }: FilterModalProps) {
+    const isProfiles = mode === 'Profiles';
+    const isTribes = mode === 'Tribes';
+    const isSimilar = mode === 'Similar';
+
     const [status, setStatus] = useState('All');
     const [activity, setActivity] = useState('All');
+
+    // Tribe Specific
+    const [tribeFocus, setTribeFocus] = useState('All');
+    const [visibility, setVisibility] = useState('All');
+    const [showTribeFocusRolodex, setShowTribeFocusRolodex] = useState(false);
+    const [showVisibilityRolodex, setShowVisibilityRolodex] = useState(false);
 
     // Height
     const [heightMode, setHeightMode] = useState<'Range' | 'Exact'>('Range');
@@ -47,7 +69,7 @@ export default function FilterModal({ visible, onClose, onApply }: FilterModalPr
     useEffect(() => {
         // Reset applied state on change
         setIsApplied(false);
-    }, [status, activity, heightMode, heightVal, weightMode, weightVal, minBf, maxBf, minMeals, minWorkouts, minUpdates]);
+    }, [status, activity, tribeFocus, visibility, heightMode, heightVal, weightMode, weightVal, minBf, maxBf, minMeals, minWorkouts, minUpdates]);
 
     useEffect(() => {
         // Sync string representation on change
@@ -61,10 +83,12 @@ export default function FilterModal({ visible, onClose, onApply }: FilterModalPr
     const handleApply = () => {
         onApply({
             status,
-            activity,
-            height: { mode: heightMode, val: heightVal },
-            weight: { mode: weightMode, val: weightVal },
-            bodyFat: { min: minBf, max: maxBf },
+            activity: isTribes ? undefined : activity,
+            tribeFocus: isTribes ? tribeFocus : undefined,
+            visibility: isTribes ? visibility : undefined,
+            height: isTribes ? undefined : { mode: heightMode, val: heightVal },
+            weight: isTribes ? undefined : { mode: weightMode, val: weightVal },
+            bodyFat: isTribes ? undefined : { min: minBf, max: maxBf },
             minMeals,
             minWorkouts,
             minUpdates
@@ -75,6 +99,8 @@ export default function FilterModal({ visible, onClose, onApply }: FilterModalPr
     const handleReset = () => {
         setStatus('All');
         setActivity('All');
+        setTribeFocus('All');
+        setVisibility('All');
         setHeightMode('Range');
         setHeightVal("5'7"); // Default
         setFt(5);
@@ -101,6 +127,12 @@ export default function FilterModal({ visible, onClose, onApply }: FilterModalPr
             {icon && <MaterialCommunityIcons name={icon} size={16} color={color} style={{ marginLeft: 4 }} />}
         </TouchableOpacity>
     );
+
+    // Determines if a section is disabled (e.g. for Similar tabs)
+    const isSectionDisabled = (section: 'activity' | 'body') => {
+        if (isSimilar) return true;
+        return false;
+    };
 
     return (
         <Modal
@@ -136,113 +168,156 @@ export default function FilterModal({ visible, onClose, onApply }: FilterModalPr
 
                         <View style={styles.divider} />
 
-                        {/* Activity */}
-                        <View style={styles.row}>
-                            <Text style={styles.label}>Activity</Text>
-                            <TouchableOpacity
-                                style={[styles.pill, styles.activePill, { alignSelf: 'flex-start' }]}
-                                onPress={() => setShowActivityRolodex(true)}
-                            >
-                                <Text style={styles.activePillText}>{activity}</Text>
-                                <MaterialCommunityIcons name="chevron-down" size={20} color="#F5F5DC" style={{ marginLeft: 4 }} />
-                            </TouchableOpacity>
-                        </View>
-
-                        <View style={styles.divider} />
-
-                        {/* Height */}
-                        <View style={styles.row}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                                <Text style={styles.label}>Height</Text>
-                                <TouchableOpacity onPress={() => setIsMetric(!isMetric)} style={{ paddingRight: 10 }}>
-                                    <Text style={{ color: '#F5F5DC', fontSize: 12, fontWeight: 'bold', textDecorationLine: 'underline' }}>
-                                        {isMetric ? 'Switch to ft/in' : 'Switch to cm'}
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-
-                            <View style={styles.controlsRow}>
-                                <TouchableOpacity
-                                    style={[styles.toggleBtn, heightMode === 'Range' && styles.activeToggle]}
-                                    onPress={() => setHeightMode('Range')}
-                                >
-                                    <Text style={[styles.toggleText, heightMode === 'Range' && styles.activeToggleText]}>± 3 {isMetric ? 'cm' : 'in.'}</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.toggleBtn, heightMode === 'Exact' && styles.activeToggle]}
-                                    onPress={() => setHeightMode('Exact')}
-                                >
-                                    <Text style={[styles.toggleText, heightMode === 'Exact' && styles.activeToggleText]}>Exact</Text>
-                                </TouchableOpacity>
-
-                                {isMetric ? (
-                                    <View style={styles.inputContainer}>
-                                        <TextInput
-                                            style={styles.textInput}
-                                            value={cmVal}
-                                            onChangeText={setCmVal}
-                                            keyboardType="numeric"
-                                            placeholder="170"
-                                            placeholderTextColor="rgba(47, 58, 39, 0.5)"
-                                        />
-                                        <Text style={styles.suffix}>cm</Text>
-                                    </View>
-                                ) : (
+                        {/* Activity - Hide for Tribes */}
+                        {!isTribes && (
+                            <>
+                                <View style={[styles.row, isSectionDisabled('activity') && { opacity: 0.5 }]} pointerEvents={isSectionDisabled('activity') ? 'none' : 'auto'}>
+                                    <Text style={styles.label}>Activity</Text>
                                     <TouchableOpacity
-                                        style={styles.inputContainer}
-                                        onPress={() => setShowHeightRolodex(true)}
+                                        style={[styles.pill, styles.activePill, { alignSelf: 'flex-start' }]}
+                                        onPress={() => setShowActivityRolodex(true)}
                                     >
-                                        <Text style={styles.inputValue}>{ft}'{inch}</Text>
+                                        <Text style={styles.activePillText}>{activity}</Text>
+                                        <MaterialCommunityIcons name="chevron-down" size={20} color="#F5F5DC" style={{ marginLeft: 4 }} />
                                     </TouchableOpacity>
-                                )}
-                            </View>
-                        </View>
-
-                        <View style={styles.divider} />
-
-                        {/* Weight */}
-                        <View style={styles.row}>
-                            <Text style={styles.label}>Weight</Text>
-                            <View style={styles.controlsRow}>
-                                <TouchableOpacity
-                                    style={[styles.toggleBtn, weightMode === 'Range15' && styles.activeToggle]}
-                                    onPress={() => setWeightMode('Range15')}
-                                >
-                                    <Text style={[styles.toggleText, weightMode === 'Range15' && styles.activeToggleText]}>± 15 lbs</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.toggleBtn, weightMode === 'Range5' && styles.activeToggle]}
-                                    onPress={() => setWeightMode('Range5')}
-                                >
-                                    <Text style={[styles.toggleText, weightMode === 'Range5' && styles.activeToggleText]}>± 5 lbs</Text>
-                                </TouchableOpacity>
-                                <View style={styles.inputContainer}>
-                                    <TextInput
-                                        style={styles.textInput}
-                                        placeholder=".."
-                                        placeholderTextColor="rgba(47, 58, 39, 0.5)"
-                                        keyboardType="numeric"
-                                        value={weightVal}
-                                        onChangeText={setWeightVal}
-                                    />
-                                    <Text style={styles.suffix}>lbs</Text>
                                 </View>
-                            </View>
-                        </View>
+                                <View style={styles.divider} />
+                            </>
+                        )}
+
+                        {/* Tribe Filters */}
+                        {isTribes && (
+                            <>
+                                {/* Tribe Focus */}
+                                <View style={styles.row}>
+                                    <Text style={styles.label}>Tribe focus</Text>
+                                    <TouchableOpacity
+                                        style={[styles.pill, styles.activePill, { alignSelf: 'flex-start' }]}
+                                        onPress={() => setShowTribeFocusRolodex(true)}
+                                    >
+                                        <Text style={styles.activePillText}>{tribeFocus}</Text>
+                                        <MaterialCommunityIcons name="chevron-down" size={20} color="#F5F5DC" style={{ marginLeft: 4 }} />
+                                    </TouchableOpacity>
+                                </View>
+                                <View style={styles.divider} />
+
+                                {/* Visibility */}
+                                <View style={styles.row}>
+                                    <Text style={styles.label}>Visibility</Text>
+                                    <TouchableOpacity
+                                        style={[styles.pill, styles.activePill, { alignSelf: 'flex-start' }]}
+                                        onPress={() => setShowVisibilityRolodex(true)}
+                                    >
+                                        <Text style={styles.activePillText}>{visibility}</Text>
+                                        <MaterialCommunityIcons name="chevron-down" size={20} color="#F5F5DC" style={{ marginLeft: 4 }} />
+                                    </TouchableOpacity>
+                                </View>
+                                <View style={styles.divider} />
+                            </>
+                        )}
 
                         <View style={styles.divider} />
 
-                        {/* Body Fat */}
-                        <RangeSlider
-                            min={1}
-                            max={99}
-                            initialMin={minBf}
-                            initialMax={maxBf}
-                            onValuesChange={(min, max) => {
-                                setMinBf(min);
-                                setMaxBf(max);
-                            }}
-                        />
+                        {/* Physical Stats - Hide for Tribes */}
+                        {!isTribes && (
+                            <View style={{ opacity: isSectionDisabled('body') ? 0.5 : 1 }} pointerEvents={isSectionDisabled('body') ? 'none' : 'auto'}>
+                                {/* Height */}
+                                <View style={styles.row}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                        <Text style={styles.label}>Height</Text>
+                                        <TouchableOpacity onPress={() => setIsMetric(!isMetric)} style={{ paddingRight: 10 }}>
+                                            <Text style={{ color: '#F5F5DC', fontSize: 12, fontWeight: 'bold', textDecorationLine: 'underline' }}>
+                                                {isMetric ? 'Switch to ft/in' : 'Switch to cm'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    <View style={styles.controlsRow}>
+                                        <TouchableOpacity
+                                            style={[styles.toggleBtn, heightMode === 'Range' && styles.activeToggle]}
+                                            onPress={() => setHeightMode('Range')}
+                                        >
+                                            <Text style={[styles.toggleText, heightMode === 'Range' && styles.activeToggleText]}>± 3 {isMetric ? 'cm' : 'in.'}</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[styles.toggleBtn, heightMode === 'Exact' && styles.activeToggle]}
+                                            onPress={() => setHeightMode('Exact')}
+                                        >
+                                            <Text style={[styles.toggleText, heightMode === 'Exact' && styles.activeToggleText]}>Exact</Text>
+                                        </TouchableOpacity>
+
+                                        {isMetric ? (
+                                            <View style={styles.inputContainer}>
+                                                <TextInput
+                                                    style={styles.textInput}
+                                                    value={cmVal}
+                                                    onChangeText={setCmVal}
+                                                    keyboardType="numeric"
+                                                    placeholder="170"
+                                                    placeholderTextColor="rgba(47, 58, 39, 0.5)"
+                                                />
+                                                <Text style={styles.suffix}>cm</Text>
+                                            </View>
+                                        ) : (
+                                            <TouchableOpacity
+                                                style={styles.inputContainer}
+                                                onPress={() => setShowHeightRolodex(true)}
+                                            >
+                                                <Text style={styles.inputValue}>{ft}'{inch}</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                </View>
+
+                                <View style={styles.divider} />
+
+                                {/* Weight */}
+                                <View style={styles.row}>
+                                    <Text style={styles.label}>Weight</Text>
+                                    <View style={styles.controlsRow}>
+                                        <TouchableOpacity
+                                            style={[styles.toggleBtn, weightMode === 'Range15' && styles.activeToggle]}
+                                            onPress={() => setWeightMode('Range15')}
+                                        >
+                                            <Text style={[styles.toggleText, weightMode === 'Range15' && styles.activeToggleText]}>± 15 lbs</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[styles.toggleBtn, weightMode === 'Range5' && styles.activeToggle]}
+                                            onPress={() => setWeightMode('Range5')}
+                                        >
+                                            <Text style={[styles.toggleText, weightMode === 'Range5' && styles.activeToggleText]}>± 5 lbs</Text>
+                                        </TouchableOpacity>
+                                        <View style={styles.inputContainer}>
+                                            <TextInput
+                                                style={styles.textInput}
+                                                placeholder=".."
+                                                placeholderTextColor="rgba(47, 58, 39, 0.5)"
+                                                keyboardType="numeric"
+                                                value={weightVal}
+                                                onChangeText={setWeightVal}
+                                            />
+                                            <Text style={styles.suffix}>lbs</Text>
+                                        </View>
+                                    </View>
+                                </View>
+
+                                <View style={styles.divider} />
+
+                                {/* Body Fat */}
+                                <RangeSlider
+                                    min={1}
+                                    max={99}
+                                    initialMin={minBf}
+                                    initialMax={maxBf}
+                                    onValuesChange={(min, max) => {
+                                        setMinBf(min);
+                                        setMaxBf(max);
+                                    }}
+                                />
+
+                                <View style={styles.divider} />
+                            </View>
+                        )}
 
                         <View style={styles.divider} />
 
@@ -319,10 +394,29 @@ export default function FilterModal({ visible, onClose, onApply }: FilterModalPr
                 </Pressable>
             </Pressable>
 
-            {(showActivityRolodex || showHeightRolodex) && (
+            {showVisibilityRolodex && (
+                <RolodexPicker
+                    options={VISIBILITY_OPTIONS}
+                    selected={visibility}
+                    onSelect={setVisibility}
+                />
+            )}
+            {showTribeFocusRolodex && (
+                <RolodexPicker
+                    options={TRIBE_FOCUS_OPTIONS}
+                    selected={tribeFocus}
+                    onSelect={setTribeFocus}
+                />
+            )}
+            {(showActivityRolodex || showHeightRolodex || showVisibilityRolodex || showTribeFocusRolodex) && (
                 <View style={styles.rolodexContainer}>
                     <View style={styles.rolodexHeader}>
-                        <TouchableOpacity onPress={() => { setShowActivityRolodex(false); setShowHeightRolodex(false); }}>
+                        <TouchableOpacity onPress={() => {
+                            setShowActivityRolodex(false);
+                            setShowHeightRolodex(false);
+                            setShowVisibilityRolodex(false);
+                            setShowTribeFocusRolodex(false);
+                        }}>
                             <Text style={styles.doneText}>Done</Text>
                         </TouchableOpacity>
                     </View>
@@ -338,6 +432,20 @@ export default function FilterModal({ visible, onClose, onApply }: FilterModalPr
                             selectedFt={ft}
                             selectedIn={inch}
                             onSelect={(f, i) => { setFt(f); setInch(i); }}
+                        />
+                    )}
+                    {showVisibilityRolodex && (
+                        <RolodexPicker
+                            options={VISIBILITY_OPTIONS}
+                            selected={visibility}
+                            onSelect={setVisibility}
+                        />
+                    )}
+                    {showTribeFocusRolodex && (
+                        <RolodexPicker
+                            options={TRIBE_FOCUS_OPTIONS}
+                            selected={tribeFocus}
+                            onSelect={setTribeFocus}
                         />
                     )}
                 </View>

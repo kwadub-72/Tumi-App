@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/src/shared/theme/Colors';
@@ -14,12 +14,20 @@ import TribeSelectionModal from '@/src/features/home/components/TribeSelectionMo
 
 type NavTab = 'Following' | 'Diary' | 'Tribe';
 
+import { useUserTribeStore } from '@/src/store/UserTribeStore';
+// ... 
+
 export default function HomeScreen() {
+    const { init } = useUserTribeStore();
     const [currentTab, setCurrentTab] = useState<NavTab>('Following');
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [viewDate, setViewDate] = useState(new Date());
     const [isCalendarVisible, setIsCalendarVisible] = useState(false);
     const [isTribeModalVisible, setIsTribeModalVisible] = useState(false);
+
+    useEffect(() => {
+        init();
+    }, []);
 
     // Format date for button (e.g., "Dec 29, 2025")
     const formattedDate = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });

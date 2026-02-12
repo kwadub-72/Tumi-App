@@ -150,3 +150,31 @@ export interface Workout {
     duration?: number; // total duration in minutes
     timestamp: number;
 }
+
+export type TribeType = 'accountability' | 'head-to-head' | 'tribe-vs-tribe';
+export type TribePrivacy = 'public' | 'private';
+export type TribeJoinStatus = 'none' | 'requested' | 'joined';
+
+export interface Tribe {
+    id: string;
+    name: string;
+    avatar: any;
+    themeColor: string;
+    type: TribeType;
+    privacy: TribePrivacy;
+    memberCount: number;
+    description: string;
+    joinStatus: TribeJoinStatus;
+    chief: User;
+    members?: User[];
+    posts?: FeedPost[];
+    tags?: string[]; // 'natural', 'active'
+    activity?: string; // e.g. 'Bodybuilder (bulk)'
+    activityIcon?: string;
+    visibility?: {
+        meal: 'public' | 'private' | 'tribe';
+        workout: 'public' | 'private' | 'tribe';
+        macro: 'public' | 'private' | 'tribe';
+    };
+    naturalStatus?: boolean; // natural/enhanced
+}
