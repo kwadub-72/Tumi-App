@@ -21,7 +21,7 @@ export default function SettingsScreen() {
             'Are you sure you want to logout?',
             [
                 { text: 'No', style: 'cancel' },
-                { text: 'Yes', onPress: () => router.replace('/(tabs)') }
+                { text: 'Yes', onPress: () => router.replace('/') }
             ]
         );
     };

@@ -83,7 +83,13 @@ export function generateFakeUsers(count: number): User[] {
                 workouts: Math.floor(Math.random() * 600) + 50,
                 updates: Math.floor(Math.random() * 300) + 20
             },
-            isFollowing: Math.random() > 0.7
+            isFollowing: Math.random() > 0.7,
+            macroTargets: {
+                p: Math.floor(Math.random() * 100) + 150, // 150-250g
+                c: Math.floor(Math.random() * 200) + 200, // 200-400g
+                f: Math.floor(Math.random() * 50) + 50,   // 50-100g
+                calories: Math.floor(Math.random() * 1500) + 2000 // 2000-3500 cals
+            }
         });
     }
     return users;

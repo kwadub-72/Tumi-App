@@ -11,13 +11,14 @@ interface RolodexProps {
     options: ActivityOption[];
     selected: string;
     onSelect: (val: string) => void;
+    showAll?: boolean;
 }
 
 const ITEM_HEIGHT = 50;
 
-export default function RolodexPicker({ options, selected, onSelect }: RolodexProps) {
+export default function RolodexPicker({ options, selected, onSelect, showAll = true }: RolodexProps) {
     const flatListRef = useRef<FlatList>(null);
-    const data = [{ name: 'All', icon: '' }, ...options];
+    const data = showAll ? [{ name: 'All', icon: '' }, ...options] : options;
 
     useEffect(() => {
         // Initial scroll to position if possible, maybe delayed

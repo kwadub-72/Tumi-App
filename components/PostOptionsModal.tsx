@@ -6,9 +6,10 @@ import { Colors } from '../src/shared/theme/Colors';
 interface PostOptionsModalProps {
     visible: boolean;
     onClose: () => void;
+    onSelectItems?: () => void;
 }
 
-export default function PostOptionsModal({ visible, onClose }: PostOptionsModalProps) {
+export default function PostOptionsModal({ visible, onClose, onSelectItems }: PostOptionsModalProps) {
     return (
         <Modal
             visible={visible}
@@ -19,6 +20,15 @@ export default function PostOptionsModal({ visible, onClose }: PostOptionsModalP
             <Pressable style={styles.overlay} onPress={onClose}>
                 <Pressable style={styles.content}>
                     <View style={styles.handle} />
+
+                    {onSelectItems && (
+                        <TouchableOpacity style={styles.optionRow} onPress={onSelectItems}>
+                            <View style={styles.iconContainer}>
+                                <Ionicons name="checkmark-circle-outline" size={24} color="#2D3A26" />
+                            </View>
+                            <Text style={styles.optionText}>Select items</Text>
+                        </TouchableOpacity>
+                    )}
 
                     <TouchableOpacity style={styles.optionRow}>
                         <View style={styles.iconContainer}>
@@ -65,7 +75,7 @@ const styles = StyleSheet.create({
     optionRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: Colors.theme.sage, // Light sage background for Unfollow
+        backgroundColor: Colors.theme.sage, // Light sage background
         borderRadius: 20,
         padding: 16,
         marginBottom: 12,

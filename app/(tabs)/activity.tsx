@@ -9,6 +9,16 @@ import { Colors } from '../../src/shared/theme/Colors';
 import { PostStore } from '../../store/PostStore';
 import { WeightEntry, WeightStore } from '../../store/WeightStore';
 import { useUserStore } from '../../store/UserStore';
+import { AccountabilityDashboard } from '../../src/features/tribes/components/dashboards/AccountabilityDashboard';
+import { H2HUserMatchupDashboard } from '../../src/features/tribes/components/dashboards/H2HUserMatchupDashboard';
+import { H2HLeaderboardDashboard } from '../../src/features/tribes/components/dashboards/H2HLeaderboardDashboard';
+import { PremierH2HLeaderboardDashboard } from '../../src/features/tribes/components/dashboards/PremierH2HLeaderboardDashboard';
+import { DashboardCarousel } from '../../src/features/tribes/components/dashboards/DashboardCarousel';
+import { TradTribeBattleDashboard } from '../../src/features/tribes/components/dashboards/TradTribeBattleDashboard';
+import { TradTribeBattleUserMatchup } from '../../src/features/tribes/components/dashboards/TradTribeBattleUserMatchup';
+import { TradTribeBattleLeaderboard } from '../../src/features/tribes/components/dashboards/TradTribeBattleLeaderboard';
+import { PremierTribeBattleDashboard } from '../../src/features/tribes/components/dashboards/PremierTribeBattleDashboard';
+import { PremierTribeBattleLeaderboard } from '../../src/features/tribes/components/dashboards/PremierTribeBattleLeaderboard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -267,74 +277,32 @@ export default function DashboardScreen() {
                     </Animated.View>
                 </View>
 
-                {/* League / Flip Card */}
-                <TouchableOpacity activeOpacity={0.9} style={styles.leagueCard} onPress={() => setIsFlipped(!isFlipped)}>
-                    {!isFlipped ? (
-                        <>
-                            <Text style={styles.leagueTitle}>Harvard Alum League</Text>
-                            <View style={styles.leagueTableHeader}>
-                                <Text style={styles.tableHead}>Weekly Rank</Text>
-                                <Text style={styles.tableHead}>Score</Text>
-                            </View>
-                            {LEAGUE_DATA.map((item, i) => (
-                                <View key={i} style={styles.leagueRow}>
-                                    <View style={styles.leagueUser}>
-                                        <Text style={styles.rankNum}>{item.rank}.</Text>
-                                        <Text style={styles.userName}>{item.name}</Text>
-                                        {item.direction === 'up' && <Ionicons name="arrow-up" size={14} color="#4ADE80" />}
-                                        {item.direction === 'down' && <Ionicons name="arrow-down" size={14} color={Colors.error} />}
-                                    </View>
-                                    <View style={styles.scoreGroup}>
-                                        <Text style={styles.leagueScore}>{item.score}</Text>
-                                        <Text style={[styles.scoreDiff, { color: item.change > 0 ? '#4ADE80' : Colors.error }]}>
-                                            ({item.change > 0 ? '+' : ''}{item.change})
-                                        </Text>
-                                    </View>
-                                </View>
-                            ))}
-                        </>
-                    ) : (
-                        <View style={styles.matchupView}>
-                            <View style={styles.matchupHeader}>
-                                <MaterialCommunityIcons name="fire" size={28} color={Colors.primary} />
-                                <Text style={styles.leagueTitleInline}>Harvard Alum League</Text>
-                                <View style={styles.badgeIcons}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-                                        <MaterialCommunityIcons
-                                            name={userInfo.activityIcon as any}
-                                            size={20}
-                                            color={userInfo.activity === 'Glute Growth' ? '#FFB07C' : Colors.primary}
-                                        />
-                                        {userInfo.activity.toLowerCase().includes('bulk') && (
-                                            <Text style={{ color: Colors.primary, fontSize: 13, fontWeight: 'bold', marginLeft: 1, marginTop: -2 }}>+</Text>
-                                        )}
-                                        {userInfo.activity.toLowerCase().includes('cut') && (
-                                            <Text style={{ color: Colors.primary, fontSize: 13, fontWeight: 'bold', marginLeft: 1, marginTop: -2 }}>-</Text>
-                                        )}
-                                    </View>
-                                    <MaterialCommunityIcons name="leaf" size={20} color="#4ADE80" />
-                                </View>
-                            </View>
-                            <View style={styles.matchupGrid}>
-                                <View style={styles.matchupPlayer}>
-                                    <Image source={{ uri: userInfo.avatar }} style={styles.matchAvatar} />
-                                    <Text style={styles.matchName}><Text style={{ color: '#4ADE80' }}>1st</Text> {userInfo.name.split(' ')[0]}</Text>
-                                    <Text style={styles.matchHandle}>@kwadub</Text>
-                                    <Text style={styles.matchRecord}>6-3 <Text style={{ color: '#4ADE80' }}>(W3)</Text></Text>
-                                    <Text style={styles.matchBigScore}>23</Text>
-                                </View>
-                                <Text style={styles.vsText}>VS</Text>
-                                <View style={styles.matchupPlayer}>
-                                    <View style={[styles.matchAvatar, { backgroundColor: '#ccc' }]} />
-                                    <Text style={styles.matchName}>Matt</Text>
-                                    <Text style={styles.matchHandle}>@Hud2x</Text>
-                                    <Text style={styles.matchRecord}>6-3 <Text style={{ color: Colors.error }}>(L1)</Text></Text>
-                                    <Text style={styles.matchBigScore}>21</Text>
-                                </View>
-                            </View>
-                        </View>
-                    )}
-                </TouchableOpacity>
+                {/* New Dashboards will go here */}
+                <View style={styles.dashboardsContainer}>
+                    <AccountabilityDashboard />
+
+                    <DashboardCarousel>
+                        <H2HUserMatchupDashboard />
+                        <H2HLeaderboardDashboard />
+                    </DashboardCarousel>
+
+                    <DashboardCarousel>
+                        <TradTribeBattleDashboard />
+                        <TradTribeBattleUserMatchup />
+                        <TradTribeBattleLeaderboard />
+                        <TradTribeBattleLeaderboard />
+                    </DashboardCarousel>
+
+                    <DashboardCarousel>
+                        <PremierH2HLeaderboardDashboard />
+                    </DashboardCarousel>
+
+                    <DashboardCarousel>
+                        <PremierTribeBattleDashboard />
+                        <PremierTribeBattleLeaderboard />
+                        <PremierTribeBattleLeaderboard />
+                    </DashboardCarousel>
+                </View>
 
             </ScrollView>
         </SafeAreaView>
@@ -370,12 +338,12 @@ const styles = StyleSheet.create({
         paddingBottom: 100,
     },
     dashboardCard: {
-        backgroundColor: 'rgba(79, 99, 82, 0.1)',
+        backgroundColor: Colors.card,
         borderRadius: 35,
         padding: 20,
         marginBottom: 25,
         borderWidth: 1,
-        borderColor: 'rgba(79, 99, 82, 0.2)',
+        borderColor: 'rgba(79, 99, 82, 0.4)',
     },
     macroRow: {
         flexDirection: 'row',
@@ -394,8 +362,6 @@ const styles = StyleSheet.create({
         borderRadius: 18,
         flexDirection: 'row',
         overflow: 'hidden',
-        borderWidth: 1.5,
-        borderColor: Colors.primary,
     },
     sliderFill: {
         height: '100%',
@@ -420,21 +386,23 @@ const styles = StyleSheet.create({
     goalHint: {
         width: 55,
         fontSize: 10,
-        color: Colors.primary,
-        opacity: 0.6,
+        color: 'white',
+        opacity: 0.8,
         fontWeight: 'bold',
     },
     divider: {
         height: 1,
-        backgroundColor: Colors.primary,
+        backgroundColor: 'white',
         opacity: 0.2,
         marginVertical: 8,
     },
     weightCard: {
-        backgroundColor: Colors.primary,
+        backgroundColor: Colors.card,
         borderRadius: 35,
         padding: 20,
         marginBottom: 25,
+        borderWidth: 1,
+        borderColor: 'rgba(79, 99, 82, 0.4)',
     },
     weightHeader: {
         flexDirection: 'row',
@@ -449,7 +417,7 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
     weightBadge: {
-        backgroundColor: 'rgba(255,255,255,0.2)',
+        backgroundColor: 'rgba(255,255,255,0.3)',
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 15,
@@ -514,132 +482,8 @@ const styles = StyleSheet.create({
         color: 'rgba(255,255,255,0.6)',
         fontSize: 9,
     },
-    leagueCard: {
-        backgroundColor: 'white',
-        borderRadius: 35,
-        padding: 20,
-        borderWidth: 1.5,
-        borderColor: Colors.primary,
-    },
-    leagueTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: Colors.primary,
-        textAlign: 'center',
-        textDecorationLine: 'underline',
-        marginBottom: 15,
-    },
-    leagueTableHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 8,
-    },
-    tableHead: {
-        color: Colors.primary,
-        fontSize: 14,
-        fontWeight: 'bold',
-        opacity: 0.6,
-    },
-    leagueRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 6,
-    },
-    leagueUser: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    rankNum: {
-        fontWeight: 'bold',
-        color: Colors.primary,
-    },
-    userName: {
-        fontSize: 16,
-        color: Colors.primary,
-        fontWeight: '600',
-    },
-    scoreGroup: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    leagueScore: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: Colors.primary,
-    },
-    scoreDiff: {
-        fontSize: 14,
-    },
-    matchupView: {
-        alignItems: 'center',
-    },
-    matchupHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        marginBottom: 20,
-        width: '100%',
-        justifyContent: 'center',
-    },
-    leagueTitleInline: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: Colors.primary,
-        textDecorationLine: 'underline',
-    },
-    badgeIcons: {
-        flexDirection: 'row',
-        gap: 4,
-        position: 'absolute',
-        right: 0,
-    },
-    matchupGrid: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        width: '100%',
-    },
-    matchupPlayer: {
-        flex: 1,
-        alignItems: 'center',
-    },
-    matchAvatar: {
-        width: 70,
-        height: 70,
-        borderRadius: 35,
-        marginBottom: 8,
-        borderWidth: 2,
-        borderColor: Colors.primary,
-    },
-    matchName: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: Colors.primary,
-    },
-    matchHandle: {
-        fontSize: 12,
-        color: Colors.primary,
-        opacity: 0.6,
-    },
-    matchRecord: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        marginTop: 4,
-    },
-    matchBigScore: {
-        fontSize: 48,
-        fontWeight: 'bold',
-        color: Colors.primary,
-        marginTop: 5,
-    },
-    vsText: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: Colors.primary,
-        opacity: 0.3,
-        marginHorizontal: 10,
+    dashboardsContainer: {
+        gap: 20,
+        paddingBottom: 40,
     }
 });

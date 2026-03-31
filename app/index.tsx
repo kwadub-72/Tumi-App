@@ -2,49 +2,24 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Path, G } from 'react-native-svg';
 import { StatusBar } from 'expo-status-bar';
+import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
 
 const { width } = Dimensions.get('window');
 
-// Colors based on user description/images
-const BG_COLOR = '#3E5245'; // Dark Sage/Green from Image 1 impression
-const CREAM_COLOR = '#EAE8D9'; // "Image 3" color (approx)
-const TEXT_COLOR = '#F5F5DC'; // Beige text
-
-const TabonoLogo = ({ size = 200, color = CREAM_COLOR }: { size?: number, color?: string }) => {
-    // Tabono symbol consists of 4 paddle-like shapes joined at the center.
-    // Approximated with 4 rotated petals.
-    const petalPath = "M0 0 C 25 -25, 50 -60, 0 -90 C -50 -60, -25 -25, 0 0";
-
-    return (
-        <Svg width={size} height={size} viewBox="0 0 200 200">
-            <G transform="translate(100, 100)">
-                {[0, 90, 180, 270].map((rotation, i) => (
-                    <G key={i} transform={`rotate(${rotation})`}>
-                        <Path
-                            d={petalPath}
-                            fill={color}
-                        />
-                    </G>
-                ))}
-            </G>
-        </Svg>
-    );
-};
+// Colors
+const CREAM_COLOR = '#EAE8D9';
+const BG_COLOR = '#435D4C'; // Matches the greenish background in Image 1
 
 export default function WelcomeScreen() {
     const router = useRouter();
 
     const handleLogin = () => {
-        // Navigate to the main app (Feed)
-        router.replace('/(tabs)');
+        router.push('/login');
     };
 
     const handleCreateAccount = () => {
-        // Just log for now as per instructions "but when he presses log-in, it should take him to the feed screen"
-        // Create account action not specified.
-        console.log("Create Account pressed");
+        router.push('/signup'); // Route to signup flow
     };
 
     return (
@@ -74,23 +49,23 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#435D4C', // Matches the greenish background in Image 1
+        backgroundColor: BG_COLOR,
     },
     content: {
         flex: 1,
-        justifyContent: 'center', // Center vertically
+        justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 40,
     },
     logoContainer: {
         alignItems: 'center',
-        marginBottom: 80, // Space between logo and buttons
+        marginBottom: 80,
         gap: 20,
     },
     title: {
         fontSize: 64,
-        fontWeight: '400', // Thin/Regular font weight as shown
-        color: '#EAE8D9', // Matching logo color or specific text color
+        fontWeight: '400',
+        color: CREAM_COLOR,
         letterSpacing: 2,
         fontFamily: 'System',
         marginTop: 20,
@@ -99,10 +74,10 @@ const styles = StyleSheet.create({
         width: '100%',
         gap: 20,
         position: 'absolute',
-        bottom: 80, // Position buttons at bottom
+        bottom: 80,
     },
     button: {
-        backgroundColor: '#EAE8D9', // Cream button
+        backgroundColor: CREAM_COLOR,
         paddingVertical: 18,
         borderRadius: 30, // Pill shape
         alignItems: 'center',
@@ -114,7 +89,7 @@ const styles = StyleSheet.create({
         elevation: 3,
     },
     loginButton: {
-        // Login button style identical to Create Account in Image 1
+        // Same style
     },
     buttonText: {
         color: '#2F3A27', // Dark green text

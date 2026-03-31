@@ -53,6 +53,12 @@ export interface User {
         updates: number;
     };
     isFollowing?: boolean;
+    macroTargets?: {
+        p: number;
+        c: number;
+        f: number;
+        calories: number;
+    };
 }
 
 export interface FeedPost {

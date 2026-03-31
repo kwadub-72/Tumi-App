@@ -1,7 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FlatList, Image, StyleSheet, Text, TouchableOpacity, View, Modal, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import FeedItem from '@/src/features/feed/components/FeedItem';
 import { FeedPost, Comment } from '@/src/shared/models/types';
@@ -10,12 +10,44 @@ import { PostStore } from '@/store/PostStore';
 import { generateFakePosts } from '@/src/shared/utils/FakeDataGenerator';
 import { useUserStore } from '@/store/UserStore';
 import HammerModal from '@/components/HammerModal';
+import PostOptionsModal from '@/components/PostOptionsModal';
+
+type NavTab = 'Following' | 'Diary' | 'Tribe';
 
 export default function PostDetailScreen() {
     const { id } = useLocalSearchParams();
     const router = useRouter();
     const userInfo = useUserStore();
     const [post, setPost] = useState<FeedPost | null>(null);
+
+    const [currentTab, setCurrentTab] = useState<NavTab>('Following');
+    const [selectedDate, setSelectedDate] = useState(new Date());
+
+    const [isOptionsModalVisible, setOptionsModalVisible] = useState(false);
+    const [isSelectMode, setIsSelectMode] = useState(false);
+    const [selectedItems, setSelectedItems] = useState<string[]>([]);
+
+    const formattedDate = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+    const handleTabPress = (tab: NavTab) => {
+        router.replace({ pathname: '/(tabs)', params: { tab } });
+    };
+
+    const handleToggleSelect = (itemId: string, type: string) => {
+        if (type === 'macro') {
+            // For macros, only one can be selected, and it acts as a toggle
+            setSelectedItems(prev => {
+                if (prev.includes(itemId)) return [];
+                return [itemId];
+            });
+            return;
+        }
+
+        setSelectedItems(prev => {
+            if (prev.includes(itemId)) return prev.filter(i => i !== itemId);
+            return [...prev, itemId];
+        });
+    };
 
     useEffect(() => {
         const loadPost = async () => {
@@ -64,21 +96,44 @@ export default function PostDetailScreen() {
         });
     };
 
-    const renderComment = ({ item }: { item: Comment }) => (
-        <View style={styles.commentItem}>
-            <Image
-                source={typeof item.user.avatar === 'string' ? { uri: item.user.avatar } : item.user.avatar}
-                style={styles.commentAvatar}
-            />
-            <View style={styles.commentContent}>
-                <Text style={styles.commentText}>{item.text}</Text>
-                <Text style={styles.commentTime}>Just now</Text>
-            </View>
-            <View style={styles.commentActions}>
-                <TouchableOpacity>
-                    <Ionicons name={item.isLiked ? "heart" : "heart-outline"} size={20} color={item.isLiked ? Colors.error : Colors.primary} />
-                </TouchableOpacity>
-                <Text style={styles.commentLikes}>30</Text>
+    const renderComment = ({ item, index }: { item: Comment, index: number }) => (
+        <View key={item.id} style={styles.commentRowWrapper}>
+            <View style={styles.commentItem}>
+                <Image
+                    source={typeof item.user.avatar === 'string' ? { uri: item.user.avatar } : item.user.avatar}
+                    style={styles.commentAvatar}
+                />
+                <View style={styles.commentContent}>
+                    <View style={styles.commentHeaderLine}>
+                        <Text style={styles.commentName}>{item.user.name}</Text>
+                        {item.user.status && (item.user.status !== 'none') && (
+                            <MaterialCommunityIcons
+                                name={item.user.status === 'enhanced' ? "lightning-bolt" : "leaf"}
+                                size={14}
+                                color={item.user.status === 'enhanced' ? "#FFD700" : Colors.success}
+                            />
+                        )}
+                        {item.user.activityIcon && (
+                            <MaterialCommunityIcons
+                                name={item.user.activityIcon as any}
+                                size={14}
+                                color={(item.user as any).activity === 'Glute Growth' ? '#FFB07C' : 'white'}
+                            />
+                        )}
+                    </View>
+                    <View style={styles.commentHandleRow}>
+                        <Text style={styles.commentHandle}>{item.user.handle}</Text>
+                    </View>
+                    <Text style={styles.commentText}>{item.text}</Text>
+                </View>
+
+                <View style={styles.commentActions}>
+                    <TouchableOpacity>
+                        <Ionicons name={item.isLiked ? "heart" : "heart-outline"} size={20} color={"white"} />
+                    </TouchableOpacity>
+                    <Text style={styles.commentLikes}>{item.likes}</Text>
+                    <Text style={styles.commentTime}>Just now</Text>
+                </View>
             </View>
         </View>
     );
@@ -98,13 +153,48 @@ export default function PostDetailScreen() {
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
-            <View style={styles.header}>
+            <View style={styles.headerRow}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={28} color={Colors.primary} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Post</Text>
+
+                <View style={styles.topNavWrapper}>
+                    <View style={styles.tabsContainer}>
+                        {(['Following', 'Diary', 'Tribe'] as NavTab[]).map((tab) => (
+                            <TouchableOpacity
+                                key={tab}
+                                style={[
+                                    styles.tabButton,
+                                    currentTab === tab && styles.tabButtonActive
+                                ]}
+                                onPress={() => handleTabPress(tab)}
+                            >
+                                <Text style={[
+                                    styles.tabText,
+                                    currentTab === tab && styles.tabTextActive
+                                ]}>
+                                    {tab}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+
+                    <TouchableOpacity style={styles.dateButton} onPress={() => router.replace('/')}>
+                        <Text style={styles.dateButtonText}>{formattedDate}</Text>
+                    </TouchableOpacity>
+                </View>
+
                 <View style={{ width: 44 }} />
             </View>
+
+            <PostOptionsModal
+                visible={isOptionsModalVisible}
+                onClose={() => setOptionsModalVisible(false)}
+                onSelectItems={() => {
+                    setOptionsModalVisible(false);
+                    setIsSelectMode(true);
+                }}
+            />
 
             <HammerModal
                 visible={isHammerModalVisible}
@@ -113,13 +203,24 @@ export default function PostDetailScreen() {
                 activityIcon={hammerData.icon}
             />
             <FlatList
-                data={post.comments || []}
-                keyExtractor={(item) => item.id}
-                renderItem={renderComment}
+                data={[]}
+                keyExtractor={(item) => 'dummy'}
+                renderItem={() => null}
                 ListHeaderComponent={(
                     <View style={styles.postContainer}>
                         <FeedItem
                             post={post}
+                            isDetailView={true}
+                            isSelectMode={isSelectMode}
+                            selectedItems={selectedItems}
+                            onToggleSelect={handleToggleSelect}
+                            onPressOptions={() => {
+                                if (isSelectMode) {
+                                    setIsSelectMode(false);
+                                } else {
+                                    setOptionsModalVisible(true);
+                                }
+                            }}
                             onPressLike={toggleLike}
                             onPressHammer={() => {
                                 setHammerData({
@@ -129,7 +230,12 @@ export default function PostDetailScreen() {
                                 setHammerModalVisible(true);
                             }}
                         />
-                        <View style={styles.divider} />
+                        {post.comments && post.comments.length > 0 && (
+                            <View style={styles.commentsWrapper}>
+                                <Text style={styles.commentsHeaderText}>Comments</Text>
+                                {post.comments.map((item, index) => renderComment({ item, index }))}
+                            </View>
+                        )}
                     </View>
                 )}
                 contentContainerStyle={styles.listContent}
@@ -154,22 +260,61 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
     },
-    header: {
+    headerRow: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         justifyContent: 'space-between',
         paddingHorizontal: 15,
-        paddingVertical: 10,
+        paddingTop: 10,
+        marginBottom: 10,
     },
     backBtn: {
         width: 44,
         height: 44,
         justifyContent: 'center',
+        marginTop: 5,
     },
-    headerTitle: {
-        fontSize: 20,
+    topNavWrapper: {
+        alignItems: 'center',
+        flex: 1,
+    },
+    tabsContainer: {
+        flexDirection: 'row',
+        backgroundColor: Colors.topNavBackground,
+        borderRadius: 25,
+        padding: 5,
+        alignSelf: 'stretch', // take available space 
+        marginHorizontal: 10,
+        justifyContent: 'space-between',
+    },
+    tabButton: {
+        flex: 1,
+        paddingVertical: 10,
+        alignItems: 'center',
+        borderRadius: 20,
+    },
+    tabButtonActive: {
+        backgroundColor: Colors.primary,
+    },
+    tabText: {
+        fontSize: 14,
         fontWeight: 'bold',
-        color: Colors.primary,
+        color: '#6E7A66', // Sage dark muted
+    },
+    tabTextActive: {
+        color: 'white',
+    },
+    dateButton: {
+        backgroundColor: Colors.primary,
+        paddingVertical: 6,
+        paddingHorizontal: 16,
+        borderRadius: 15,
+        marginTop: 10,
+    },
+    dateButtonText: {
+        color: 'white',
+        fontSize: 13,
+        fontWeight: 'bold',
     },
     postContainer: {
         paddingHorizontal: 15,
@@ -183,12 +328,14 @@ const styles = StyleSheet.create({
     listContent: {
         paddingBottom: 40,
     },
+    commentRowWrapper: {
+        marginBottom: 8,
+    },
     commentItem: {
         flexDirection: 'row',
-        paddingHorizontal: 20,
         paddingVertical: 15,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(79, 99, 82, 0.1)',
+        borderBottomColor: 'rgba(255, 255, 255, 0.1)',
         alignItems: 'flex-start',
     },
     commentAvatar: {
@@ -196,19 +343,34 @@ const styles = StyleSheet.create({
         height: 44,
         borderRadius: 22,
         marginRight: 12,
+        backgroundColor: 'rgba(0,0,0,0.1)', // Placeholder
     },
     commentContent: {
         flex: 1,
     },
+    commentHeaderLine: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 4,
+        gap: 2,
+    },
+    commentName: {
+        fontWeight: 'bold',
+        fontSize: 14,
+        color: 'white',
+        marginRight: 4,
+    },
+    commentHandleRow: {
+        marginBottom: 4,
+    },
+    commentHandle: {
+        color: 'rgba(255,255,255,0.6)',
+        fontSize: 12,
+    },
     commentText: {
         fontSize: 14,
-        color: Colors.primary,
+        color: 'white',
         lineHeight: 18,
-    },
-    commentTime: {
-        fontSize: 11,
-        color: 'rgba(79, 99, 82, 0.6)',
-        marginTop: 4,
     },
     commentActions: {
         alignItems: 'center',
@@ -216,7 +378,27 @@ const styles = StyleSheet.create({
     },
     commentLikes: {
         fontSize: 11,
-        color: 'rgba(79, 99, 82, 0.6)',
+        color: 'rgba(255,255,255,0.6)',
         marginTop: 2,
+    },
+    commentTime: {
+        fontSize: 11,
+        color: 'rgba(255,255,255,0.5)',
+        marginTop: 4,
+        alignSelf: 'flex-end',
+    },
+    commentsWrapper: {
+        backgroundColor: '#A4B69D', // Matching post card color
+        borderRadius: 45,
+        padding: 20,
+        marginBottom: 20,
+        marginTop: -10, // Pull it up slightly underneath the card
+    },
+    commentsHeaderText: {
+        color: 'rgba(255,255,255,0.8)',
+        fontSize: 16,
+        fontWeight: 'bold',
+        textAlign: 'center',
+        marginBottom: 10,
     }
 });

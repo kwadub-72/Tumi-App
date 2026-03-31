@@ -4,7 +4,7 @@ import { Colors } from '@/src/shared/theme/Colors';
 import { useUserTribeStore } from '@/src/store/UserTribeStore';
 import { generateFakePosts } from '@/src/shared/utils/FakeDataGenerator';
 import { FeedPost } from '@/src/shared/models/types';
-import TribePost from '@/src/features/tribes/components/TribePost';
+import FeedItem from '@/src/features/feed/components/FeedItem';
 
 export default function TribeView() {
     const { selectedTribe } = useUserTribeStore();
@@ -32,9 +32,12 @@ export default function TribeView() {
                 data={posts}
                 keyExtractor={item => item.id}
                 renderItem={({ item }) => (
-                    <TribePost post={item} cardColor={selectedTribe.themeColor === '#DEA5A4' ? '#A05F5F' : '#3E4E3E'} /> // Approximate card color contrast
+                    <View style={{ marginBottom: 15 }}>
+                        <FeedItem post={item} isDetailView={false} />
+                    </View>
                 )}
                 contentContainerStyle={{ padding: 20 }}
+                showsVerticalScrollIndicator={false}
             />
         </View>
     );

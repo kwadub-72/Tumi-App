@@ -18,7 +18,7 @@ import { useUserTribeStore } from '@/src/store/UserTribeStore';
 // ... 
 
 export default function HomeScreen() {
-    const { init } = useUserTribeStore();
+    const { init, selectedTribe } = useUserTribeStore();
     const [currentTab, setCurrentTab] = useState<NavTab>('Following');
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [viewDate, setViewDate] = useState(new Date());
@@ -62,32 +62,40 @@ export default function HomeScreen() {
     const calendarHolders = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
     const monthName = viewDate.toLocaleString('default', { month: 'long' });
 
+    const isTribeThemeActive = currentTab === 'Tribe' && selectedTribe;
+    const dynamicPrimaryColor = isTribeThemeActive ? selectedTribe.themeColor : Colors.primary;
+
     return (
         <SafeAreaView style={styles.container}>
             {/* Top Navigation */}
             <View style={styles.topNavWrapper}>
                 <View style={styles.tabsContainer}>
-                    {(['Following', 'Diary', 'Tribe'] as NavTab[]).map((tab) => (
-                        <TouchableOpacity
-                            key={tab}
-                            style={[
-                                styles.tabButton,
-                                currentTab === tab && styles.tabButtonActive
-                            ]}
-                            onPress={() => handleTabPress(tab)}
-                        >
-                            <Text style={[
-                                styles.tabText,
-                                currentTab === tab && styles.tabTextActive
-                            ]}>
-                                {tab}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
+                    {(['Following', 'Diary', 'Tribe'] as NavTab[]).map((tab) => {
+                        const isActive = currentTab === tab;
+                        const isTribeTabActive = isActive && tab === 'Tribe' && selectedTribe;
+                        return (
+                            <TouchableOpacity
+                                key={tab}
+                                style={[
+                                    styles.tabButton,
+                                    isActive && styles.tabButtonActive,
+                                    isTribeTabActive && { backgroundColor: selectedTribe.themeColor }
+                                ]}
+                                onPress={() => handleTabPress(tab)}
+                            >
+                                <Text style={[
+                                    styles.tabText,
+                                    isActive && styles.tabTextActive
+                                ]}>
+                                    {tab}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
                 </View>
 
                 <TouchableOpacity
-                    style={styles.dateButton}
+                    style={[styles.dateButton, { backgroundColor: dynamicPrimaryColor }]}
                     onPress={() => setIsCalendarVisible(true)}
                 >
                     <Text style={styles.dateButtonText}>{formattedDate}</Text>
