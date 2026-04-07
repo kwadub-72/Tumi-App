@@ -1,7 +1,8 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+    ActivityIndicator,
     Dimensions,
     FlatList,
     Image,
@@ -16,364 +17,525 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MealLoggerSheet from '../../src/features/meal-logging/components/MealLoggerSheet';
 import { FeedPost, Ingredient } from '../../src/shared/models/types';
 import { NutritionService } from '../../src/shared/services/NutritionService';
+import { USDAFoodItem, USDAFoodService } from '../../src/shared/services/USDAFoodService';
+import { useMealbookStore } from '../../src/store/useMealbookStore';
 import { Colors } from '../../src/shared/theme/Colors';
 import { useMealLogStore } from '../../src/store/useMealLogStore';
-import { PostStore } from '../../store/PostStore';
-import { useUserStore } from '../../store/UserStore';
+import { useAuthStore } from '../../store/AuthStore';
+import { SupabasePostService } from '../../src/shared/services/SupabasePostService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-interface MealItem {
-    id: string;
-    userName?: string;
-    handle?: string;
-    avatar?: any;
-    brand?: string;
-    title: string;
-    calories: number;
-    p: number;
-    c: number;
-    f: number;
-    timestamp?: string;
-    description?: string;
-    isSystemItem?: boolean;
+type Tab = 'All' | 'Recents' | 'Following' | 'Mealbook';
+const TABS: Tab[] = ['All', 'Recents', 'Following', 'Mealbook'];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Calories for 1 serving of a USDA item */
+function calPerServing(item: USDAFoodItem) {
+    return Math.round((item.caloriesPer100g * item.servingSizeG) / 100);
+}
+function macroPerServing(item: USDAFoodItem) {
+    const s = item.servingSizeG / 100;
+    return {
+        p: Math.round(item.macrosPer100g.p * s),
+        c: Math.round(item.macrosPer100g.c * s),
+        f: Math.round(item.macrosPer100g.f * s),
+    };
 }
 
-const MOCK_MEALS: MealItem[] = [
-    {
-        id: '1',
-        userName: 'Kwaku',
-        handle: '@kwadub',
-        avatar: require('../../assets/images/kwadub.jpg'),
-        title: 'Halal guys chicken and rice... post celebration',
-        calories: 1000,
-        p: 54,
-        c: 80,
-        f: 20,
-        timestamp: 'Tues 12/23/25 1:03 PM',
-    },
-    // ... other recents
-];
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
-const SYSTEM_MEALS: MealItem[] = [
-    {
-        id: 's1',
-        brand: 'Optimum\nNutrition',
-        title: 'Chocolate Shake',
-        description: '2 scoops',
-        calories: 240,
-        p: 48,
-        c: 5,
-        f: 2,
-        isSystemItem: true,
-    },
-    {
-        id: 's2',
-        brand: 'Muscle\nMilk',
-        title: 'Protein Pack',
-        description: '1 container',
-        calories: 160,
-        p: 25,
-        c: 4,
-        f: 5,
-        isSystemItem: true,
-    },
-    {
-        id: 's3',
-        brand: 'Egg\nWhites',
-        title: 'Morning Scramble',
-        description: '1 cup',
-        calories: 120,
-        p: 26,
-        c: 0,
-        f: 0,
-        isSystemItem: true,
-    },
-    {
-        id: 's4',
-        brand: 'Greek\nYogurt',
-        title: 'Plain Non-fat',
-        description: '170g',
-        calories: 100,
-        p: 18,
-        c: 6,
-        f: 0,
-        isSystemItem: true,
-    },
-];
+function USDAResultCard({
+    item,
+    onAdd,
+    onQuickAdd,
+}: {
+    item: USDAFoodItem;
+    onAdd: () => void;
+    onQuickAdd: () => void;
+}) {
+    const cals = calPerServing(item);
+    const macros = macroPerServing(item);
+    const servingLabel = item.servingSizeText
+        ? `${item.servingSizeText} (${item.servingSizeG}g)`
+        : `${item.servingSizeG}g`;
+
+    return (
+        <TouchableOpacity style={styles.usdaCard} onPress={onAdd} activeOpacity={0.85}>
+            <View style={styles.usdaCardLeft}>
+                <Text style={styles.usdaName} numberOfLines={2}>
+                    {item.name}
+                </Text>
+                {item.brand && (
+                    <Text style={styles.usdaBrand} numberOfLines={1}>
+                        {item.brand}
+                    </Text>
+                )}
+                <Text style={styles.usdaServing}>{servingLabel}</Text>
+                <View style={styles.usdaMacros}>
+                    <View style={styles.usdaMacroItem}>
+                        <MaterialCommunityIcons name="fire" size={13} color={Colors.primary} />
+                        <Text style={styles.usdaMacroText}>{cals}</Text>
+                    </View>
+                    <View style={styles.usdaMacroItem}>
+                        <MaterialCommunityIcons name="food-drumstick" size={12} color="white" />
+                        <Text style={styles.usdaMacroText}>{macros.p}g</Text>
+                    </View>
+                    <View style={styles.usdaMacroItem}>
+                        <MaterialCommunityIcons name="barley" size={12} color="white" />
+                        <Text style={styles.usdaMacroText}>{Math.round(item.netCarbsPer100g * (item.servingSizeG/100))}g</Text>
+                    </View>
+                    <View style={styles.usdaMacroItem}>
+                        <Ionicons name="water" size={12} color="white" />
+                        <Text style={styles.usdaMacroText}>{macros.f}g</Text>
+                    </View>
+                </View>
+            </View>
+            <TouchableOpacity style={styles.usdaAddBtn} onPress={onQuickAdd} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="add" size={22} color={Colors.primary} />
+            </TouchableOpacity>
+        </TouchableOpacity>
+    );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function AddMealScreen() {
     const [searchQuery, setSearchQuery] = useState('');
-    const [activeTab, setActiveTab] = useState('All');
+    const [activeTab, setActiveTab] = useState<Tab>('All');
     const [isLocked, setIsLocked] = useState(false);
+    const [isSearching, setIsSearching] = useState(false);
+    const [suggestions, setSuggestions] = useState<USDAFoodItem[]>([]);
+    const [fullResults, setFullResults] = useState<USDAFoodItem[]>([]);
+    const [showFullResults, setShowFullResults] = useState(false);
+    const [followingPosts, setFollowingPosts] = useState<FeedPost[]>([]);
 
-    // Zustand Store
-    const cartItems = useMealLogStore((state) => state.cartItems);
-    const addItem = useMealLogStore((state) => state.addItem);
-    const removeItem = useMealLogStore((state) => state.removeItem);
-    const clearCart = useMealLogStore((state) => state.clear);
+    const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const params = useLocalSearchParams<{ capturedImage?: string, mediaType?: 'image' | 'video' }>();
+    // Stores
+    const cartItems = useMealLogStore((s) => s.cartItems);
+    const addItem = useMealLogStore((s) => s.addItem);
+    const removeItem = useMealLogStore((s) => s.removeItem);
+    const clearCart = useMealLogStore((s) => s.clear);
+    const { bookmarks, recents, addRecent } = useMealbookStore();
+
+    const params = useLocalSearchParams<{ capturedImage?: string; mediaType?: 'image' | 'video' }>();
     const capturedImage = params.capturedImage;
     const mediaType = params.mediaType;
-
     const [isSheetVisible, setIsSheetVisible] = useState(false);
+    const { session, profile } = useAuthStore();
+    const userInfo = { handle: profile?.handle, name: profile?.name, avatar: profile?.avatar_url, status: profile?.status }; // Stub if needed, though profile might be better
 
-    // Clear params after consumption to prevent camera screen persistence
-    React.useEffect(() => {
+    // ── Load following feed for the Following tab ──
+    useEffect(() => {
+        if (!session?.user?.id) return;
+        SupabasePostService.getFeed({
+            userId: session.user.id,
+            feedType: 'following',
+            date: new Date(),
+            limit: 50
+        }).then((posts) => {
+            setFollowingPosts(posts);
+        });
+    }, [session?.user?.id]);
+
+    // ── Sheet visibility ──
+    useEffect(() => {
+        setIsSheetVisible(cartItems.length > 0);
+    }, [cartItems.length]);
+
+    // ── Clear captured image params ──
+    useEffect(() => {
         if (capturedImage) {
-            // Params will be consumed by MealLoggerSheet, clear them after a brief delay
-            const timer = setTimeout(() => {
+            const t = setTimeout(() => {
                 router.setParams({ capturedImage: undefined, mediaType: undefined });
             }, 500);
-            return () => clearTimeout(timer);
+            return () => clearTimeout(t);
         }
     }, [capturedImage]);
 
-    // Derived state for sheet visibility based on cart
-    React.useEffect(() => {
-        if (cartItems.length > 0) {
-            setIsSheetVisible(true);
-        } else {
-            setIsSheetVisible(false); // Optional: decide if it should auto-close
-        }
-    }, [cartItems.length]);
+    // ── Debounced inline suggestions (keystroke) ──
+    useEffect(() => {
+        if (suggestTimer.current) clearTimeout(suggestTimer.current);
+        setSuggestions([]);
+        setShowFullResults(false);
 
-    const userInfo = useUserStore();
-    const syncedMockMeals = MOCK_MEALS.map(m => {
-        if (m.handle === '@kwadub') {
-            return {
-                ...m,
-                userName: userInfo.name,
-                avatar: userInfo.avatar,
-                status: userInfo.status
-            };
-        }
-        return m;
-    });
+        if (!searchQuery.trim() || activeTab !== 'All') return;
 
-    const filteredMeals = activeTab === 'Mealbook'
-        ? SYSTEM_MEALS
-        : syncedMockMeals.filter((meal) =>
-            meal.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (meal.description && meal.description.toLowerCase().includes(searchQuery.toLowerCase()))
-        );
+        suggestTimer.current = setTimeout(async () => {
+            const items = await USDAFoodService.suggest(searchQuery);
+            setSuggestions(items);
+        }, 350);
 
-    const addToLog = (meal: MealItem) => {
-        const newItem: Ingredient = {
-            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-            name: meal.title.split(' ').slice(0, 3).join(' '),
-            amount: meal.description || '1 serving',
-            cals: meal.calories,
-            macros: { p: meal.p, c: meal.c, f: meal.f },
+        return () => {
+            if (suggestTimer.current) clearTimeout(suggestTimer.current);
         };
-        addItem(newItem);
-    };
+    }, [searchQuery, activeTab]);
 
-    const handlePublish = async (mealData: { title: string; type: string; ingredients: Ingredient[]; mediaUrl?: any }) => {
+    // ── Full search (submit / arrow) ──
+    const handleSubmitSearch = useCallback(async () => {
+        if (!searchQuery.trim()) return;
+        Keyboard.dismiss();
+        setSuggestions([]);
+        setIsSearching(true);
+        setShowFullResults(true);
+        const items = await USDAFoodService.search(searchQuery, 40);
+        setFullResults(items);
+        setIsSearching(false);
+    }, [searchQuery]);
+
+    // ── Add USDA item to cart ──
+    const addUSDAToCart = useCallback(
+        (food: USDAFoodItem) => {
+            const macros = macroPerServing(food);
+            const newItem: Ingredient = {
+                id: `usda-${food.fdcId}-${Date.now()}`,
+                name: food.name,
+                amount: food.servingSizeText ?? `${food.servingSizeG}g`,
+                cals: calPerServing(food),
+                macros,
+            };
+            addItem(newItem);
+            addRecent(food);
+        },
+        [addItem, addRecent]
+    );
+
+    // ── Navigate to meal-entry for detail view ──
+    const goToEntry = useCallback(
+        (food: USDAFoodItem) => {
+            router.push({
+                pathname: '/meal-entry',
+                params: {
+                    id: String(food.fdcId),
+                    title: food.name,
+                    description: food.brand ?? '',
+                    caloriesPer100g: String(food.caloriesPer100g),
+                    proteinPer100g: String(food.macrosPer100g.p),
+                    carbsPer100g: String(food.netCarbsPer100g), // Pass NET CARBS as requested
+                    fatPer100g: String(food.macrosPer100g.f),
+                    servingSizeG: String(food.servingSizeG),
+                    servingSizeText: food.servingSizeText ?? '',
+                    fdcId: String(food.fdcId),
+                    fdcName: food.name,
+                    fdcBrand: food.brand ?? '',
+                    servingUnits: JSON.stringify(food.servingUnits),
+                },
+            });
+        },
+        []
+    );
+
+    // ── Publish meal ──
+    const handlePublish = async (mealData: {
+        title: string;
+        type: string;
+        ingredients: Ingredient[];
+        mediaUrl?: any;
+    }) => {
+        if (!session?.user?.id) return;
         const totals = NutritionService.sumMacros(cartItems);
 
-        const newPost: FeedPost = {
-            id: Date.now().toString(),
-            user: {
-                id: userInfo.handle === '@kwadub' ? 'u1' : userInfo.handle,
-                name: userInfo.name,
-                handle: userInfo.handle,
-                avatar: userInfo.avatar,
-                status: userInfo.status,
-                verified: true
+        await SupabasePostService.addPost({
+            authorId: session.user.id,
+            postType: 'meal',
+            payload: {
+                meal: {
+                    id: Date.now().toString(),
+                    title: mealData.type && mealData.type !== 'Meal' ? mealData.type : mealData.title || 'My Meal',
+                    type: mealData.type,
+                    calories: totals.cals,
+                    macros: totals.macros,
+                    ingredients: mealData.ingredients,
+                }
             },
-            timeAgo: 'Just now',
-            meal: {
-                id: Date.now().toString(), // Added ID
-                title: (mealData.type && mealData.type !== 'Meal') ? mealData.type : (mealData.title || 'My Meal'),
-                type: mealData.type, // Added Type
-                calories: totals.cals,
-                macros: totals.macros,
-                ingredients: mealData.ingredients,
-            },
-            stats: { likes: 0, shares: 0, comments: 0, saves: 0 },
-            isLiked: false,
-            isShared: false,
-            isSaved: false,
-            hasCommented: false,
-            mediaUrl: mealData.mediaUrl,
-            mediaType: mealData.mediaUrl ? 'image' : undefined,
-        };
+            tribeId: undefined // Let users optionally log to a tribe in the future
+        });
 
-        await PostStore.addPost(newPost);
         clearCart();
         setIsSheetVisible(false);
     };
 
-    const renderMealItem = ({ item }: { item: MealItem }) => {
-        const goToEntry = () => {
-            router.push({
-                pathname: '/meal-entry',
-                params: {
-                    id: item.id,
-                    title: item.title,
-                    description: item.description || '',
-                },
+    // ─────────────────────────────────────────────────────────────────────────
+    // Render helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    const renderUSDACard = ({ item }: { item: USDAFoodItem }) => (
+        <USDAResultCard
+            item={item}
+            onAdd={() => goToEntry(item)}
+            onQuickAdd={() => addUSDAToCart(item)}
+        />
+    );
+
+    /** Following tab: extract unique foods from following's meal posts */
+    const followingFoods = (() => {
+        const seen = new Set<string>();
+        const foods: Array<{ name: string; cals: number; p: number; c: number; f: number; userName: string; avatar: any }> = [];
+        followingPosts.forEach((post) => {
+            if (!post.meal) return;
+            const q = searchQuery.toLowerCase();
+            post.meal.ingredients.forEach((ing) => {
+                if (q && !ing.name.toLowerCase().includes(q)) return;
+                if (seen.has(ing.name)) return;
+                seen.add(ing.name);
+                foods.push({
+                    name: ing.name,
+                    cals: ing.cals,
+                    p: ing.macros.p,
+                    c: ing.macros.c,
+                    f: ing.macros.f,
+                    userName: post.user.name,
+                    avatar: post.user.avatar,
+                });
             });
-        };
+        });
+        return foods;
+    })();
 
-        if (item.isSystemItem) {
+    const renderFollowingFood = ({ item }: { item: typeof followingFoods[0] }) => (
+        <View style={styles.followingCard}>
+            <View style={styles.followingLeft}>
+                <View style={styles.followingUserRow}>
+                    <Image
+                        source={typeof item.avatar === 'string' ? { uri: item.avatar } : item.avatar}
+                        style={styles.followingAvatar}
+                    />
+                    <Text style={styles.followingUser}>{item.userName}</Text>
+                </View>
+                <Text style={styles.followingName}>{item.name}</Text>
+                <View style={styles.usdaMacros}>
+                    <View style={styles.usdaMacroItem}>
+                        <MaterialCommunityIcons name="fire" size={13} color={Colors.primary} />
+                        <Text style={styles.usdaMacroText}>{item.cals}</Text>
+                    </View>
+                    <View style={styles.usdaMacroItem}>
+                        <MaterialCommunityIcons name="food-drumstick" size={12} color="white" />
+                        <Text style={styles.usdaMacroText}>{item.p}g</Text>
+                    </View>
+                    <View style={styles.usdaMacroItem}>
+                        <MaterialCommunityIcons name="barley" size={12} color="white" />
+                        <Text style={styles.usdaMacroText}>{item.c}g</Text>
+                    </View>
+                    <View style={styles.usdaMacroItem}>
+                        <Ionicons name="water" size={12} color="white" />
+                        <Text style={styles.usdaMacroText}>{item.f}g</Text>
+                    </View>
+                </View>
+            </View>
+            <TouchableOpacity
+                style={styles.usdaAddBtn}
+                onPress={() => {
+                    const ing: Ingredient = {
+                        id: `following-${Date.now()}-${Math.random()}`,
+                        name: item.name,
+                        amount: '1 serving',
+                        cals: item.cals,
+                        macros: { p: item.p, c: item.c, f: item.f },
+                    };
+                    addItem(ing);
+                }}
+            >
+                <Ionicons name="add" size={22} color={Colors.primary} />
+            </TouchableOpacity>
+        </View>
+    );
+
+    const renderMealbookCard = ({ item }: { item: typeof bookmarks[0] }) => (
+        <USDAResultCard
+            item={item}
+            onAdd={() => goToEntry(item)}
+            onQuickAdd={() => addUSDAToCart(item)}
+        />
+    );
+
+    const renderRecentCard = ({ item }: { item: typeof recents[0] }) => (
+        <USDAResultCard
+            item={item}
+            onAdd={() => goToEntry(item)}
+            onQuickAdd={() => addUSDAToCart(item)}
+        />
+    );
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Filtered data per tab
+    // ─────────────────────────────────────────────────────────────────────────
+
+    const filteredRecents = searchQuery
+        ? recents.filter((r) => r.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        : recents;
+
+    const filteredBookmarks = searchQuery
+        ? bookmarks.filter((b) => b.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        : bookmarks;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Body content per tab
+    // ─────────────────────────────────────────────────────────────────────────
+
+    const renderAllTab = () => {
+        if (showFullResults || suggestions.length > 0) {
+            const dataToRender = showFullResults ? fullResults : suggestions;
+            if (isSearching) {
+                return (
+                    <View style={styles.centered}>
+                        <ActivityIndicator color={Colors.primary} size="large" />
+                        <Text style={styles.loadingText}>Searching USDA database…</Text>
+                    </View>
+                );
+            }
+            if (dataToRender.length === 0) {
+                return (
+                    <View style={styles.centered}>
+                        <Ionicons name="search" size={48} color={Colors.primary + '55'} />
+                        <Text style={styles.emptyText}>No results found</Text>
+                    </View>
+                );
+            }
             return (
-                <TouchableOpacity
-                    style={styles.systemMealCard}
-                    onPress={goToEntry}
-                    activeOpacity={0.9}
-                >
-                    <View style={styles.systemTopRow}>
-                        <View style={styles.brandContainer}>
-                            <Text style={styles.brandText}>{item.brand}</Text>
-                        </View>
-
-                        <View style={styles.systemContent}>
-                            <Text style={styles.systemMealTitle}>{item.title}</Text>
-                            <Text style={styles.systemMealDesc}>{item.description}</Text>
-                        </View>
-                    </View>
-
-                    <View style={styles.systemStatsRow}>
-                        <View style={styles.systemStat}>
-                            <MaterialCommunityIcons name="fire" size={18} color="#1a2e05" />
-                            <Text style={styles.systemStatText}>{item.calories} cals</Text>
-                        </View>
-                        <View style={styles.systemStat}>
-                            <MaterialCommunityIcons name="food-drumstick" size={16} color="white" />
-                            <Text style={styles.systemStatText}>{item.p}g</Text>
-                        </View>
-                        <View style={styles.systemStat}>
-                            <MaterialCommunityIcons name="barley" size={16} color="white" />
-                            <Text style={styles.systemStatText}>{item.c}g</Text>
-                        </View>
-                        <View style={styles.systemStat}>
-                            <Ionicons name="water" size={16} color="white" />
-                            <Text style={styles.systemStatText}>{item.f}g</Text>
-                        </View>
-                    </View>
-
-                    <TouchableOpacity
-                        style={styles.systemPlusButton}
-                        onPress={() => addToLog(item)}
-                    >
-                        <Ionicons name="add" size={24} color="#556b2f" />
-                    </TouchableOpacity>
-                </TouchableOpacity>
+                <FlatList
+                    data={dataToRender}
+                    keyExtractor={(i) => String(i.fdcId)}
+                    renderItem={renderUSDACard}
+                    contentContainerStyle={styles.listContent}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                />
             );
         }
 
-        const isLongName = item.id === '1' || item.id === '2';
-        const displayTitle = item.title.length > 50
-            ? item.title.slice(0, 50) + '...'
-            : item.title;
-
+        // No search yet
         return (
-            <View style={styles.mealCard}>
-                <View style={[styles.mealRow, { alignItems: 'flex-start' }]}>
-                    <View style={styles.userSection}>
-                        <Image source={typeof item.avatar === 'string' ? { uri: item.avatar } : item.avatar} style={styles.avatar} />
-                        <View style={styles.userColumn}>
-                            <View style={styles.nameRow}>
-                                <Text style={styles.userName}>{item.userName}</Text>
-                                {(item as any).status && ((item as any).status === 'natural' || (item as any).status === 'enhanced') && (
-                                    (item as any).status === 'enhanced' ? (
-                                        <MaterialCommunityIcons name="lightning-bolt" size={12} color="#FFD700" style={{ marginLeft: 2 }} />
-                                    ) : (
-                                        <MaterialCommunityIcons name="leaf" size={12} color={Colors.success} style={{ marginLeft: 2 }} />
-                                    )
-                                )}
-                            </View>
-                            <Text style={styles.handle}>{item.handle}</Text>
-                        </View>
-                    </View>
-
-                    <TouchableOpacity
-                        style={styles.tappableMain}
-                        activeOpacity={0.7}
-                        onPress={goToEntry}
-                    >
-                        <View style={styles.contentColumn}>
-                            <Text
-                                style={[
-                                    styles.mealTitle,
-                                    isLongName && { fontSize: 12 },
-                                ]}
-                                numberOfLines={isLongName ? 2 : 1}
-                            >
-                                {displayTitle}
-                            </Text>
-                            {item.description && (
-                                <Text style={styles.mealDescription}>{item.description}</Text>
-                            )}
-                        </View>
-                    </TouchableOpacity>
-
-                    <View style={styles.actionColumn}>
-                        <TouchableOpacity style={styles.itemAddButton} onPress={() => addToLog(item)}>
-                            <Ionicons name="add" size={24} color={Colors.primary} />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={goToEntry} style={styles.timestampContainer}>
-                            <Text style={styles.timestampText}>{item.timestamp?.split(' ')[0]}</Text>
-                            <Text style={styles.timestampText}>{item.timestamp?.split(' ')[1]}</Text>
-                            <Text style={styles.timestampText}>
-                                {item.timestamp?.split(' ').slice(2).join(' ')}
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                <TouchableOpacity
-                    style={styles.mealStats}
-                    onPress={goToEntry}
-                    activeOpacity={0.7}
-                >
-                    <View style={styles.statItem}>
-                        <MaterialCommunityIcons name="fire" size={16} color={Colors.primary} />
-                        <Text style={styles.statText}>{item.calories} cals</Text>
-                    </View>
-                    <View style={styles.statItem}>
-                        <MaterialCommunityIcons name="food-drumstick" size={16} color="white" />
-                        <Text style={styles.statText}>{item.p}g</Text>
-                    </View>
-                    <View style={styles.statItem}>
-                        <MaterialCommunityIcons name="barley" size={16} color="white" />
-                        <Text style={styles.statText}>{item.c}g</Text>
-                    </View>
-                    <View style={styles.statItem}>
-                        <Ionicons name="water" size={16} color="white" />
-                        <Text style={styles.statText}>{item.f}g</Text>
-                    </View>
-                </TouchableOpacity>
+            <View style={styles.centered}>
+                <Ionicons name="nutrition" size={56} color={Colors.primary + '44'} />
+                <Text style={styles.emptyText}>Search millions of foods</Text>
+                <Text style={styles.emptySubText}>Type above to search the USDA database</Text>
             </View>
         );
     };
 
+    const renderRecentsTab = () => {
+        if (filteredRecents.length === 0) {
+            return (
+                <View style={styles.centered}>
+                    <Ionicons name="time-outline" size={56} color={Colors.primary + '44'} />
+                    <Text style={styles.emptyText}>No recent foods</Text>
+                    <Text style={styles.emptySubText}>Foods you log will appear here</Text>
+                </View>
+            );
+        }
+        return (
+            <FlatList
+                data={filteredRecents}
+                keyExtractor={(i) => String(i.fdcId)}
+                renderItem={renderRecentCard}
+                contentContainerStyle={styles.listContent}
+                showsVerticalScrollIndicator={false}
+            />
+        );
+    };
+
+    const renderFollowingTab = () => {
+        if (followingPosts.length === 0) {
+            return (
+                <View style={styles.centered}>
+                    <Ionicons name="people-outline" size={56} color={Colors.primary + '44'} />
+                    <Text style={styles.emptyText}>Nobody followed yet</Text>
+                    <Text style={styles.emptySubText}>
+                        Follow people to see their recent foods here
+                    </Text>
+                </View>
+            );
+        }
+        if (followingFoods.length === 0) {
+            return (
+                <View style={styles.centered}>
+                    <Ionicons name="restaurant-outline" size={56} color={Colors.primary + '44'} />
+                    <Text style={styles.emptyText}>No meals logged yet</Text>
+                    <Text style={styles.emptySubText}>
+                        Your followed users haven't logged any meals
+                    </Text>
+                </View>
+            );
+        }
+        return (
+            <FlatList
+                data={followingFoods}
+                keyExtractor={(i, idx) => `${i.name}-${idx}`}
+                renderItem={renderFollowingFood}
+                contentContainerStyle={styles.listContent}
+                showsVerticalScrollIndicator={false}
+            />
+        );
+    };
+
+    const renderMealbookTab = () => {
+        if (filteredBookmarks.length === 0) {
+            return (
+                <View style={styles.centered}>
+                    <Ionicons name="bookmark-outline" size={56} color={Colors.primary + '44'} />
+                    <Text style={styles.emptyText}>Your Mealbook is empty</Text>
+                    <Text style={styles.emptySubText}>
+                        Bookmark a meal post to save its foods here
+                    </Text>
+                </View>
+            );
+        }
+        return (
+            <FlatList
+                data={filteredBookmarks}
+                keyExtractor={(i) => String(i.fdcId)}
+                renderItem={renderMealbookCard}
+                contentContainerStyle={styles.listContent}
+                showsVerticalScrollIndicator={false}
+            />
+        );
+    };
+
+    const renderTabContent = () => {
+        switch (activeTab) {
+            case 'All': return renderAllTab();
+            case 'Recents': return renderRecentsTab();
+            case 'Following': return renderFollowingTab();
+            case 'Mealbook': return renderMealbookTab();
+        }
+    };
+
+    // ─────────────────────────────────────────────────────────────────────────
+
     return (
         <SafeAreaView style={styles.container}>
+            {/* ── Header bar ── */}
             <View style={styles.header}>
-                <TouchableOpacity style={styles.scanButton}>
+                <TouchableOpacity
+                    style={styles.scanButton}
+                    onPress={() => router.push('/scan')}
+                >
                     <MaterialCommunityIcons name="barcode-scan" size={24} color={Colors.primary} />
                 </TouchableOpacity>
 
                 <View style={styles.searchWrapper}>
-                    <Ionicons
-                        name="search"
-                        size={20}
-                        color={Colors.primary}
-                        style={styles.searchIcon}
-                    />
+                    <Ionicons name="search" size={20} color={Colors.primary} style={styles.searchIcon} />
                     <TextInput
                         style={styles.searchInput}
-                        placeholder="Log it..."
+                        placeholder={activeTab === 'Following' ? 'Search following foods…' : 'Log it…'}
                         placeholderTextColor="#666"
                         value={searchQuery}
-                        onChangeText={setSearchQuery}
-                        onSubmitEditing={() => Keyboard.dismiss()}
+                        onChangeText={(t) => {
+                            setSearchQuery(t);
+                            if (!t.trim()) {
+                                setShowFullResults(false);
+                                setFullResults([]);
+                            }
+                        }}
+                        onSubmitEditing={() => {
+                            handleSubmitSearch();
+                            Keyboard.dismiss();
+                        }}
+                        returnKeyType="search"
                     />
-                    <TouchableOpacity onPress={() => Keyboard.dismiss()}>
+                    <TouchableOpacity onPress={handleSubmitSearch}>
                         <Ionicons name="arrow-forward" size={20} color={Colors.primary} />
                     </TouchableOpacity>
                 </View>
@@ -393,21 +555,20 @@ export default function AddMealScreen() {
                 </TouchableOpacity>
             </View>
 
+            {/* ── Tabs ── */}
             <View style={styles.tabsRow}>
-                {['All', 'Recents', 'Following', 'Mealbook'].map((tab) => (
+                {TABS.map((tab) => (
                     <TouchableOpacity
                         key={tab}
-                        onPress={() => setActiveTab(tab)}
-                        style={[
-                            styles.tabPill,
-                            activeTab === tab && styles.tabPillActive,
-                        ]}
+                        onPress={() => {
+                            setActiveTab(tab);
+                            setShowFullResults(false);
+                            setSuggestions([]);
+                        }}
+                        style={[styles.tabPill, activeTab === tab && styles.tabPillActive]}
                     >
                         <Text
-                            style={[
-                                styles.tabText,
-                                activeTab === tab && styles.tabTextActive,
-                            ]}
+                            style={[styles.tabText, activeTab === tab && styles.tabTextActive]}
                         >
                             {tab}
                         </Text>
@@ -415,13 +576,8 @@ export default function AddMealScreen() {
                 ))}
             </View>
 
-            <FlatList
-                data={filteredMeals}
-                renderItem={renderMealItem}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.listContent}
-                showsVerticalScrollIndicator={false}
-            />
+            {/* ── Content ── */}
+            <View style={{ flex: 1 }}>{renderTabContent()}</View>
 
             <MealLoggerSheet
                 visible={isSheetVisible}
@@ -436,11 +592,10 @@ export default function AddMealScreen() {
     );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: Colors.background,
-    },
+    container: { flex: 1, backgroundColor: Colors.background },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -449,242 +604,69 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     scanButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
-        backgroundColor: 'rgba(164, 182, 157, 0.2)', // Light sage
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: Colors.primary,
-    },
-    cameraButton: {
-        width: 44,
-        height: 44,
-        justifyContent: 'center',
-        alignItems: 'center',
+        width: 44, height: 44, borderRadius: 12,
+        backgroundColor: 'rgba(164, 182, 157, 0.2)',
+        justifyContent: 'center', alignItems: 'center',
+        borderWidth: 1, borderColor: Colors.primary,
     },
     searchWrapper: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        height: 44,
-        borderRadius: 22,
-        borderWidth: 1.5,
-        borderColor: Colors.primary,
-        paddingHorizontal: 12,
+        flex: 1, flexDirection: 'row', alignItems: 'center',
+        height: 44, borderRadius: 22, borderWidth: 1.5,
+        borderColor: Colors.primary, paddingHorizontal: 12,
         backgroundColor: Colors.background,
     },
-    searchIcon: {
-        marginRight: 8,
-    },
-    searchInput: {
-        flex: 1,
-        color: Colors.textDark,
-        fontSize: 16,
-    },
-    modeButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    modeButtonGlobal: {
-        backgroundColor: Colors.primary,
-    },
-    modeButtonLocked: {
-        backgroundColor: 'rgba(164, 182, 157, 0.2)',
-        borderWidth: 1,
-        borderColor: Colors.primary,
-    },
-    tabsRow: {
-        flexDirection: 'row',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        gap: 8,
-    },
+    searchIcon: { marginRight: 8 },
+    searchInput: { flex: 1, color: Colors.textDark, fontSize: 16 },
+    modeButton: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
+    modeButtonGlobal: { backgroundColor: Colors.primary },
+    modeButtonLocked: { backgroundColor: 'rgba(164,182,157,0.2)', borderWidth: 1, borderColor: Colors.primary },
+
+    // Tabs
+    tabsRow: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
     tabPill: {
-        flex: 1,
-        height: 36,
-        borderRadius: 18,
-        borderWidth: 1, // Add border to match design
-        borderColor: 'transparent',
-        justifyContent: 'center',
-        alignItems: 'center',
+        flex: 1, height: 34, borderRadius: 17,
+        justifyContent: 'center', alignItems: 'center',
+        borderWidth: 1, borderColor: 'transparent',
     },
-    tabPillActive: {
-        backgroundColor: Colors.primary,
+    tabPillActive: { backgroundColor: Colors.primary },
+    tabText: { color: Colors.textDark, fontSize: 12, fontWeight: '500' },
+    tabTextActive: { color: 'white', fontWeight: 'bold' },
+
+    listContent: { paddingHorizontal: 12, paddingBottom: 100 },
+
+    // USDA result card
+    usdaCard: {
+        backgroundColor: Colors.card,
+        borderRadius: 20, padding: 14, marginBottom: 10,
+        flexDirection: 'row', alignItems: 'center',
     },
-    tabText: {
-        color: Colors.textDark,
-        fontSize: 13,
-        fontWeight: '500',
+    usdaCardLeft: { flex: 1, paddingRight: 10 },
+    usdaName: { color: 'white', fontSize: 15, fontWeight: '700', marginBottom: 2 },
+    usdaBrand: { color: 'rgba(255,255,255,0.65)', fontSize: 12, marginBottom: 2 },
+    usdaServing: { color: 'rgba(255,255,255,0.5)', fontSize: 11, marginBottom: 6 },
+    usdaMacros: { flexDirection: 'row', gap: 10 },
+    usdaMacroItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+    usdaMacroText: { color: 'white', fontSize: 12, fontWeight: '600' },
+    usdaAddBtn: {
+        width: 36, height: 36, borderRadius: 18,
+        backgroundColor: 'white', justifyContent: 'center', alignItems: 'center',
     },
-    tabTextActive: {
-        fontWeight: 'bold',
-        color: 'white',
+
+    // Following card
+    followingCard: {
+        backgroundColor: Colors.card, borderRadius: 20,
+        padding: 14, marginBottom: 10,
+        flexDirection: 'row', alignItems: 'center',
     },
-    listContent: {
-        paddingHorizontal: 12,
-        paddingBottom: 20,
-    },
-    mealCard: {
-        backgroundColor: Colors.card, // Sage Green
-        borderRadius: 24,
-        padding: 12,
-        marginBottom: 12,
-    },
-    mealRow: {
-        flexDirection: 'row',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        gap: 12,
-    },
-    userSection: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    tappableMain: {
-        flex: 1,
-    },
-    avatar: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-    },
-    userColumn: {
-        width: 60,
-    },
-    nameRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    userName: {
-        color: 'white',
-        fontSize: 12,
-        fontWeight: 'bold',
-    },
-    handle: {
-        color: 'rgba(255,255,255,0.7)',
-        fontSize: 10,
-    },
-    contentColumn: {
-        flex: 1,
-        paddingHorizontal: 8,
-    },
-    mealTitle: {
-        color: 'white',
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    mealDescription: {
-        color: 'rgba(255,255,255,0.7)',
-        fontSize: 12,
-    },
-    actionColumn: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 60,
-    },
-    itemAddButton: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: 'white', // White button for green card
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 4,
-    },
-    timestampContainer: {
-        alignItems: 'center',
-    },
-    timestampText: {
-        color: 'rgba(255,255,255,0.6)',
-        fontSize: 8,
-        textAlign: 'center',
-        lineHeight: 10,
-    },
-    mealStats: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 10,
-        gap: 16,
-        paddingLeft: 4,
-    },
-    statItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    statText: {
-        color: 'white',
-        fontSize: 13,
-        fontWeight: '600',
-    },
-    systemMealCard: {
-        backgroundColor: Colors.card, // System cards match regular cards now? Or different shade?
-        // Let's stick to consistent sage green for visual unity unless specific requirement.
-        borderRadius: 24,
-        padding: 16,
-        marginBottom: 12,
-        height: 100,
-        justifyContent: 'space-between',
-    },
-    systemTopRow: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-    },
-    brandContainer: {
-        width: 80,
-    },
-    brandText: {
-        color: 'white',
-        fontSize: 12,
-        fontWeight: 'bold',
-        textTransform: 'none',
-        lineHeight: 14,
-    },
-    systemContent: {
-        flex: 1,
-        paddingLeft: 10,
-    },
-    systemMealTitle: {
-        color: 'white',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    systemMealDesc: {
-        color: 'white',
-        fontSize: 14,
-        fontStyle: 'italic',
-        opacity: 0.9,
-    },
-    systemPlusButton: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: 'white',
-        justifyContent: 'center',
-        alignItems: 'center',
-        position: 'absolute',
-        right: 16,
-        top: 34,
-    },
-    systemStatsRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 16,
-    },
-    systemStat: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    systemStatText: {
-        color: 'white',
-        fontSize: 14,
-        fontWeight: '600',
-    },
+    followingLeft: { flex: 1, paddingRight: 10 },
+    followingUserRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+    followingAvatar: { width: 20, height: 20, borderRadius: 10 },
+    followingUser: { color: 'rgba(255,255,255,0.6)', fontSize: 11 },
+    followingName: { color: 'white', fontSize: 15, fontWeight: '700', marginBottom: 6 },
+
+    // Empty / loading states
+    centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
+    loadingText: { color: Colors.textDark, marginTop: 16, fontSize: 14 },
+    emptyText: { color: Colors.textDark, fontSize: 18, fontWeight: '700', marginTop: 16 },
+    emptySubText: { color: Colors.textDark + '99', fontSize: 13, marginTop: 6, textAlign: 'center' },
 });

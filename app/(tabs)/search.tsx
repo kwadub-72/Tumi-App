@@ -326,6 +326,7 @@ export default function ExploreScreen() {
                         placeholderTextColor="rgba(79, 99, 82, 0.5)"
                         value={searchQuery}
                         onChangeText={setSearchQuery}
+                        onSubmitEditing={Keyboard.dismiss} // Close on search submit
                     />
                     <TouchableOpacity onPress={() => { Keyboard.dismiss(); }}>
                         <Ionicons name="arrow-forward" size={20} color="#4F6352" />
@@ -349,9 +350,9 @@ export default function ExploreScreen() {
                 ))}
             </View>
 
-            <View style={{ flex: 1 }} onStartShouldSetResponder={() => { Keyboard.dismiss(); return false; }}>
+            <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss} accessible={false}>
                 {renderContent()}
-            </View>
+            </Pressable>
 
             <FilterModal
                 visible={filterVisible}

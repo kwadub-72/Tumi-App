@@ -42,10 +42,10 @@ export default function HomeScreen() {
 
     const renderContent = () => {
         switch (currentTab) {
-            case 'Following': return <FollowingView />;
-            case 'Diary': return <DiaryView />;
-            case 'Tribe': return <TribeView />;
-            default: return <FollowingView />;
+            case 'Following': return <FollowingView selectedDate={selectedDate} />;
+            case 'Diary': return <DiaryView selectedDate={selectedDate} />;
+            case 'Tribe': return <TribeView selectedDate={selectedDate} />;
+            default: return <FollowingView selectedDate={selectedDate} />;
         }
     };
 

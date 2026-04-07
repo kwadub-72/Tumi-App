@@ -1,19 +1,24 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
-import { Button, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Button, Pressable, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 import { Colors } from '../src/shared/theme/Colors';
+import { USDAFoodService } from '../src/shared/services/USDAFoodService';
+import { useState, useRef } from 'react';
+import Toast from '../components/ui/Toast';
 
 export default function ScanScreen() {
     const [permission, requestPermission] = useCameraPermissions();
     const router = useRouter();
+    const [isScanning, setIsScanning] = useState(false);
+    const [toastVisible, setToastVisible] = useState(false);
+    const [toastMessage, setToastMessage] = useState('');
+    const scanLock = useRef(false);
 
     if (!permission) {
-        // Camera permissions are still loading.
         return <View />;
     }
 
     if (!permission.granted) {
-        // Camera permissions are not granted yet.
         return (
             <View style={styles.container}>
                 <Text style={styles.message}>We need your permission to show the camera</Text>
@@ -22,19 +27,59 @@ export default function ScanScreen() {
         );
     }
 
-    const handleBarCodeScanned = ({ data }: { data: string }) => {
-        router.push({
-            pathname: '/scan-result',
-            params: { barcode: data }
-        });
+    const handleBarCodeScanned = async ({ data }: { data: string }) => {
+        if (scanLock.current) return;
+        scanLock.current = true;
+        
+        setIsScanning(true);
+        const food = await USDAFoodService.findByBarcode(data);
+        setIsScanning(false);
+
+        if (food) {
+            setToastMessage('Item Found!');
+            setToastVisible(true);
+            
+            // Brief delay for toast to be seen
+            setTimeout(() => {
+                router.replace({
+                    pathname: '/meal-entry',
+                    params: {
+                        id: String(food.fdcId),
+                        title: food.name,
+                        description: food.brand ?? '',
+                        caloriesPer100g: String(food.caloriesPer100g),
+                        proteinPer100g: String(food.macrosPer100g.p),
+                        carbsPer100g: String(food.netCarbsPer100g),
+                        fatPer100g: String(food.macrosPer100g.f),
+                        servingSizeG: String(food.servingSizeG),
+                        servingSizeText: food.servingSizeText ?? '',
+                        fdcId: String(food.fdcId),
+                        fdcName: food.name,
+                        fdcBrand: food.brand ?? '',
+                        servingUnits: JSON.stringify(food.servingUnits),
+                    }
+                });
+            }, 800);
+        } else {
+            setToastMessage('Item Not Found');
+            setToastVisible(true);
+            setTimeout(() => {
+                scanLock.current = false;
+            }, 2000);
+        }
     };
 
     return (
         <View style={styles.container}>
-            <CameraView style={styles.camera} facing="back" onBarcodeScanned={handleBarCodeScanned}>
-
-                {/* Overlay UI */}
-                <SafeAreaViewComponent>
+            <CameraView 
+                style={styles.camera} 
+                facing="back" 
+                onBarcodeScanned={handleBarCodeScanned}
+                barcodeScannerSettings={{
+                    barcodeTypes: ["upc_a", "upc_e", "ean13", "ean8"]
+                }}
+            >
+                <View style={styles.uiContainer}>
                     <View style={styles.header}>
                         <Pressable onPress={() => router.back()} style={styles.closeButton}>
                             <Text style={styles.closeText}>Cancel</Text>
@@ -43,25 +88,22 @@ export default function ScanScreen() {
                         <View style={{ width: 60 }} />
                     </View>
 
-                    {/* Reticle / Frame */}
                     <View style={styles.overlay}>
-                        <View style={styles.cutout} />
+                        <View style={styles.cutout}>
+                           {isScanning && <ActivityIndicator color="white" size="large" />}
+                        </View>
+                        <Text style={styles.instructions}>Center a barcode in the frame</Text>
                     </View>
+                </View>
 
-                </SafeAreaViewComponent>
-
+                <Toast 
+                    message={toastMessage} 
+                    visible={toastVisible} 
+                    onHide={() => setToastVisible(false)} 
+                />
             </CameraView>
         </View>
     );
-}
-
-// Custom safe area wrapper to handle the translucent camera view
-function SafeAreaViewComponent({ children }: { children: React.ReactNode }) {
-    return (
-        <View style={styles.uiContainer}>
-            {children}
-        </View>
-    )
 }
 
 const styles = StyleSheet.create({
@@ -86,7 +128,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingTop: 60, // approximate status bar
+        paddingTop: 60,
         paddingHorizontal: 20,
         backgroundColor: 'rgba(0,0,0,0.4)',
         paddingBottom: 20,
@@ -112,11 +154,23 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     cutout: {
-        width: 250,
-        height: 250,
+        width: 280,
+        height: 180,
         borderWidth: 2,
-        borderColor: 'white',
+        borderColor: Colors.primary,
         borderRadius: 20,
         backgroundColor: 'transparent',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    instructions: {
+        color: 'white',
+        marginTop: 20,
+        fontSize: 14,
+        fontWeight: '500',
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
     }
 });
