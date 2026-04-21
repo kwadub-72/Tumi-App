@@ -53,6 +53,8 @@ export interface User {
         updates: number;
     };
     isFollowing?: boolean;
+    isRequested?: boolean;
+    isPrivate?: boolean;
     macroTargets?: {
         p: number;
         c: number;
@@ -63,6 +65,7 @@ export interface User {
 
 export interface FeedPost {
     id: string;
+    caption?: string;
     user: User;
     timeAgo: string;
     meal?: Meal;
@@ -147,6 +150,15 @@ export interface Exercise {
     icon?: string; // 'dumbbell' or 'run'
     superset?: string;
     eccentric?: string;
+    /** All-time log count across the platform (read-only from DB, starts at 0) */
+    logCount?: number;
+    /** Creator attribution — who created this exercise definition */
+    createdBy?: {
+        name: string;
+        handle: string;
+        avatar?: any;
+        isTribe?: boolean; // true = show Tribe flame logo
+    };
 }
 
 export interface Workout {

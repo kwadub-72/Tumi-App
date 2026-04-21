@@ -10,7 +10,9 @@ import {
     Image,
     Alert,
     Modal,
-    FlatList
+    FlatList,
+    Keyboard,
+    TouchableWithoutFeedback
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -168,14 +170,19 @@ export default function CreateTribeScreen() {
     // Modals related state already defined above.
 
     return (
-        <SafeAreaView style={styles.container}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+            <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()}>
                     <Ionicons name="arrow-back" size={28} color={Colors.primary} />
                 </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.content}>
+                <ScrollView 
+                    contentContainerStyle={styles.content}
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode="on-drag"
+                >
                 {/* Edit Symbol */}
                 <View style={styles.symbolSection}>
                     <TouchableOpacity style={styles.symbolCircle} onPress={pickImage}>
@@ -420,7 +427,8 @@ export default function CreateTribeScreen() {
                 initialConfig={editingComp ? compConfigs[editingComp.id] : undefined}
                 onSave={saveCompConfig}
             />
-        </SafeAreaView>
+            </SafeAreaView>
+        </TouchableWithoutFeedback>
     );
 }
 
@@ -588,11 +596,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     createButton: {
-        backgroundColor: Colors.background, // Or transparent with border?
-        // Prompt image 2 bottom button looks like a pill with "Found a tribe" + (+) icon.
-        // Wait, Image 2 bottom says "At the bottom of the screen is the add tribe button".
-        // The user says "when the user is content, they can press this to finish creating the tribe."
-        // I'll style it to look clickable.
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,

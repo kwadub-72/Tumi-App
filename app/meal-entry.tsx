@@ -9,6 +9,7 @@ import {
     TextInput,
     TouchableOpacity,
     View,
+    Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { USDAFoodItem } from '../src/shared/services/USDAFoodService';
@@ -47,8 +48,43 @@ function MacroSlider({
     }
     
     const totalForScale = Math.max(goal, totalCurrent);
-    const w = (v: number) => `${(v / totalForScale) * 100}%` as any;
+    const wPct = (v: number) => (totalForScale > 0 ? (v / totalForScale) * 100 : 0);
     const isOverflowing = overflow > 0;
+
+    const renderSeg = (val: number, bg: string, textCol: string) => {
+        if (val <= 0) return null;
+        const pct = wPct(val);
+        const isSmall = pct < 12;
+        return (
+            <View style={[mss.seg, { width: `${pct}%`, backgroundColor: bg }]}>
+                {!isSmall && <Text style={[mss.segText, { color: textCol }]} numberOfLines={1}>{val}</Text>}
+            </View>
+        );
+    }
+
+    const renderSub = (val: number, textCol: string, align: 'center'|'left'|'right' = 'center') => {
+        if (val <= 0) return null;
+        const pct = wPct(val);
+        const isSmall = pct < 12;
+        return (
+            <View style={{ width: `${pct}%` }}>
+                {isSmall && (
+                    <View style={{ position: 'absolute', top: 2, left: '50%', width: 20, marginLeft: -10, alignItems: 'center', overflow: 'visible' }}>
+                        <Ionicons name="chevron-up" size={14} color={textCol} style={{ marginBottom: -4 }} />
+                        <View style={{
+                            position: 'absolute',
+                            top: 14,
+                            width: 100,
+                            alignItems: align === 'left' ? 'flex-end' : align === 'right' ? 'flex-start' : 'center',
+                            ...(align === 'left' ? { right: 10, paddingRight: 2 } : align === 'right' ? { left: 10, paddingLeft: 2 } : { left: -40 })
+                        }}>
+                            <Text style={[mss.segText, { color: textCol }]} numberOfLines={1}>{val}</Text>
+                        </View>
+                    </View>
+                )}
+            </View>
+        );
+    }
 
     return (
         <View style={mss.row}>
@@ -57,29 +93,22 @@ function MacroSlider({
             </View>
             <View style={mss.trackWrap}>
                 <View style={mss.track}>
-                    {logged > 0 && (
-                        <View style={[mss.seg, { width: w(logged), backgroundColor: Colors.primary }]}>
-                            <Text style={[mss.segText, { color: 'white' }]} numberOfLines={1}>{logged}</Text>
-                        </View>
-                    )}
-                    {cart > 0 && (
-                        <View style={[mss.seg, { width: w(cart), backgroundColor: 'white' }]}>
-                            <Text style={[mss.segText, { color: Colors.primary }]} numberOfLines={1}>{cart}</Text>
-                        </View>
-                    )}
-                    {proposed > 0 && (
-                        <View style={[mss.seg, { width: w(proposed), backgroundColor: isOverflowing ? 'rgba(239,68,68,0.4)' : '#DADBDA' }]}>
-                            <Text style={[mss.segText, { color: isOverflowing ? 'white' : '#4F6352' }]} numberOfLines={1}>{proposed}</Text>
-                        </View>
-                    )}
-                    {remaining > 0 && (
-                        <View style={[mss.seg, { width: w(remaining), backgroundColor: '#8A8A8A' }]}>
-                            <Text style={[mss.segText, { color: 'white' }]} numberOfLines={1}>{remaining}</Text>
-                        </View>
-                    )}
+                    {renderSeg(logged, Colors.primary, 'white')}
+                    {renderSeg(cart, 'white', Colors.primary)}
+                    {renderSeg(proposed, '#A0A5A0', '#4F6352')}
+                    {renderSeg(remaining, '#787D78', 'white')}
+                </View>
+                <View style={{ flexDirection: 'row', height: 24, position: 'relative' }}>
+                    {renderSub(logged, Colors.primary, 'center')}
+                    {renderSub(cart, Colors.primary, 'left')}
+                    {renderSub(proposed, '#A0A5A0', 'right')}
+                    {renderSub(remaining, '#787D78', 'center')}
                     {overflow > 0 && (
-                        <View style={[mss.seg, { width: w(overflow), backgroundColor: Colors.error }]}>
-                            <Text style={[mss.segText, { color: 'white' }]} numberOfLines={1}>{overflow}</Text>
+                        <View style={{ position: 'absolute', right: -5, top: 2, alignItems: 'flex-end', overflow: 'visible' }}>
+                            <Ionicons name="chevron-up" size={14} color="#F06565" style={{ marginBottom: -4, marginRight: 2 }} />
+                            <View style={{ width: 100, alignItems: 'flex-end' }}>
+                                <Text style={[mss.segText, { color: '#F06565' }]} numberOfLines={1}>-{overflow}</Text>
+                            </View>
                         </View>
                     )}
                 </View>
@@ -89,12 +118,12 @@ function MacroSlider({
 }
 
 const mss = StyleSheet.create({
-    row: { flexDirection: 'row', alignItems: 'center' },
-    iconBox: { width: 30, alignItems: 'center' },
+    row: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
+    iconBox: { width: 30, alignItems: 'center', marginTop: 8 },
     trackWrap: { flex: 1, marginLeft: 15 },
     track: { height: 45, backgroundColor: 'transparent', borderRadius: 25, flexDirection: 'row', overflow: 'hidden' },
     seg: { height: '100%', justifyContent: 'center', alignItems: 'center' },
-    segText: { fontSize: 11, fontWeight: '700' },
+    segText: { fontSize: 13, fontWeight: '700' },
 });
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
@@ -134,6 +163,7 @@ export default function MealEntryScreen() {
 
     const [amount, setAmount] = useState('1'); // Enter multiple
     const [selectedUnitIndex, setSelectedUnitIndex] = useState(0);
+    const [showUnitPicker, setShowUnitPicker] = useState(false);
 
     const servingUnits: any[] = params.servingUnits ? JSON.parse(params.servingUnits) : [
         { label: params.servingSizeText || `${servingSizeG}g`, gramsPerUnit: servingSizeG }
@@ -176,11 +206,13 @@ export default function MealEntryScreen() {
     }
 
     const handleAdd = () => {
-        const unitLabel = currentUnit.label;
+        const totalAmountNum = amountValue * currentUnit.amount;
+        const formattedAmount = `${totalAmountNum} ${currentUnit.unit}`;
+        
         addItem({
             id: Date.now().toString(),
             name: (params.title as string) || 'Meal Item',
-            amount: `${amountValue} x ${unitLabel}`,
+            amount: formattedAmount,
             cals: proposedCals,
             macros: proposedMacros,
         });
@@ -201,10 +233,6 @@ export default function MealEntryScreen() {
         }
 
         router.back();
-    };
-
-    const toggleUnit = () => {
-        setSelectedUnitIndex(prev => (prev + 1) % servingUnits.length);
     };
 
     return (
@@ -245,7 +273,7 @@ export default function MealEntryScreen() {
                 <View style={styles.inputsRow}>
                     <View style={styles.inputGroup}>
                         <Text style={styles.inputLabel}>Serving size</Text>
-                        <TouchableOpacity style={styles.pillBox} onPress={toggleUnit}>
+                        <TouchableOpacity style={styles.pillBox} onPress={() => setShowUnitPicker(true)}>
                             <Text style={styles.pillText}>{currentUnit.label}</Text>
                         </TouchableOpacity>
                     </View>
@@ -307,11 +335,14 @@ export default function MealEntryScreen() {
                         <Text style={styles.legendText}>In cart</Text>
                     </View>
                     <View style={styles.legendItem}>
-                        <View style={[styles.legendDot, { backgroundColor: '#DADBDA' }]} />
+                        <View style={[styles.legendDot, { backgroundColor: '#A0A5A0' }]} />
                         <Text style={styles.legendText}>Proposed entry</Text>
                     </View>
                     <View style={styles.legendItem}>
-                        <View style={[styles.legendDot, { backgroundColor: '#8A8A8A' }]} />
+                        <View style={{ gap: 2 }}>
+                            <View style={[styles.legendDot, { backgroundColor: '#787D78' }]} />
+                            <View style={[styles.legendDot, { backgroundColor: '#F06565' }]} />
+                        </View>
                         <Text style={styles.legendText}>Remaining</Text>
                     </View>
                 </View>
@@ -321,6 +352,45 @@ export default function MealEntryScreen() {
                     <Ionicons name="add" size={32} color="white" />
                 </TouchableOpacity>
             </Pressable>
+
+            {/* ── Dropdown Modal ── */}
+            <Modal
+                visible={showUnitPicker}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowUnitPicker(false)}
+            >
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShowUnitPicker(false)}
+                >
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Select Serving Size</Text>
+                        <View style={styles.modalSeparator} />
+                        {servingUnits.map((unit, index) => (
+                            <TouchableOpacity
+                                key={index}
+                                style={styles.modalOption}
+                                onPress={() => {
+                                    setSelectedUnitIndex(index);
+                                    setShowUnitPicker(false);
+                                }}
+                            >
+                                <Text style={[
+                                    styles.modalOptionText,
+                                    selectedUnitIndex === index && { color: Colors.primary, fontWeight: '700' }
+                                ]}>
+                                    {unit.label}
+                                </Text>
+                                {selectedUnitIndex === index && (
+                                    <Ionicons name="checkmark" size={20} color={Colors.primary} />
+                                )}
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </TouchableOpacity>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -367,8 +437,45 @@ const styles = StyleSheet.create({
     addCircle: {
         width: 60, height: 60, borderRadius: 30, backgroundColor: Colors.primary,
         justifyContent: 'center', alignItems: 'center', alignSelf: 'center',
-        marginTop: 'auto', marginBottom: 30,
+        marginTop: 'auto', marginBottom: -25,
         // Optional floating shadow
         shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 5, elevation: 4
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        backgroundColor: Colors.background,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        padding: 20,
+        paddingBottom: 40,
+        maxHeight: '70%',
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: Colors.textDark,
+        textAlign: 'center',
+        marginBottom: 15,
+    },
+    modalSeparator: {
+        height: 1,
+        backgroundColor: Colors.primary + '33',
+        marginBottom: 10,
+    },
+    modalOption: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 15,
+        paddingHorizontal: 10,
+        borderRadius: 10,
+    },
+    modalOptionText: {
+        fontSize: 16,
+        color: Colors.textDark,
     },
 });

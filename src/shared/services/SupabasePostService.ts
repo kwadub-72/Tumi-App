@@ -3,7 +3,7 @@ import { FeedPost, Comment, Ingredient } from '../models/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type FeedType = 'following' | 'diary' | 'tribe';
+export type FeedType = 'following' | 'diary' | 'tribe' | 'profile';
 
 export interface GetFeedOptions {
     userId: string;          // the authenticated user's id
@@ -19,6 +19,7 @@ function rowToFeedPost(row: any, currentUserId: string): FeedPost {
     const payload = row.payload ?? {};
     return {
         id: row.id,
+        caption: row.caption || undefined,
         user: {
             id: row.author_id,
             name: row.author_name,
@@ -37,7 +38,6 @@ function rowToFeedPost(row: any, currentUserId: string): FeedPost {
         snapshot: payload.snapshot ?? undefined,
         mediaUrl: row.media_url ?? undefined,
         mediaType: row.media_type ?? undefined,
-        caption: row.caption ?? undefined,
         stats: {
             likes: Number(row.like_count ?? 0),
             comments: Number(row.comment_count ?? 0),
@@ -70,9 +70,9 @@ export const SupabasePostService = {
 
     /**
      * Fetch the feed for a given type.
-     * - 'diary': all posts by the current user, filtered to the selected date
      * - 'following': posts by followed users within 7 days of the selected date
      * - 'tribe': posts by tribe members within 7 days of the selected date
+     * - 'profile': all posts by the current user (unlimited date range)
      */
     async getFeed(opts: GetFeedOptions): Promise<FeedPost[]> {
         const { userId, feedType, date = new Date(), tribeId, limit = 50 } = opts;
@@ -108,6 +108,7 @@ export const SupabasePostService = {
                 .eq('follower_id', userId);
 
             const followedIds = (follows ?? []).map((f: any) => f.following_id);
+            followedIds.push(userId); // Include current user's posts
             if (followedIds.length === 0) return [];
 
             query = query
@@ -134,6 +135,9 @@ export const SupabasePostService = {
                 .in('author_id', memberIds)
                 .gte('created_at', weekBack.toISOString())
                 .lte('created_at', dayEnd.toISOString());
+        } else if (feedType === 'profile') {
+            // Profile: all posts by targeted user (or current user)
+            query = query.eq('author_id', userId);
         }
 
         const { data, error } = await query;
@@ -280,6 +284,8 @@ export const SupabasePostService = {
             return null;
         }
 
+        const profile = Array.isArray(data.profiles) ? data.profiles[0] : data.profiles;
+
         return {
             id: data.id,
             text: data.body,
@@ -287,11 +293,11 @@ export const SupabasePostService = {
             likes: 0,
             isLiked: false,
             user: {
-                id: data.profiles.id,
-                handle: data.profiles.handle,
-                name: data.profiles.name,
-                avatar: data.profiles.avatar_url ?? 'https://i.pravatar.cc/150?u=default',
-                status: data.profiles.status ?? 'none',
+                id: profile.id,
+                handle: profile.handle,
+                name: profile.name,
+                avatar: profile.avatar_url ?? 'https://i.pravatar.cc/150?u=default',
+                status: profile.status ?? 'none',
                 verified: true,
             },
         };

@@ -5,11 +5,11 @@ import { Colors } from '../src/shared/theme/Colors';
 interface HammerModalProps {
     visible: boolean;
     onClose: () => void;
-    activityName: string;
-    activityIcon: string;
+    activityName?: string;
+    activityIcon?: string;
 }
 
-export default function HammerModal({ visible, onClose, activityName, activityIcon }: HammerModalProps) {
+export default function HammerModal({ visible, onClose, activityName = '', activityIcon = 'hammer' }: HammerModalProps) {
     const isPeach = activityName === 'Glute Growth';
     const isBulk = activityName.toLowerCase().includes('bulk');
     const isCut = activityName.toLowerCase().includes('cut');

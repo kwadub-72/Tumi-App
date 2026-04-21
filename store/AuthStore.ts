@@ -19,6 +19,12 @@ export interface DbProfile {
     training_target: string | null;
     last_macro_update: string | null;
     created_at: string;
+    is_private: boolean;
+    show_meals_to_public: boolean;
+    show_workouts_to_public: boolean;
+    show_macros_to_public: boolean;
+    show_measurements_to_public: boolean;
+    show_likes_to_public: boolean;
 }
 
 interface AuthState {

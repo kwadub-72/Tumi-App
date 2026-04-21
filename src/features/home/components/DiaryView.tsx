@@ -81,6 +81,8 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
                     servingSizeText: ing.amount || '100g',
                     caloriesPer100g: ing.cals,
                     macrosPer100g: { p: ing.macros.p, c: ing.macros.c, f: ing.macros.f },
+                    netCarbsPer100g: ing.macros.c,
+                    servingUnits: [{ label: '100 g', amount: 100, unit: 'g', gramsPerUnit: 1 }]
                 };
                 addBookmark(food);
             });

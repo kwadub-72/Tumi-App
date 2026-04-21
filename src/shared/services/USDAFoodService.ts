@@ -47,7 +47,12 @@ function toTitleCase(str: string): string {
  */
 function mapFood(raw: any): USDAFoodItem {
     const nutrients: any[] = raw.foodNutrients ?? [];
-    const servingG = Number(raw.servingSize) || 100;
+    let servingG = Number(raw.servingSize) || 100;
+    let unitLabel = (raw.servingSizeUnit || '').trim();
+    if (unitLabel.toUpperCase() === 'ONZ') {
+        servingG = servingG * 28.35;
+        unitLabel = 'oz';
+    }
     const scale = 100 / servingG;
 
     // Macros
@@ -77,7 +82,12 @@ function mapFood(raw: any): USDAFoodItem {
         { label: '1 ml', amount: 1, unit: 'ml', gramsPerUnit: 1 }, // simplified dense-ish
     ];
 
-    const household = raw.householdServingFullText || '';
+    let household = raw.householdServingFullText || '';
+    household = household.replace(/onz/ig, 'oz');
+    
+    if (!household && raw.servingSize) {
+        household = `${raw.servingSize} ${unitLabel || 'g'}`;
+    }
     let defaultUnit: USDAServingUnit | null = null;
 
     // Check for tbsp or cup
@@ -110,7 +120,7 @@ function mapFood(raw: any): USDAFoodItem {
         name,
         brand,
         servingSizeG: servingG,
-        servingSizeText: raw.householdServingFullText || `${servingG}g`,
+        servingSizeText: household || `${servingG}g`,
         caloriesPer100g: Math.round(calPerServing * scale),
         macrosPer100g: {
             p: Math.round(pPerServing * scale * 10) / 10,

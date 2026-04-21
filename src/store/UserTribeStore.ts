@@ -1,5 +1,8 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Tribe, User } from '@/src/shared/models/types';
+import { SupabaseNetworkService } from '../shared/services/SupabaseNetworkService';
 import { generateFakeTribes } from '@/src/shared/utils/FakeDataGenerator';
 
 interface UserTribeState {
@@ -16,94 +19,104 @@ interface UserTribeState {
     createTribe: (tribe: Tribe) => void;
 
     // Initialization (mock)
-    init: () => void;
+    init: (userId?: string) => Promise<void>;
+    refreshMyTribes: (userId: string) => Promise<void>;
 }
 
-export const useUserTribeStore = create<UserTribeState>((set, get) => ({
-    myTribes: [],
-    pendingTribes: [],
-    selectedTribe: null,
-
-    init: () => {
-        // Initialize with some fake data for demo
-        const allTribes = generateFakeTribes();
-        // Assume user is member of first 2
-        set({
-            myTribes: allTribes.slice(0, 2).map(t => ({ ...t, joinStatus: 'joined' })),
+export const useUserTribeStore = create<UserTribeState>()(
+    persist(
+        (set, get) => ({
+            myTribes: [],
             pendingTribes: [],
-            selectedTribe: null
-        });
-    },
+            selectedTribe: null,
 
-    joinTribe: (tribe: Tribe) => {
-        const { myTribes, pendingTribes } = get();
+            init: async (userId?: string) => {
+                if (userId) {
+                    await get().refreshMyTribes(userId);
+                } else {
+                    // Fallback to fake data for guest/demo
+                    if (get().myTribes.length === 0) {
+                        const allTribes = generateFakeTribes();
+                        set({
+                            myTribes: allTribes.slice(0, 2).map(t => ({ ...t, joinStatus: 'joined' })),
+                        });
+                    }
+                }
+            },
 
-        if (tribe.privacy === 'private') {
-            // Request logic
-            if (!pendingTribes.includes(tribe.id)) {
-                set({ pendingTribes: [...pendingTribes, tribe.id] });
-                // In a real app, backend would handle approval. 
-                // Here we just keep it pending until "accepted" (which we might mock via a secret timeout or just manual toggle if needed, but per request: gray button -> member if accepted)
-                // For demo flow: Let's assume private tribes are "Requested" indefinitely until "Accepted".
-                // But user wants to see "Member" eventually. 
-                // Let's auto-accept after 5 seconds for demo purposes? Or just keep as requested for now.
+            refreshMyTribes: async (userId: string) => {
+                const tribes = await SupabaseNetworkService.getMyTribes(userId);
+                set({ myTribes: tribes });
+
+                // Update selectedTribe if it's no longer valid
+                const currentSelected = get().selectedTribe;
+                if (currentSelected && !tribes.find(t => t.id === currentSelected.id)) {
+                    set({ selectedTribe: null });
+                } else if (!currentSelected && tribes.length > 0) {
+                    set({ selectedTribe: tribes[0] });
+                }
+            },
+
+            joinTribe: (tribe: Tribe) => {
+                const { myTribes, pendingTribes } = get();
+
+                if (tribe.privacy === 'private') {
+                    if (!pendingTribes.includes(tribe.id)) {
+                        set({ pendingTribes: [...pendingTribes, tribe.id] });
+                    }
+                } else {
+                    if (!myTribes.find(t => t.id === tribe.id)) {
+                        set({ myTribes: [...myTribes, { ...tribe, joinStatus: 'joined' }] });
+                    }
+                }
+            },
+
+            leaveTribe: (tribeId: string) => {
+                const { myTribes, selectedTribe, pendingTribes } = get();
+                const newTribes = myTribes.filter(t => t.id !== tribeId);
+                const newPending = pendingTribes.filter(id => id !== tribeId);
+                let newSelected = selectedTribe;
+                if (selectedTribe?.id === tribeId) {
+                    newSelected = newTribes.length > 0 ? newTribes[0] : null;
+                }
+                set({
+                    myTribes: newTribes,
+                    pendingTribes: newPending,
+                    selectedTribe: newSelected
+                });
+            },
+
+            selectTribe: (tribeId: string | null) => {
+                if (!tribeId) {
+                    set({ selectedTribe: null });
+                    return;
+                }
+                const tribe = get().myTribes.find(t => t.id === tribeId);
+                if (tribe) {
+                    set({ selectedTribe: tribe });
+                }
+            },
+
+            isMember: (tribeId: string) => {
+                return !!get().myTribes.find(t => t.id === tribeId);
+            },
+
+            isRequested: (tribeId: string) => {
+                return get().pendingTribes.includes(tribeId);
+            },
+
+            createTribe: (tribe: Tribe) => {
+                const { myTribes } = get();
+                const newTribe = { ...tribe, joinStatus: 'joined' as const };
+                set({
+                    myTribes: [...myTribes, newTribe],
+                    selectedTribe: newTribe
+                });
             }
-        } else {
-            // Public logic -> Join immediately
-            if (!myTribes.find(t => t.id === tribe.id)) {
-                set({ myTribes: [...myTribes, { ...tribe, joinStatus: 'joined' }] });
-            }
+        }),
+        {
+            name: 'user-tribe-storage',
+            storage: createJSONStorage(() => AsyncStorage),
         }
-    },
-
-    leaveTribe: (tribeId: string) => {
-        const { myTribes, selectedTribe, pendingTribes } = get();
-
-        // Remove from members
-        const newTribes = myTribes.filter(t => t.id !== tribeId);
-
-        // Remove from pending if there
-        const newPending = pendingTribes.filter(id => id !== tribeId);
-
-        // If currently selected tribe is left, deselect it
-        let newSelected = selectedTribe;
-        if (selectedTribe?.id === tribeId) {
-            newSelected = null;
-        }
-
-        set({
-            myTribes: newTribes,
-            pendingTribes: newPending,
-            selectedTribe: newSelected
-        });
-    },
-
-    selectTribe: (tribeId: string | null) => {
-        if (!tribeId) {
-            set({ selectedTribe: null });
-            return;
-        }
-        const tribe = get().myTribes.find(t => t.id === tribeId);
-        if (tribe) {
-            set({ selectedTribe: tribe });
-        }
-    },
-
-    isMember: (tribeId: string) => {
-        return !!get().myTribes.find(t => t.id === tribeId);
-    },
-
-    isRequested: (tribeId: string) => {
-        return get().pendingTribes.includes(tribeId);
-    },
-
-    createTribe: (tribe: Tribe) => {
-        const { myTribes } = get();
-        // Add to myTribes with joined status
-        const newTribe = { ...tribe, joinStatus: 'joined' as const };
-        set({
-            myTribes: [...myTribes, newTribe],
-            selectedTribe: newTribe // Auto select the new tribe
-        });
-    }
-}));
+    )
+);

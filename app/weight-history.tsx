@@ -1,228 +1,340 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
-import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import {
+    Dimensions,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    FlatList,
+    Animated,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../src/shared/theme/Colors';
-import { WeightEntry, WeightStore } from '../store/WeightStore';
+import { WeeklyMetric, WeeklyMetricsStore } from '../store/WeeklyMetricsStore';
+import { CalendarModal } from '../src/features/feed/components/CalendarModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-type Range = '2w' | '4w' | '3m' | '6m' | '1y' | 'all';
-type ViewType = 'week' | 'month' | 'year';
+// Layout constants
+const CARD_MARGIN = 20;
+const CARD_WIDTH = SCREEN_WIDTH - CARD_MARGIN * 2;
+const CHART_PADDING_LEFT = 40; // Space for Y-axis
+const CHART_PADDING_RIGHT = 30; // Increased padding for alignment
+const CHART_PADDING_TOP = 30;
+const CHART_PADDING_BOTTOM = 30;
+const CHART_DRAW_WIDTH = CARD_WIDTH - CHART_PADDING_LEFT - CHART_PADDING_RIGHT;
+const CHART_HEIGHT = 200;
 
-export default function WeightHistoryScreen() {
+type Range = '4W' | '3M' | '6M' | '1Y' | 'ALL';
+const RANGES: Range[] = ['4W', '3M', '6M', '1Y', 'ALL'];
+
+export default function WeightTrendsScreen() {
     const router = useRouter();
-    const [weights, setWeights] = useState<WeightEntry[]>([]);
-    const [range, setRange] = useState<Range>('all');
-    const [viewType, setViewType] = useState<ViewType>('week');
+    const [metrics, setMetrics] = useState<WeeklyMetric[]>([]);
+    const [range, setRange] = useState<Range>('4W');
+    const flatListRef = useRef<FlatList>(null);
+    const [isCalendarVisible, setIsCalendarVisible] = useState(false);
 
-    const TARGET_WEIGHT = 250;
-
-    useEffect(() => {
-        const load = async () => {
-            const data = await WeightStore.loadWeights();
-            setWeights(data);
-        };
-        load();
-        return WeightStore.subscribe(setWeights);
-    }, []);
-
-    // Helper to get grouping key
-    const getGroupKey = (dateStr: string) => {
-        const d = new Date(dateStr + 'T12:00:00');
-        if (viewType === 'week') {
-            const day = d.getDay();
-            d.setDate(d.getDate() - day);
-            return d.toISOString().split('T')[0];
-        } else if (viewType === 'month') {
-            return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-01`;
-        } else {
-            return `${d.getFullYear()}-01-01`;
+    // ──────────────────────────────────────────────────────────────────────────
+    // Swipe Logic for Ranges (Natural ScrollView)
+    // ──────────────────────────────────────────────────────────────────────────
+    const onScroll = (event: any) => {
+        const offset = event.nativeEvent.contentOffset.x;
+        const index = Math.round(offset / CARD_WIDTH);
+        if (RANGES[index] && RANGES[index] !== range) {
+            setRange(RANGES[index]);
         }
     };
 
-    // Calculate averages
-    const groupedAverages = useMemo(() => {
-        const groups: { [key: string]: number[] } = {};
+    useEffect(() => {
+        const load = async () => {
+            const data = await WeeklyMetricsStore.loadMetrics();
+            setMetrics(data);
+        };
+        load();
+        return WeeklyMetricsStore.subscribe(setMetrics);
+    }, []);
 
-        weights.forEach(w => {
-            const key = getGroupKey(w.date);
-            if (!groups[key]) groups[key] = [];
-            groups[key].push(w.weight);
-        });
+    // ──────────────────────────────────────────────────────────────────────────
+    // Data Filtering Logic
+    // ──────────────────────────────────────────────────────────────────────────
+    const chartData = useMemo(() => {
+        if (metrics.length === 0) return [];
+        const sorted = [...metrics].sort((a, b) => a.weekStartDate.localeCompare(b.weekStartDate));
 
-        const averages = Object.keys(groups).sort().map(key => {
-            const vals = groups[key];
-            const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
-            return {
-                key, // Sunday date, Month start, or Year start
-                avg: parseFloat(avg.toFixed(1)),
-                count: groups[key].length
-            };
-        });
+        if (range === '4W') {
+            return sorted.slice(-4);
+        }
 
-        // Calculate changes
-        return averages.map((item, i) => ({
-            ...item,
-            change: i > 0 ? parseFloat((item.avg - averages[i - 1].avg).toFixed(1)) : null
-        }));
-    }, [weights, viewType]);
+        if (range === '3M') {
+            const subset = sorted.slice(-12);
+            return subset.filter((_, i) => i % 2 === 0).slice(-6);
+        }
 
-    // Filter by range
-    const filteredAverages = useMemo(() => {
-        if (range === 'all') return groupedAverages;
+        if (range === '6M') {
+            const result: WeeklyMetric[] = [];
+            const monthsSeen = new Set<string>();
+            for (let i = sorted.length - 1; i >= 0 && result.length < 6; i--) {
+                const date = new Date(sorted[i].weekStartDate);
+                const monthKey = `${date.getFullYear()}-${date.getMonth()}`;
+                if (!monthsSeen.has(monthKey)) {
+                    result.unshift(sorted[i]);
+                    monthsSeen.add(monthKey);
+                }
+            }
+            return result;
+        }
 
-        const now = new Date();
-        let cutoff = new Date();
+        if (range === '1Y') {
+            const result: WeeklyMetric[] = [];
+            const monthsSeen = new Set<string>();
+            let skipMonth = false;
 
-        if (range === '2w') cutoff.setDate(now.getDate() - 14);
-        else if (range === '4w') cutoff.setDate(now.getDate() - 28);
-        else if (range === '3m') cutoff.setMonth(now.getMonth() - 3);
-        else if (range === '6m') cutoff.setMonth(now.getMonth() - 6);
-        else if (range === '1y') cutoff.setFullYear(now.getFullYear() - 1);
+            for (let i = sorted.length - 1; i >= 0 && result.length < 6; i--) {
+                const date = new Date(sorted[i].weekStartDate);
+                const monthKey = `${date.getFullYear()}-${date.getMonth()}`;
+                if (!monthsSeen.has(monthKey)) {
+                    monthsSeen.add(monthKey);
+                    if (!skipMonth) {
+                        result.unshift(sorted[i]);
+                        skipMonth = true;
+                    } else {
+                        skipMonth = false;
+                    }
+                }
+            }
+            return result;
+        }
 
-        const cutoffStr = cutoff.toISOString().split('T')[0];
-        return groupedAverages.filter(a => a.key >= cutoffStr);
-    }, [groupedAverages, range]);
+        if (sorted.length <= 6) return sorted;
+        const result: WeeklyMetric[] = [];
+        const step = (sorted.length - 1) / 5;
+        for (let i = 0; i < 6; i++) {
+            result.push(sorted[Math.round(i * step)]);
+        }
+        return result;
+    }, [metrics, range]);
 
-    const maxDev = useMemo(() => {
-        if (filteredAverages.length === 0) return 10;
-        const devs = filteredAverages.map(a => Math.abs(a.avg - TARGET_WEIGHT));
-        return Math.max(10, ...devs);
-    }, [filteredAverages]);
+    // ──────────────────────────────────────────────────────────────────────────
+    // Chart Calculations
+    // ──────────────────────────────────────────────────────────────────────────
+    const { minY, maxY, yLabels } = useMemo(() => {
+        if (chartData.length === 0) return { minY: 225, maxY: 245, yLabels: [225, 235, 240] };
+        const values = chartData.map(d => d.averageWeight);
+        const actualMin = Math.min(...values);
+        const actualMax = Math.max(...values);
+        
+        // Determine labels
+        let lo = Math.floor(actualMin / 5) * 5 - 5;
+        let hi = Math.ceil(actualMax / 5) * 5 + 5;
+        if (hi - lo < 20) hi = lo + 20;
+        const mid = lo + (hi - lo) / 2;
+        const labels = [lo, Math.round(mid), hi];
 
-    const getYPos = (weight: number) => {
-        const diff = weight - TARGET_WEIGHT;
-        const percentage = 50 - (diff / maxDev) * 50;
-        return Math.max(0, Math.min(100, percentage));
+        return { minY: lo, maxY: hi, yLabels: labels };
+    }, [chartData]);
+
+    const getY = (weight: number) => {
+        const pct = (weight - minY) / (maxY - minY);
+        return CHART_HEIGHT - (pct * CHART_HEIGHT);
     };
 
-    const getXPos = (index: number) => {
-        if (filteredAverages.length <= 1) return 50;
-        const total = filteredAverages.length - 1;
-        return 10 + (index / total) * 80; // 10% padding on sides
+    const getX = (index: number) => {
+        if (chartData.length <= 1) return (CHART_DRAW_WIDTH - 20) / 2;
+        return (index / (chartData.length - 1)) * (CHART_DRAW_WIDTH - 20);
     };
 
-    const formatDisplayDate = (dateStr: string) => {
-        const [y, m, d] = dateStr.split('-');
-        if (viewType === 'week') return `${m}/${d}`;
-        if (viewType === 'month') return `${new Date(parseInt(y), parseInt(m) - 1).toLocaleString('default', { month: 'short' })}`;
-        return y;
+    const formatDate = (dateStr: string) => {
+        // Use YYYY, MM, DD to avoid timezone shifts
+        const [y, m, d] = dateStr.split('-').map(Number);
+        return `${m}/${d}`;
     };
 
-    const getViewLabel = () => {
-        if (viewType === 'week') return 'Weekly';
-        if (viewType === 'month') return 'Monthly';
-        return 'Yearly';
+    const scrollToMetric = (dateStr: string) => {
+        const allSorted = [...metrics].sort((a, b) => b.weekStartDate.localeCompare(a.weekStartDate));
+        const listIndex = allSorted.findIndex(m => m.weekStartDate === dateStr);
+        if (listIndex !== -1) {
+            flatListRef.current?.scrollToIndex({ index: listIndex, animated: true, viewPosition: 0 });
+        }
     };
+
+    const handleDotPress = (index: number) => {
+        const metric = chartData[index];
+        scrollToMetric(metric.weekStartDate);
+    };
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Render Helpers
+    // ──────────────────────────────────────────────────────────────────────────
+    const renderMetricPill = ({ item }: { item: WeeklyMetric }) => {
+        const [y, m, d] = item.weekStartDate.split('-').map(Number);
+        const displayDate = `Week of ${m}/${d}`;
+        
+        return (
+            <View style={styles.metricPill}>
+                <View style={styles.metricPillHeader}>
+                    <Text style={styles.metricPillHeaderText}>{displayDate} · {item.entryCount} entries</Text>
+                </View>
+                <View style={styles.metricPillBody}>
+                    <Text style={styles.metricWeightText}>{item.averageWeight.toFixed(1)} lbs</Text>
+                    <View style={styles.metricStatsRow}>
+                        <View style={styles.metricStat}>
+                            <MaterialCommunityIcons name="fire" size={14} color="#4F6352" />
+                            <Text style={styles.metricStatText}>{Math.round(item.averageCalories)} cals</Text>
+                        </View>
+                        <View style={styles.metricStat}>
+                            <MaterialCommunityIcons name="food-drumstick" size={14} color="#4F6352" />
+                            <Text style={styles.metricStatText}>{Math.round(item.averageProtein)}g</Text>
+                        </View>
+                        <View style={styles.metricStat}>
+                            <MaterialCommunityIcons name="leaf" size={14} color="#4F6352" />
+                            <Text style={styles.metricStatText}>{Math.round(item.averageCarbs)}g</Text>
+                        </View>
+                        <View style={styles.metricStat}>
+                            <Ionicons name="water-outline" size={14} color="#4F6352" />
+                            <Text style={styles.metricStatText}>{Math.round(item.averageFat)}g</Text>
+                        </View>
+                    </View>
+                </View>
+            </View>
+        );
+    };
+
+    const sortedMetricsForList = useMemo(() => 
+        [...metrics].sort((a, b) => b.weekStartDate.localeCompare(a.weekStartDate))
+    , [metrics]);
 
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="chevron-back" size={28} color="white" />
+                    <Ionicons name="arrow-back" size={28} color="#4F6352" />
                 </TouchableOpacity>
-                <Text style={styles.title}>Weight History</Text>
+                <Text style={styles.headerTitle}>Weight trends</Text>
                 <View style={{ width: 44 }} />
             </View>
 
-            <View style={styles.rangeSelector}>
-                {(['2w', '4w', '3m', '6m', '1y', 'all'] as Range[]).map(r => (
+            <View style={styles.rangeContainer}>
+                {RANGES.map(r => (
                     <TouchableOpacity
                         key={r}
-                        style={[styles.rangePill, range === r && styles.rangePillActive]}
                         onPress={() => setRange(r)}
+                        style={[styles.rangePill, range === r && styles.rangePillActive]}
                     >
-                        <Text style={[styles.rangeText, range === r && styles.rangeTextActive]}>
-                            {r.toUpperCase()}
-                        </Text>
+                        <Text style={[styles.rangeText, range === r && styles.rangeTextActive]}>{r}</Text>
                     </TouchableOpacity>
                 ))}
             </View>
 
-            <View style={styles.viewSelector}>
-                {(['week', 'month', 'year'] as ViewType[]).map(v => (
-                    <TouchableOpacity
-                        key={v}
-                        style={[styles.viewTab, viewType === v && styles.viewTabActive]}
-                        onPress={() => setViewType(v)}
-                    >
-                        <Text style={[styles.viewTabText, viewType === v && styles.viewTabTextActive]}>
-                            {v.charAt(0).toUpperCase() + v.slice(1)}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-                <View style={styles.chartCard}>
-                    <Text style={styles.chartTitle}>{getViewLabel()} Average</Text>
-
-                    <View style={styles.chartBody}>
-                        <View style={styles.chartInner}>
-                            {/* Reference Lines */}
-                            <View style={[styles.referenceLineContainer, { top: '25%' }]}>
-                                <View style={styles.referenceLine} />
-                            </View>
-                            <View style={[styles.referenceLineContainer, { top: '75%' }]}>
-                                <View style={styles.referenceLine} />
-                            </View>
-
-                            {/* Target Line */}
-                            <View style={styles.targetLineContainer}>
-                                <Text style={styles.yLabel}>{TARGET_WEIGHT} lbs</Text>
-                                <View style={styles.dashedLine} />
-                            </View>
-
-                            {/* Data Points */}
-                            {filteredAverages.map((item, i) => {
-                                const x = getXPos(i);
-                                const y = getYPos(item.avg);
-                                return (
-                                    <View key={item.key} style={[styles.markerContainer, { left: `${x}%`, top: `${y}%` }]}>
-                                        <Text style={styles.markerLabel}>{item.avg}</Text>
-                                        <Text style={styles.markerX}>✕</Text>
-                                    </View>
-                                );
-                            })}
-                        </View>
-                    </View>
-
-                    <View style={styles.footerRow}>
-                        {filteredAverages.map((item, i) => {
-                            if (filteredAverages.length > 8 && i % Math.ceil(filteredAverages.length / 5) !== 0) return null;
-                            const x = getXPos(i);
-                            return (
-                                <View key={item.key} style={[styles.dateLabelContainer, { left: `${x}%` }]}>
-                                    <Text style={styles.dateLabel}>{formatDisplayDate(item.key)}</Text>
+            <View style={styles.chartCard}>
+                <ScrollView
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    onMomentumScrollEnd={onScroll}
+                    scrollEventThrottle={16}
+                >
+                    {RANGES.map((r) => (
+                        <View key={r} style={{ width: CARD_WIDTH - 24 }}> 
+                            <View style={styles.chartViewport}>
+                                <View style={styles.yAxis}>
+                                    {yLabels.map((label, idx) => (
+                                        <View key={idx} style={[styles.gridRow, { top: getY(label) }]}>
+                                            <View style={styles.gridLine} />
+                                        </View>
+                                    ))}
                                 </View>
-                            );
-                        })}
-                    </View>
-                </View>
 
-                <Text style={styles.sectionTitle}>{getViewLabel()} Changes</Text>
-                {filteredAverages.slice().reverse().map((item, i) => (
-                    <View key={item.key} style={styles.historyRow}>
-                        <View>
-                            <Text style={styles.historyDate}>
-                                {viewType === 'week' ? `Week of ${formatDisplayDate(item.key)}` :
-                                    viewType === 'month' ? formatDisplayDate(item.key) : item.key.split('-')[0]}
-                            </Text>
-                            <Text style={styles.historyCount}>{item.count} check-ins</Text>
+                                <View style={styles.plotArea}>
+                                    {chartData.map((d, i) => {
+                                        const x = getX(i);
+                                        const y = getY(d.averageWeight);
+                                        
+                                        return (
+                                            <React.Fragment key={i}>
+                                                {i < chartData.length - 1 && (() => {
+                                                    const p1 = { x, y };
+                                                    const p2 = { x: getX(i + 1), y: getY(chartData[i + 1].averageWeight) };
+                                                    const dx = p2.x - p1.x;
+                                                    const dy = p2.y - p1.y;
+                                                    const length = Math.sqrt(dx * dx + dy * dy);
+                                                    const angle = Math.atan2(dy, dx);
+                                                    
+                                                    return (
+                                                        <View key={`line-${i}`} style={[
+                                                            styles.chartLine,
+                                                            {
+                                                                width: length,
+                                                                left: (p1.x + p2.x) / 2 - length / 2,
+                                                                top: (p1.y + p2.y) / 2,
+                                                                transform: [{ rotate: `${angle}rad` }],
+                                                            }
+                                                        ]} />
+                                                    );
+                                                })()}
+                                                
+                                                <TouchableOpacity
+                                                    activeOpacity={0.7}
+                                                    onPress={() => handleDotPress(i)}
+                                                    hitSlop={{ top: 20, left: 20, right: 20, bottom: 20 }}
+                                                    style={[styles.chartDot, { left: x - 4, top: y - 4, zIndex: 100 }]}
+                                                />
+
+                                                <TouchableOpacity
+                                                    activeOpacity={0.7}
+                                                    onPress={() => handleDotPress(i)}
+                                                    style={{ position: 'absolute', left: x - 20, top: y - 22, zIndex: 100 }}
+                                                >
+                                                    <Text style={styles.dotValue}>{d.averageWeight.toFixed(1)}</Text>
+                                                </TouchableOpacity>
+
+                                                <Text style={[styles.xAxisLabel, { left: x - 20 }]}>
+                                                    {formatDate(d.weekStartDate)}
+                                                </Text>
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </View>
+                            </View>
                         </View>
-                        <View style={styles.historyStats}>
-                            <Text style={styles.historyAvg}>{item.avg} lbs</Text>
-                            {item.change !== null && (
-                                <Text style={[styles.historyChange, { color: item.change <= 0 ? Colors.success : Colors.error }]}>
-                                    {item.change > 0 ? '+' : ''}{item.change} lbs
-                                </Text>
-                            )}
-                        </View>
-                    </View>
-                ))}
-            </ScrollView>
+                    ))}
+                </ScrollView>
+            </View>
+
+            <View style={styles.listHeader}>
+                <Text style={styles.listTitle}>Weekly weights & macros</Text>
+                <TouchableOpacity onPress={() => setIsCalendarVisible(true)}>
+                    <Ionicons name="calendar-outline" size={24} color="#4F6352" />
+                </TouchableOpacity>
+            </View>
+
+            <FlatList
+                ref={flatListRef}
+                data={sortedMetricsForList}
+                renderItem={renderMetricPill}
+                keyExtractor={item => item.weekStartDate}
+                contentContainerStyle={styles.listContent}
+                showsVerticalScrollIndicator={false}
+                getItemLayout={(data, index) => (
+                    {length: 80, offset: 80 * index, index}
+                )}
+            />
+
+            <CalendarModal
+                visible={isCalendarVisible}
+                onClose={() => setIsCalendarVisible(false)}
+                onSelectDate={(date) => {
+                    const d = new Date(date);
+                    d.setHours(12,0,0,0);
+                    d.setDate(d.getDate() - d.getDay());
+                    const sunStr = d.toISOString().split('T')[0];
+                    scrollToMetric(sunStr);
+                    setIsCalendarVisible(false);
+                }}
+            />
         </SafeAreaView>
     );
 }
@@ -230,206 +342,186 @@ export default function WeightHistoryScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#000',
+        backgroundColor: '#EFF0E1',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingVertical: 10,
+        paddingHorizontal: 16,
+        paddingTop: 8,
     },
     backButton: {
-        width: 44,
-        height: 44,
-        justifyContent: 'center',
-        alignItems: 'center',
+        padding: 4,
     },
-    title: {
-        color: 'white',
-        fontSize: 20,
-        fontWeight: 'bold',
+    headerTitle: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: '#4F6352',
     },
-    rangeSelector: {
+    rangeContainer: {
         flexDirection: 'row',
-        paddingHorizontal: 20,
-        gap: 8,
-        marginVertical: 15,
         justifyContent: 'center',
+        gap: 12,
+        marginVertical: 16,
     },
     rangePill: {
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 15,
-        backgroundColor: '#111',
-        borderWidth: 1,
-        borderColor: '#333',
+        paddingHorizontal: 16,
+        paddingVertical: 4,
+        borderRadius: 12,
+        backgroundColor: 'transparent',
     },
     rangePillActive: {
-        backgroundColor: Colors.primary,
-        borderColor: Colors.primary,
+        backgroundColor: '#2D4734',
     },
     rangeText: {
-        color: '#666',
-        fontSize: 10,
-        fontWeight: 'bold',
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#A9BAA2',
     },
     rangeTextActive: {
-        color: 'white',
-    },
-    viewSelector: {
-        flexDirection: 'row',
-        paddingHorizontal: 20,
-        marginBottom: 10,
-        justifyContent: 'center',
-    },
-    viewTab: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderBottomWidth: 2,
-        borderBottomColor: 'transparent',
-    },
-    viewTabActive: {
-        borderBottomColor: Colors.primary,
-    },
-    viewTabText: {
-        color: '#666',
-        fontSize: 14,
-        fontWeight: 'bold',
-    },
-    viewTabTextActive: {
-        color: Colors.primary,
-    },
-    scrollContent: {
-        padding: 20,
-        paddingBottom: 40,
+        color: '#FFFFFF',
     },
     chartCard: {
-        backgroundColor: '#0a0a0a',
+        backgroundColor: '#EFF0E1',
         borderRadius: 30,
-        padding: 20,
-        borderWidth: 1,
-        borderColor: '#222',
-        marginBottom: 30,
+        marginHorizontal: 16,
+        padding: 12,
+        borderWidth: 1.5,
+        borderColor: '#A9BAA2',
+        height: 280,
     },
-    chartTitle: {
-        color: Colors.theme.olive,
-        fontSize: 18,
-        fontWeight: 'bold',
-        textAlign: 'center',
-        marginBottom: 20,
-    },
-    chartBody: {
-        height: 200,
-        marginBottom: 30,
-    },
-    chartInner: {
+    chartViewport: {
         flex: 1,
         position: 'relative',
+        paddingTop: 15, // Shift chart downwards for centering
     },
-    referenceLineContainer: {
+    yAxis: {
         position: 'absolute',
         left: 0,
-        right: 0,
-        height: 1,
-    },
-    referenceLine: {
-        flex: 1,
-        backgroundColor: Colors.theme.sage,
-        opacity: 0.1,
-    },
-    targetLineContainer: {
-        position: 'absolute',
-        top: '50%',
-        left: 0,
-        right: 0,
-        zIndex: 1,
-    },
-    yLabel: {
-        color: 'white',
-        fontSize: 10,
-        marginBottom: 2,
-    },
-    dashedLine: {
+        top: 15, // Match viewport padding
+        bottom: CHART_PADDING_BOTTOM,
         width: '100%',
-        borderTopWidth: 1,
-        borderColor: 'white',
-        borderStyle: 'dashed',
     },
-    markerContainer: {
+    gridRow: {
         position: 'absolute',
-        width: 60,
-        height: 40,
-        alignItems: 'center',
-        justifyContent: 'center',
-        transform: [{ translateX: -30 }, { translateY: -20 }],
-        zIndex: 5,
-    },
-    markerX: {
-        color: Colors.success,
-        fontSize: 14,
-        fontWeight: 'bold',
-    },
-    markerLabel: {
-        color: Colors.success,
-        fontSize: 10,
-        fontWeight: '600',
-        marginBottom: 2,
-    },
-    footerRow: {
         flexDirection: 'row',
-        height: 20,
-        position: 'relative',
-    },
-    dateLabelContainer: {
-        position: 'absolute',
-        transform: [{ translateX: -20 }], // Approximate centering
-        width: 40,
         alignItems: 'center',
+        left: 5, // Offset to remove edge ticks
+        right: 5,
     },
-    dateLabel: {
-        color: '#666',
+    yAxisLabel: {
+        width: CHART_PADDING_LEFT - 5,
+        fontSize: 11,
+        color: '#A9BAA2',
+        textAlign: 'left',
+    },
+    gridLine: {
+        flex: 1,
+        height: 1.5,
+        backgroundColor: '#A9BAA2',
+        opacity: 0.3,
+    },
+    plotArea: {
+        position: 'absolute',
+        left: CHART_PADDING_LEFT,
+        top: 15, // Match viewport padding
+        width: CHART_DRAW_WIDTH - 20,
+        height: CHART_HEIGHT,
+    },
+    chartLine: {
+        position: 'absolute',
+        height: 1.5,
+        backgroundColor: '#4F6352',
+        opacity: 0.4,
+    },
+    chartDot: {
+        position: 'absolute',
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        borderWidth: 1.5,
+        borderColor: '#4F6352',
+        backgroundColor: '#EFF0E1',
+    },
+    dotValue: {
         fontSize: 10,
+        fontWeight: '700',
+        color: '#4F6352',
+        width: 40,
+        textAlign: 'center',
     },
-    sectionTitle: {
-        color: 'white',
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginBottom: 15,
-        marginLeft: 5,
+    xAxisLabel: {
+        position: 'absolute',
+        bottom: -22,
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#4F6352',
+        opacity: 0.6,
+        width: 40,
+        textAlign: 'center',
     },
-    historyRow: {
+    listHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: '#0a0a0a',
-        padding: 16,
-        borderRadius: 20,
+        paddingHorizontal: 20,
+        marginTop: 24,
         marginBottom: 12,
+    },
+    listTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#4F6352',
+    },
+    listContent: {
+        paddingHorizontal: 16,
+        paddingBottom: 40,
+    },
+    metricPill: {
+        backgroundColor: '#A9BAA2',
+        borderRadius: 25,
+        marginBottom: 12,
+        paddingTop: 6,
+        paddingBottom: 2,
+        paddingHorizontal: 16,
         borderWidth: 1,
-        borderColor: '#111',
+        borderColor: '#4F6352',
+        height: 68,
     },
-    historyDate: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: '600',
-        marginBottom: 4,
+    metricPillHeader: {
+        alignItems: 'center',
+        marginBottom: 2, // Reduced margin
     },
-    historyCount: {
-        color: '#666',
+    metricPillHeaderText: {
         fontSize: 12,
+        fontWeight: '700',
+        fontStyle: 'italic',
+        color: '#4F6352',
+        opacity: 0.8,
     },
-    historyStats: {
-        alignItems: 'flex-end',
+    metricPillBody: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
     },
-    historyAvg: {
-        color: 'white',
-        fontSize: 18,
-        fontWeight: 'bold',
+    metricWeightText: {
+        fontSize: 18, // Slightly smaller to fit tighter
+        fontWeight: '800',
+        color: '#FFFFFF',
     },
-    historyChange: {
-        fontSize: 12,
-        fontWeight: '600',
-        marginTop: 2,
-    }
+    metricStatsRow: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    metricStat: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+    },
+    metricStatText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#FFFFFF',
+    },
 });

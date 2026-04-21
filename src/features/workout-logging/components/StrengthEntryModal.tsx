@@ -21,7 +21,6 @@ interface StrengthEntryModalProps {
 }
 
 export default function StrengthEntryModal({ visible, exercise, onClose, onSave }: StrengthEntryModalProps) {
-    // ... state and effects (keep same)
     const [sets, setSets] = useState('');
     const [reps, setReps] = useState('');
     const [superset, setSuperset] = useState('');
@@ -31,10 +30,10 @@ export default function StrengthEntryModal({ visible, exercise, onClose, onSave 
         if (visible && exercise) {
             const s = exercise.sets?.length || 0;
             const r = exercise.sets?.[0]?.reps || 0;
-            if (s > 0) setSets(s.toString());
-            if (r > 0) setReps(r.toString());
-            if (exercise.superset) setSuperset(exercise.superset);
-            if (exercise.eccentric) setEccentric(exercise.eccentric);
+            setSets(s > 0 ? s.toString() : '');
+            setReps(r > 0 ? r.toString() : '');
+            setSuperset(exercise.superset || '');
+            setEccentric(exercise.eccentric || '');
         }
     }, [visible, exercise]);
 
@@ -62,9 +61,6 @@ export default function StrengthEntryModal({ visible, exercise, onClose, onSave 
 
     if (!exercise) return null;
 
-    const refSets = 4;
-    const refReps = 6;
-
     return (
         <Modal
             visible={visible}
@@ -75,28 +71,31 @@ export default function StrengthEntryModal({ visible, exercise, onClose, onSave 
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                 <View style={styles.overlay}>
                     <View style={styles.container}>
-                        {/* Header: Title and Icon */}
+                        {/* ── Header ── */}
                         <View style={styles.header}>
                             <TouchableOpacity onPress={onClose} style={styles.backButton}>
                                 <Ionicons name="arrow-back" size={24} color={Colors.primary} />
                             </TouchableOpacity>
 
-                            <View style={styles.titleContainer}>
-                                <Text style={styles.title}>{exercise.title}</Text>
-                                <Text style={styles.subtitle}>{exercise.notes || '5 sec eccentric'}</Text>
+                            {/* Centered Creator */}
+                            <View style={styles.creatorRow}>
+                                <View style={styles.creatorAvatarCircle}>
+                                    <MaterialCommunityIcons name="fire" size={24} color={Colors.primary} />
+                                </View>
+                                <Text style={styles.creatorName}>{exercise.createdBy?.name || 'Tribe'}</Text>
                             </View>
 
-                            <MaterialCommunityIcons name="dumbbell" size={32} color={Colors.primary} style={styles.headerIcon} />
+                            <MaterialCommunityIcons 
+                                name="dumbbell" 
+                                size={32} 
+                                color={Colors.primary} 
+                                style={styles.headerIcon} 
+                            />
                         </View>
 
-                        {/* Reference Bubble */}
-                        <View style={styles.previewPill}>
-                            <View style={styles.previewIconCircle}>
-                                <MaterialCommunityIcons name="fire" size={24} color={Colors.primary} />
-                            </View>
-                            <Text style={styles.previewText}>
-                                {refSets} sets x {refReps} reps
-                            </Text>
+                        {/* ── Title ── */}
+                        <View style={styles.titleContainer}>
+                            <Text style={styles.exerciseTitle}>{exercise.title}</Text>
                         </View>
 
                         <View style={styles.divider} />
@@ -114,6 +113,7 @@ export default function StrengthEntryModal({ visible, exercise, onClose, onSave 
                                         keyboardType="numeric"
                                         placeholder="...sets"
                                         placeholderTextColor="rgba(79, 99, 82, 0.4)"
+                                        selectionColor={Colors.primary}
                                     />
                                 </View>
                             </View>
@@ -129,6 +129,7 @@ export default function StrengthEntryModal({ visible, exercise, onClose, onSave 
                                         keyboardType="numeric"
                                         placeholder="...reps"
                                         placeholderTextColor="rgba(79, 99, 82, 0.4)"
+                                        selectionColor={Colors.primary}
                                     />
                                 </View>
                             </View>
@@ -144,6 +145,7 @@ export default function StrengthEntryModal({ visible, exercise, onClose, onSave 
                                         placeholder="..."
                                         placeholderTextColor="rgba(79, 99, 82, 0.4)"
                                         maxLength={1}
+                                        selectionColor={Colors.primary}
                                     />
                                 </View>
                             </View>
@@ -158,6 +160,7 @@ export default function StrengthEntryModal({ visible, exercise, onClose, onSave 
                                         onChangeText={setEccentric}
                                         placeholder="...sec"
                                         placeholderTextColor="rgba(79, 99, 82, 0.4)"
+                                        selectionColor={Colors.primary}
                                     />
                                 </View>
                             </View>
@@ -196,55 +199,45 @@ const styles = StyleSheet.create({
     backButton: {
         padding: 5,
     },
+    creatorRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    creatorAvatarCircle: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        borderWidth: 1.5,
+        borderColor: Colors.primary,
+        backgroundColor: 'rgba(79, 99, 82, 0.1)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    creatorName: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: Colors.primary,
+    },
+    headerIcon: {
+        opacity: 0.9,
+    },
     titleContainer: {
         alignItems: 'center',
-        flex: 1,
+        marginVertical: 30,
     },
-    title: {
-        fontSize: 24,
+    exerciseTitle: {
+        fontSize: 32,
         fontWeight: 'bold',
         color: Colors.primary,
         textAlign: 'center',
-    },
-    subtitle: {
-        fontSize: 16,
-        color: '#888', // Grey italic
-        fontStyle: 'italic',
-        marginTop: 4,
-    },
-    headerIcon: {
-        transform: [{ rotate: '-15deg' }],
-    },
-    previewPill: {
-        flexDirection: 'row',
-        backgroundColor: Colors.card, // Sage Green
-        borderRadius: 40,
-        padding: 8,
-        paddingHorizontal: 16,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 20,
-        height: 70,
-    },
-    previewIconCircle: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12,
-    },
-    previewText: {
-        color: 'white',
-        fontSize: 24,
-        fontWeight: 'bold',
+        lineHeight: 38,
     },
     divider: {
         height: 1,
-        backgroundColor: '#CCC',
+        backgroundColor: 'rgba(79, 99, 82, 0.2)',
         width: '100%',
-        marginBottom: 30,
+        marginBottom: 40,
     },
     inputsGrid: {
         flexDirection: 'row',
@@ -253,28 +246,30 @@ const styles = StyleSheet.create({
         rowGap: 30,
     },
     inputGroup: {
-        width: '40%',
+        width: '45%',
         alignItems: 'center',
     },
     label: {
-        color: Colors.primary, // MATCH CARDIO: Dark Green
+        color: Colors.primary,
         fontSize: 14,
         fontStyle: 'italic',
         marginBottom: 8,
-        fontWeight: '600', // Match Cardio
+        fontWeight: '600',
     },
     inputContainer: {
         width: '100%',
-        height: 50,
-        borderRadius: 25,
+        height: 60,
+        borderRadius: 30,
         borderWidth: 1,
-        borderColor: Colors.primary, // MATCH CARDIO: Dark Green Border
+        borderColor: Colors.primary,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(164, 182, 157, 0.1)', // MATCH CARDIO: Faint background
+        backgroundColor: 'rgba(164, 182, 157, 0.1)',
     },
     input: {
-        fontSize: 16,
+        flex: 1,
+        height: '100%',
+        fontSize: 20,
         color: Colors.primary,
         fontWeight: 'bold',
         textAlign: 'center',
@@ -286,10 +281,10 @@ const styles = StyleSheet.create({
         borderRadius: 35,
         borderWidth: 1.5,
         borderColor: Colors.primary,
+        backgroundColor: 'transparent',
         justifyContent: 'center',
         alignItems: 'center',
         alignSelf: 'center',
         marginBottom: 40,
-        backgroundColor: 'transparent',
     },
 });

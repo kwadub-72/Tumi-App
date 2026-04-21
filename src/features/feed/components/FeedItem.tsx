@@ -351,21 +351,67 @@ export default function FeedItem({
         );
     };
 
+    const formatDuration = (mins: number) => {
+        if (!mins) return '';
+        if (mins >= 60) {
+            const h = Math.floor(mins / 60);
+            const m = mins % 60;
+            return m > 0 ? `${h} hr ${m} min` : `${h} hr`;
+        }
+        return `${mins} min`;
+    };
+
     const renderWorkout = (workout: any) => {
         if (!isDetailView) {
             return (
-                <View style={styles.workoutContent}>
-                    <View style={styles.workoutHeaderRow}>
-                        <MaterialCommunityIcons name="dumbbell" size={20} color="white" />
-                        <Text style={styles.workoutDuration}>{workout.duration} mins</Text>
+                <View style={[styles.workoutContent, { paddingLeft: 0 }]}>
+                    <View style={styles.workoutHeaderRowCustom}>
+                        <Text style={styles.workoutHeaderTitle}>{workout.title}</Text>
+                        {workout.duration > 0 && (
+                            <View style={styles.workoutHeaderTimeBlock}>
+                                <MaterialCommunityIcons name="timer-outline" size={20} color="white" />
+                                <Text style={styles.workoutDurationText}>{formatDuration(workout.duration)}</Text>
+                            </View>
+                        )}
                     </View>
+                    
                     {isExpanded && (
-                        <View style={styles.exercisesList}>
-                            {workout.exercises.map((ex: any, idx: number) => (
-                                <Text key={idx} style={styles.exerciseItem}>
-                                    • {ex.title} ({ex.sets?.length || 0} sets)
-                                </Text>
-                            ))}
+                        <View style={styles.exercisesListBlock}>
+                            {workout.exercises.map((ex: any, idx: number) => {
+                                const setsStr = ex.sets?.length ? `${ex.sets.length} sets x ${ex.sets[0]?.reps || 0} reps` : '';
+                                
+                                const cardioParts = [];
+                                if (ex.speed) cardioParts.push(`${ex.speed} speed`);
+                                if (ex.incline) cardioParts.push(`${ex.incline} incline`);
+                                if (ex.duration) cardioParts.push(`${ex.duration} min`);
+                                const cardioStr = cardioParts.join(', ');
+                                
+                                return (
+                                    <View key={idx} style={styles.exerciseFeedRow}>
+                                        <View style={styles.exerciseFeedLeft}>
+                                            <Text style={styles.exerciseFeedRowTitle}>
+                                                {ex.displayId ? `${ex.displayId} ` : ''}{ex.title}
+                                            </Text>
+                                            {ex.eccentric ? (
+                                                <Text style={styles.exerciseFeedEccentric}>
+                                                    {ex.eccentric.includes('sec') ? ex.eccentric : `${ex.eccentric} sec eccentric`}
+                                                </Text>
+                                            ) : null}
+                                        </View>
+                                        <View style={styles.exerciseFeedRight}>
+                                            <MaterialCommunityIcons 
+                                                name={ex.type === 'Cardio' ? 'run' : 'dumbbell'} 
+                                                size={18} 
+                                                color="rgba(255,255,255,0.7)" 
+                                                style={{ marginRight: 8 }}
+                                            />
+                                            <Text style={styles.exerciseFeedDetails}>
+                                                {ex.type === 'Cardio' ? cardioStr : setsStr}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                );
+                            })}
                         </View>
                     )}
                 </View>
@@ -448,14 +494,16 @@ export default function FeedItem({
 
             <TouchableOpacity activeOpacity={isSelectMode ? 1 : 0.9} onPress={handlePressBody} style={{ zIndex: 1 }}>
                 <Text style={styles.titleText}>
-                    {post.snapshot?.caption || post.macroUpdate?.caption || post.workout?.title || post.meal?.title}
+                    {post.caption || post.snapshot?.caption || post.macroUpdate?.caption || post.workout?.title || post.meal?.title}
                 </Text>
 
                 {content()}
 
                 {!isDetailView && (
-                    <TouchableOpacity onPress={toggleExpand} style={styles.expandTrigger}>
-                        <Ionicons name="ellipsis-horizontal" size={24} color="rgba(255,255,255,0.5)" />
+                    <TouchableOpacity onPress={toggleExpand} style={styles.expandLineTrigger}>
+                        <View style={styles.dividerHalf} />
+                        <Ionicons name="ellipsis-horizontal" size={16} color="rgba(255,255,255,0.5)" />
+                        <View style={styles.dividerHalf} />
                     </TouchableOpacity>
                 )}
 
@@ -643,27 +691,82 @@ const styles = StyleSheet.create({
     workoutContent: {
         paddingLeft: 10,
     },
-    workoutHeaderRow: {
+    workoutHeaderRowCustom: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        justifyContent: 'space-between',
+        width: '100%',
+        paddingHorizontal: 20,
     },
-    workoutDuration: {
+    workoutHeaderTitle: {
         color: 'white',
-        fontSize: 14,
+        fontSize: 20,
         fontWeight: 'bold',
     },
-    exercisesList: {
-        marginTop: 10,
-        gap: 4,
+    workoutHeaderTimeBlock: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
     },
-    exerciseItem: {
-        color: 'rgba(255,255,255,0.8)',
+    workoutDurationText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    exercisesListBlock: {
+        marginTop: 15,
+        paddingHorizontal: 20,
+        gap: 8,
+    },
+    exerciseFeedRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 4,
+    },
+    exerciseFeedLeft: {
+        flex: 1,
+        flexDirection: 'column',
+    },
+    exerciseFeedRowTitle: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    exerciseFeedEccentric: {
+        color: 'rgba(255,255,255,0.6)',
         fontSize: 12,
+        fontStyle: 'italic',
+        marginTop: 2,
+    },
+    exerciseFeedRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        width: '45%',
+    },
+    exerciseFeedDetails: {
+        color: 'white',
+        fontSize: 14,
+        fontWeight: '600',
     },
     expandTrigger: {
         alignItems: 'center',
         marginVertical: 10,
+    },
+    expandLineTrigger: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginVertical: 10,
+        justifyContent: 'center',
+        width: '100%',
+        paddingHorizontal: 20,
+    },
+    dividerHalf: {
+        flex: 1,
+        height: 1,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        marginHorizontal: 10,
     },
     mediaFrame: {
         borderRadius: 30,

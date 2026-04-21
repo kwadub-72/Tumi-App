@@ -1,14 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import { ResizeMode, Video } from 'expo-av';
 import { CameraType, CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../src/shared/theme/Colors';
+import { useMealLogStore } from '../src/store/useMealLogStore';
+import { useWorkoutLogStore } from '../src/store/useWorkoutLogStore';
 
 export default function CameraCaptureScreen() {
     const router = useRouter();
+    const { source } = useLocalSearchParams<{ source?: 'meal' | 'workout' }>();
     const [permission, requestPermission] = useCameraPermissions();
     const [micPermission, requestMicPermission] = useMicrophonePermissions();
     const [mode, setMode] = useState<'picture' | 'video'>('picture');
@@ -72,11 +75,12 @@ export default function CameraCaptureScreen() {
 
     const handleConfirm = () => {
         if (capturedMedia) {
-            // Use setParams to pass data, then go back to dismiss modal
-            router.setParams({
-                capturedImage: capturedMedia.uri,
-                mediaType: capturedMedia.type
-            });
+            const media = { uri: capturedMedia.uri, type: capturedMedia.type };
+            if (source === 'workout') {
+                useWorkoutLogStore.getState().setCapturedMedia(media);
+            } else {
+                useMealLogStore.getState().setCapturedMedia(media);
+            }
             router.back();
         }
     };

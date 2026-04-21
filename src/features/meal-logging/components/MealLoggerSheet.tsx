@@ -11,6 +11,7 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
+    TouchableWithoutFeedback,
     View,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -24,6 +25,7 @@ import Animated, {
 import { Ingredient } from '../../../shared/models/types';
 import { NutritionService } from '../../../shared/services/NutritionService';
 import { Colors } from '../../../shared/theme/Colors';
+import { useMealLogStore } from '../../../store/useMealLogStore';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const TUCKED_HEIGHT = 80;
@@ -39,7 +41,7 @@ export interface MealLoggerSheetProps {
     visible: boolean;
     items: Ingredient[];
     onClose: () => void;
-    onPublish: (meal: { title: string; type: string; ingredients: Ingredient[]; mediaUrl?: any }) => void;
+    onPublish: (meal: { title: string; type: string; ingredients: Ingredient[]; mediaUrl?: any; mediaType?: 'image' | 'video' | null }) => void;
     onRemoveItem: (id: string) => void;
     capturedImage?: string | null;
     mediaType?: 'image' | 'video';
@@ -227,6 +229,7 @@ export default function MealLoggerSheet({
             type: selectedType === 'Custom' ? customType : selectedType,
             ingredients: items,
             mediaUrl: localImage,
+            mediaType: localType,
         });
         setCaption('');
         setSelectedType('Meal');
@@ -251,35 +254,93 @@ export default function MealLoggerSheet({
                         </View>
                     </GestureDetector>
 
-                    <View style={styles.content}>
+                    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+                        <View style={styles.content}>
                         <View style={styles.captionContainer}>
                             <TouchableOpacity
                                 style={styles.cameraIconBtn}
-                                onPress={() => router.push('/camera-capture')}
+                                onPress={() => router.push('/camera-capture?source=meal')}
                             >
-                                <Ionicons name="camera" size={28} color={Colors.primary} />
+                                <Ionicons name="camera" size={28} color="white" />
                             </TouchableOpacity>
                             <View style={styles.inputWrapper}>
                                 <TextInput
                                     style={[
                                         styles.captionInput,
-                                        { fontSize: caption.length > 35 ? 12 : 14 },
+                                        { fontSize: caption.length > 35 ? 13 : 15 },
                                     ]}
-                                    placeholder="Caption..."
-                                    placeholderTextColor="#666"
+                                    placeholder="This is the best meal I've ever had!"
+                                    placeholderTextColor={Colors.textDark + '99'}
                                     value={caption}
-                                    onChangeText={(text) => setCaption(text.slice(0, 50))}
+                                    onChangeText={setCaption}
                                     multiline
+                                    maxLength={140}
                                 />
                             </View>
                             <TouchableOpacity style={styles.publishBtn} onPress={handlePublish}>
                                 <MaterialCommunityIcons
-                                    name="playlist-plus"
-                                    size={32}
-                                    color={Colors.primary}
+                                    name="post-outline"
+                                    size={30}
+                                    color="white"
                                 />
                             </TouchableOpacity>
                         </View>
+
+                        {localImage ? (
+                            <View style={[styles.capturedImageWrapper, { marginTop: 0, marginBottom: 20 }]}>
+                                {localType === 'video' ? (
+                                    <View style={styles.videoPreviewContainer}>
+                                        <Video
+                                            source={{ uri: localImage }}
+                                            style={styles.capturedImage}
+                                            resizeMode={ResizeMode.COVER}
+                                            isLooping
+                                            shouldPlay={isPlaying && !isPanning}
+                                            isMuted={isMuted}
+                                            useNativeControls={false}
+                                        />
+                                        {!isPlaying && (
+                                            <TouchableOpacity
+                                                style={styles.playOverlay}
+                                                onPress={() => setIsPlaying(true)}
+                                            >
+                                                <Ionicons name="play" size={60} color="white" />
+                                            </TouchableOpacity>
+                                        )}
+                                        {isPlaying && (
+                                            <TouchableOpacity
+                                                style={styles.playOverlay}
+                                                onPress={() => setIsPlaying(false)}
+                                            >
+                                                <Ionicons name="pause" size={60} color="rgba(255,255,255,0.5)" />
+                                            </TouchableOpacity>
+                                        )}
+                                        <TouchableOpacity
+                                            style={styles.muteBtnSmall}
+                                            onPress={() => setIsMuted(!isMuted)}
+                                        >
+                                            <Ionicons
+                                                name={isMuted ? "volume-mute" : "volume-high"}
+                                                size={18}
+                                                color="white"
+                                            />
+                                        </TouchableOpacity>
+                                    </View>
+                                ) : (
+                                    <Image source={{ uri: localImage }} style={styles.capturedImage} />
+                                )}
+                                <TouchableOpacity
+                                    style={styles.removePreviewBtn}
+                                    onPress={() => {
+                                        setLocalImage(null);
+                                        setLocalType(null);
+                                        useMealLogStore.getState().setCapturedMedia(null);
+                                    }}
+                                >
+                                    <Ionicons name="close-circle" size={24} color="white" />
+                                </TouchableOpacity>
+                            </View>
+                        ) : null}
 
                         <View style={styles.summaryRow}>
                             <TouchableOpacity
@@ -355,65 +416,14 @@ export default function MealLoggerSheet({
                             renderItem={({ item }) => (
                                 <SwipeableIngredient item={item} onRemove={onRemoveItem} />
                             )}
-                            ListFooterComponent={() => localImage ? (
-                                <View style={styles.capturedImageWrapper}>
-                                    {localType === 'video' ? (
-                                        <View style={styles.videoPreviewContainer}>
-                                            <Video
-                                                source={{ uri: localImage }}
-                                                style={styles.capturedImage}
-                                                resizeMode={ResizeMode.COVER}
-                                                isLooping
-                                                shouldPlay={isPlaying && !isPanning}
-                                                isMuted={isMuted}
-                                                useNativeControls={false}
-                                            />
-                                            {!isPlaying && (
-                                                <TouchableOpacity
-                                                    style={styles.playOverlay}
-                                                    onPress={() => setIsPlaying(true)}
-                                                >
-                                                    <Ionicons name="play" size={60} color="white" />
-                                                </TouchableOpacity>
-                                            )}
-                                            {isPlaying && (
-                                                <TouchableOpacity
-                                                    style={styles.playOverlay}
-                                                    onPress={() => setIsPlaying(false)}
-                                                >
-                                                    <Ionicons name="pause" size={60} color="rgba(255,255,255,0.5)" />
-                                                </TouchableOpacity>
-                                            )}
-                                            <TouchableOpacity
-                                                style={styles.muteBtnSmall}
-                                                onPress={() => setIsMuted(!isMuted)}
-                                            >
-                                                <Ionicons
-                                                    name={isMuted ? "volume-mute" : "volume-high"}
-                                                    size={18}
-                                                    color="white"
-                                                />
-                                            </TouchableOpacity>
-                                        </View>
-                                    ) : (
-                                        <Image source={{ uri: localImage }} style={styles.capturedImage} />
-                                    )}
-                                    <TouchableOpacity
-                                        style={styles.removePreviewBtn}
-                                        onPress={() => {
-                                            setLocalImage(null);
-                                            setLocalType(null);
-                                        }}
-                                    >
-                                        <Ionicons name="close-circle" size={24} color="white" />
-                                    </TouchableOpacity>
-                                </View>
-                            ) : null}
+                            ListFooterComponent={() => null}
                             ItemSeparatorComponent={() => <View style={styles.separator} />}
                             showsVerticalScrollIndicator={false}
                             contentContainerStyle={{ paddingBottom: 60 }}
+                            keyboardShouldPersistTaps="handled"
                         />
-                    </View>
+                        </View>
+                    </TouchableWithoutFeedback>
                 </Animated.View>
             </View>
         </View>
@@ -428,12 +438,12 @@ const styles = StyleSheet.create({
         right: 0,
     },
     sheet: {
-        backgroundColor: '#111',
+        backgroundColor: Colors.card,
         height: MAX_SHEET_HEIGHT,
         borderTopLeftRadius: 30,
         borderTopRightRadius: 30,
         borderWidth: 1,
-        borderColor: '#333',
+        borderColor: 'rgba(255,255,255,0.2)',
         paddingHorizontal: 20,
     },
     handleContainer: {
@@ -443,9 +453,9 @@ const styles = StyleSheet.create({
     },
     handle: {
         width: 40,
-        height: 4,
-        backgroundColor: '#444',
-        borderRadius: 2,
+        height: 5,
+        backgroundColor: 'rgba(255,255,255,0.4)',
+        borderRadius: 3,
     },
     content: {
         flex: 1,
@@ -460,14 +470,14 @@ const styles = StyleSheet.create({
         flex: 1,
         minHeight: 48,
         borderRadius: 24,
-        borderWidth: 1.5,
-        borderColor: Colors.primary,
+        backgroundColor: Colors.theme.beigeLight,
         paddingHorizontal: 16,
+        paddingVertical: 10,
         justifyContent: 'center',
     },
     captionInput: {
-        color: 'white',
-        paddingVertical: 8,
+        color: Colors.textDark,
+        minHeight: 24,
     },
     publishBtn: {
         width: 48,
@@ -526,7 +536,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingVertical: 12,
         paddingHorizontal: 12,
-        backgroundColor: '#111',
+        backgroundColor: Colors.card,
     },
     ingredientInfo: {
         flex: 1,
@@ -537,7 +547,7 @@ const styles = StyleSheet.create({
         fontStyle: 'italic',
     },
     ingredientAmount: {
-        color: '#666',
+        color: 'rgba(255,255,255,0.7)',
         fontSize: 12,
     },
     ingredientMacros: {
@@ -556,10 +566,10 @@ const styles = StyleSheet.create({
     },
     separator: {
         height: 1,
-        backgroundColor: '#222',
+        backgroundColor: 'rgba(255,255,255,0.15)',
     },
     pickerContainer: {
-        backgroundColor: '#1a1a1a',
+        backgroundColor: 'rgba(0,0,0,0.15)',
         borderRadius: 16,
         padding: 12,
         marginBottom: 16,
@@ -592,7 +602,7 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         overflow: 'hidden',
         borderWidth: 1,
-        borderColor: '#333',
+        borderColor: 'rgba(255,255,255,0.2)',
         position: 'relative',
     },
     capturedImage: {

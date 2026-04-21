@@ -123,8 +123,10 @@ export default function TribeSelectionModal({ visible, onClose }: TribeSelection
                             </TouchableOpacity>
                         )}
                         ListEmptyComponent={
-                            <View style={{ padding: 20, alignItems: 'center' }}>
-                                <Text style={{ color: 'rgba(255,255,255,0.5)' }}>You haven't joined any tribes yet.</Text>
+                            <View style={{ padding: 40, alignItems: 'center' }}>
+                                <Ionicons name="people-outline" size={48} color="rgba(255,255,255,0.4)" />
+                                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 16, fontWeight: 'bold', marginTop: 12 }}>No Tribes yet</Text>
+                                <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, textAlign: 'center', marginTop: 4 }}>Join a tribe to showcase it on your profile!</Text>
                             </View>
                         }
                         ListFooterComponent={renderFooter}

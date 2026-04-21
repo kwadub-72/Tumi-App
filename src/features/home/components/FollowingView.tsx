@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import FeedItem from '@/src/features/feed/components/FeedItem';
 import { FeedPost } from '@/src/shared/models/types';
@@ -41,10 +42,18 @@ export default function FollowingView({ selectedDate }: FollowingViewProps) {
         setPosts(data);
     }, [session?.user?.id, selectedDate]);
 
-    useEffect(() => {
-        setLoading(true);
-        loadFeed().finally(() => setLoading(false));
-    }, [loadFeed]);
+    useFocusEffect(
+        useCallback(() => {
+            let isInitial = false;
+            setPosts((prev) => {
+                if (prev.length === 0) isInitial = true;
+                return prev;
+            });
+            if (isInitial) setLoading(true);
+
+            loadFeed().finally(() => setLoading(false));
+        }, [loadFeed])
+    );
 
     const handleRefresh = async () => {
         setRefreshing(true);
@@ -62,7 +71,7 @@ export default function FollowingView({ selectedDate }: FollowingViewProps) {
             ? { ...p, isLiked: !wasLiked, stats: { ...p.stats, likes: wasLiked ? p.stats.likes - 1 : p.stats.likes + 1 } }
             : p
         ));
-        await SupabasePostService.toggleLike(postId, session.user.id, wasLiked);
+        await SupabasePostService.toggleLike(postId, session.user.id, !!wasLiked);
     };
 
     const toggleSave = async (postId: string) => {
@@ -75,7 +84,7 @@ export default function FollowingView({ selectedDate }: FollowingViewProps) {
             ? { ...p, isSaved: !wasSaved, stats: { ...p.stats, saves: wasSaved ? p.stats.saves - 1 : p.stats.saves + 1 } }
             : p
         ));
-        await SupabasePostService.toggleBookmark(postId, session.user.id, wasSaved);
+        await SupabasePostService.toggleBookmark(postId, session.user.id, !!wasSaved);
 
         // Also save meal ingredients to local mealbook when bookmarking
         if (!wasSaved && post.meal?.ingredients?.length) {
@@ -88,6 +97,8 @@ export default function FollowingView({ selectedDate }: FollowingViewProps) {
                     servingSizeText: ing.amount || '100g',
                     caloriesPer100g: ing.cals,
                     macrosPer100g: { p: ing.macros.p, c: ing.macros.c, f: ing.macros.f },
+                    netCarbsPer100g: ing.macros.c, // basic fallback
+                    servingUnits: [],
                 };
                 addBookmark(food);
             });

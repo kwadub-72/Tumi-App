@@ -23,6 +23,7 @@ import { Colors } from '../../src/shared/theme/Colors';
 import { useMealLogStore } from '../../src/store/useMealLogStore';
 import { useAuthStore } from '../../store/AuthStore';
 import { SupabasePostService } from '../../src/shared/services/SupabasePostService';
+import { PostStore } from '../../store/PostStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -120,9 +121,9 @@ export default function AddMealScreen() {
     const clearCart = useMealLogStore((s) => s.clear);
     const { bookmarks, recents, addRecent } = useMealbookStore();
 
-    const params = useLocalSearchParams<{ capturedImage?: string; mediaType?: 'image' | 'video' }>();
-    const capturedImage = params.capturedImage;
-    const mediaType = params.mediaType;
+    const capturedMedia = useMealLogStore((s) => s.capturedMedia);
+    const capturedImage = capturedMedia?.uri;
+    const mediaType = capturedMedia?.type;
     const [isSheetVisible, setIsSheetVisible] = useState(false);
     const { session, profile } = useAuthStore();
     const userInfo = { handle: profile?.handle, name: profile?.name, avatar: profile?.avatar_url, status: profile?.status }; // Stub if needed, though profile might be better
@@ -145,15 +146,7 @@ export default function AddMealScreen() {
         setIsSheetVisible(cartItems.length > 0);
     }, [cartItems.length]);
 
-    // ── Clear captured image params ──
-    useEffect(() => {
-        if (capturedImage) {
-            const t = setTimeout(() => {
-                router.setParams({ capturedImage: undefined, mediaType: undefined });
-            }, 500);
-            return () => clearTimeout(t);
-        }
-    }, [capturedImage]);
+    // Media persistence is handled by useMealLogStore and cleared on publish.
 
     // ── Debounced inline suggestions (keystroke) ──
     useEffect(() => {
@@ -233,13 +226,18 @@ export default function AddMealScreen() {
         type: string;
         ingredients: Ingredient[];
         mediaUrl?: any;
+        mediaType?: 'image' | 'video' | null;
     }) => {
         if (!session?.user?.id) return;
         const totals = NutritionService.sumMacros(cartItems);
 
+        // Upload to supabase (already implemented)
         await SupabasePostService.addPost({
             authorId: session.user.id,
             postType: 'meal',
+            caption: mealData.title,
+            mediaUrl: mealData.mediaUrl,
+            mediaType: mealData.mediaType || undefined,
             payload: {
                 meal: {
                     id: Date.now().toString(),
@@ -248,13 +246,43 @@ export default function AddMealScreen() {
                     calories: totals.cals,
                     macros: totals.macros,
                     ingredients: mealData.ingredients,
-                }
+                    time: 'Just now', // added time
+                },
             },
             tribeId: undefined // Let users optionally log to a tribe in the future
         });
 
+        const newPost: FeedPost = {
+            id: Date.now().toString(),
+            user: {
+                id: session.user.id,
+                handle: profile?.handle || 'me',
+                name: profile?.name || 'Me',
+                avatar: profile?.avatar_url || '',
+                status: profile?.status || 'none',
+            },
+            meal: {
+                id: Date.now().toString(),
+                title: mealData.title || mealData.type || 'My Meal',
+                type: mealData.type,
+                ingredients: mealData.ingredients,
+                calories: totals.cals,
+                macros: totals.macros,
+                timeAgo: 'Just now',
+            },
+            timeAgo: 'Just now',
+            stats: { likes: 0, comments: 0, saves: 0, shares: 0 },
+            isLiked: false,
+            isSaved: false,
+            mediaUrl: mealData.mediaUrl,
+            mediaType: mealData.mediaType || 'image',
+        };
+        await PostStore.addPost(newPost);
+
         clearCart();
         setIsSheetVisible(false);
+        // Navigate to the main feed tab (which defaults to 'Following')
+        router.replace('/');
     };
 
     // ─────────────────────────────────────────────────────────────────────────

@@ -13,7 +13,16 @@ export default function TabLayout() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isWeightModalVisible, setIsWeightModalVisible] = useState(false);
     const [tempWeight, setTempWeight] = useState('253.1');
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+
+    const getLocalDateString = (d: Date = new Date()) => {
+        return [
+            d.getFullYear(),
+            String(d.getMonth() + 1).padStart(2, '0'),
+            String(d.getDate()).padStart(2, '0')
+        ].join('-');
+    };
+
+    const [selectedDate, setSelectedDate] = useState(getLocalDateString());
     const [viewDate, setViewDate] = useState(new Date());
 
     const { units } = useUserStore();
@@ -32,7 +41,7 @@ export default function TabLayout() {
     const calendarHolders = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
     const monthName = viewDate.toLocaleString('default', { month: 'long' });
 
-    const handleSaveWeight = async () => {
+    const handleSaveWeight = async (skipWarning = false) => {
         if (tempWeight.trim() === '') {
             await WeightStore.deleteWeight(selectedDate);
             setIsWeightModalVisible(false);
@@ -46,29 +55,85 @@ export default function TabLayout() {
         const minWeight = isImperial ? 50 : 20;
         const maxWeight = isImperial ? 800 : 400;
 
-        if (!isNaN(weightNum)) {
-            if (weightNum < minWeight || weightNum > maxWeight) {
-                Alert.alert('Error', 'Please enter a realistic weight');
-                return;
-            }
+        if (isNaN(weightNum)) {
+            Alert.alert('Error', 'Please enter a valid weight');
+            return;
+        }
 
-            await WeightStore.addWeight({
-                date: selectedDate,
-                weight: weightNum,
-                timestamp: Date.now(),
+        if (weightNum < minWeight || weightNum > maxWeight) {
+            Alert.alert('Error', 'Please enter a realistic weight');
+            return;
+        }
+
+        // --- 10% safety check (unless user already confirmed) ---
+        if (!skipWarning) {
+            const allWeights = await WeightStore.loadWeights();
+            const sorted = [...allWeights].sort((a, b) => a.date.localeCompare(b.date));
+
+            // Reference 1: previous day's weight (or the day before if Sunday, look back to prev week Saturday)
+            const selDate = new Date(selectedDate + 'T12:00:00');
+            const prevDate = new Date(selDate);
+            prevDate.setDate(selDate.getDate() - 1);
+            const prevDateStr = prevDate.toISOString().split('T')[0];
+            const prevDayEntry = sorted.find(w => w.date === prevDateStr);
+
+            // Reference 2: last week's average
+            const oneWeekAgo = new Date(selDate);
+            oneWeekAgo.setDate(selDate.getDate() - 7);
+            const twoWeeksAgo = new Date(selDate);
+            twoWeeksAgo.setDate(selDate.getDate() - 14);
+            const lastWeekEntries = sorted.filter(w => {
+                const d = new Date(w.date + 'T12:00:00');
+                return d >= twoWeeksAgo && d < oneWeekAgo;
+            });
+            const lastWeekAvg = lastWeekEntries.length > 0
+                ? lastWeekEntries.reduce((s, w) => s + w.weight, 0) / lastWeekEntries.length
+                : null;
+
+            // Reference 3: target weight
+            const TARGET = 236;
+
+            const references: { label: string; value: number }[] = [];
+            if (prevDayEntry) references.push({ label: 'previous day', value: prevDayEntry.weight });
+            if (lastWeekAvg !== null) references.push({ label: "last week's average", value: lastWeekAvg });
+            references.push({ label: 'target', value: TARGET });
+
+            const triggered = references.find(ref => {
+                const pct = Math.abs(weightNum - ref.value) / ref.value;
+                return pct > 0.10;
             });
 
-            // Update bio if it's the current date
-            const todayStr = new Date().toISOString().split('T')[0];
-            if (selectedDate === todayStr) {
-                useUserStore.getState().setProfile({ weight: weightNum });
+            if (triggered) {
+                Alert.alert(
+                    'Unusual weight change detected',
+                    'Please verify your entry or update your Measurements.\n\nIf change is accurate, please consult a medical professional.',
+                    [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                            text: 'Save anyway',
+                            style: 'destructive',
+                            onPress: () => handleSaveWeight(true),
+                        },
+                    ]
+                );
+                return;
             }
-
-            setIsWeightModalVisible(false);
-            setIsMenuOpen(false);
-        } else {
-            Alert.alert('Error', 'Please enter a valid weight');
         }
+
+        await WeightStore.addWeight({
+            date: selectedDate,
+            weight: weightNum,
+            timestamp: Date.now(),
+        });
+
+        // Update bio if it's the current date
+        const todayStr = getLocalDateString(new Date());
+        if (selectedDate === todayStr) {
+            useUserStore.getState().setProfile({ weight: weightNum });
+        }
+
+        setIsWeightModalVisible(false);
+        setIsMenuOpen(false);
     };
 
     useEffect(() => {
@@ -264,7 +329,7 @@ export default function TabLayout() {
                                 {calendarHolders.map((h, idx) => <Text key={idx} style={styles.dayHeader}>{h}</Text>)}
                                 {generateCalendarDays().map((day, i) => {
                                     if (!day) return <View key={i} style={styles.dayButton} />;
-                                    const dateStr = day.toISOString().split('T')[0];
+                                    const dateStr = getLocalDateString(day);
                                     const isSelected = selectedDate === dateStr;
                                     return (
                                         <TouchableOpacity
@@ -289,7 +354,7 @@ export default function TabLayout() {
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={styles.adjustSaveBtn}
-                                onPress={handleSaveWeight}
+                                onPress={() => handleSaveWeight()}
                             >
                                 <Text style={styles.adjustBtnText}>Save</Text>
                             </TouchableOpacity>

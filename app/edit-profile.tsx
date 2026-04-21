@@ -1,4 +1,5 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { ActivityIcon } from '@/src/shared/components/ActivityIcon';
 import { useRouter } from 'expo-router';
 import React, { useState, useEffect } from 'react';
 import {
@@ -10,12 +11,19 @@ import {
     TextInput,
     TouchableOpacity,
     View,
-    Alert
+    Alert,
+    Modal,
+    FlatList
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '@/src/shared/theme/Colors';
 import { PostStore } from '@/store/PostStore';
 import { useUserStore } from '@/store/UserStore';
+import { useAuthStore } from '@/store/AuthStore';
+import { supabase } from '@/src/shared/services/supabase';
+import { decode } from 'base64-arraybuffer';
+import TribeSelectionModal from '@/src/features/home/components/TribeSelectionModal';
+import { useUserTribeStore } from '@/src/store/UserTribeStore';
 
 export default function EditProfileScreen() {
     const router = useRouter();
@@ -25,32 +33,108 @@ export default function EditProfileScreen() {
     // Form State
     const [displayName, setDisplayName] = useState(userInfo.name);
     const [avatarUrl, setAvatarUrl] = useState(userInfo.avatar);
-    const [profileVisible, setProfileVisible] = useState(true);
-    const [mealVisible, setMealVisible] = useState(false);
-    const [workoutVisible, setWorkoutVisible] = useState(true);
-    const [macroVisible, setMacroVisible] = useState(false);
-    const [likeVisible, setLikeVisible] = useState(false);
-    const [measurementsVisible, setMeasurementsVisible] = useState(false);
+    const [avatarBase64, setAvatarBase64] = useState<string | null>(null);
+    const [bio, setBio] = useState(userInfo.bio);
+    const [height, setHeight] = useState(userInfo.height); // "6'3" or "190 cm"
+    const [bodyFat, setBodyFat] = useState(userInfo.bfs);
+    const [isHeightModalVisible, setIsHeightModalVisible] = useState(false);
+    const [isTribeModalVisible, setIsTribeModalVisible] = useState(false);
+    
+    const { selectedTribe } = useUserTribeStore();
+    
+    // Imperial specific state
+    const [tempFeet, setTempFeet] = useState(6);
+    const [tempInches, setTempInches] = useState(3);
+    
+    const [profileVisible, setProfileVisible] = useState(!userInfo.isPrivate);
+    const [mealVisible, setMealVisible] = useState(userInfo.showMeals ?? false);
+    const [workoutVisible, setWorkoutVisible] = useState(userInfo.showWorkouts ?? false);
+    const [macroVisible, setMacroVisible] = useState(userInfo.showMacros ?? false);
+    const [likeVisible, setLikeVisible] = useState(userInfo.showLikes ?? false);
+    const [measurementsVisible, setMeasurementsVisible] = useState(userInfo.showMeasurements ?? false);
 
     const pickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
             allowsEditing: true,
             aspect: [1, 1],
-            quality: 1,
+            quality: 0.5,
+            base64: true,
         });
 
         if (!result.canceled) {
             setAvatarUrl(result.assets[0].uri);
+            setAvatarBase64(result.assets[0].base64 || null);
         }
     };
 
     const handleSave = async () => {
         try {
+            let finalAvatarUrl = avatarUrl;
+            
+            if (avatarBase64) {
+                Alert.alert('Uploading...', 'Uploading profile photo');
+                
+                const arrayBuffer = decode(avatarBase64);
+                
+                const fileExt = avatarUrl.split('.').pop() || 'jpg';
+                const fileName = `${Date.now()}.${fileExt}`;
+                const userId = useAuthStore.getState().session?.user?.id;
+                
+                if (!userId) throw new Error("Not authenticated");
+                
+                const filePath = `${userId}/${fileName}`;
+                
+                const { data, error } = await supabase.storage
+                    .from('avatars')
+                    .upload(filePath, arrayBuffer, {
+                        contentType: `image/${fileExt === 'png' ? 'png' : 'jpeg'}`,
+                        upsert: true
+                    });
+                    
+                if (error) {
+                    throw error;
+                }
+                
+                const { data: publicUrlData } = supabase.storage
+                    .from('avatars')
+                    .getPublicUrl(filePath);
+                    
+                finalAvatarUrl = publicUrlData.publicUrl;
+            }
+
+            // Sync to backend via AuthStore
+            await useAuthStore.getState().updateProfile({
+                name: displayName,
+                avatar_url: finalAvatarUrl ? (typeof finalAvatarUrl === 'string' ? finalAvatarUrl : undefined) : undefined,
+                bio,
+                height,
+                body_fat_pct: bodyFat,
+                activity: userInfo.activity,
+                activity_icon: userInfo.activityIcon,
+                is_private: !profileVisible,
+                show_meals_to_public: mealVisible,
+                show_workouts_to_public: workoutVisible,
+                show_macros_to_public: macroVisible,
+                show_likes_to_public: likeVisible,
+                show_measurements_to_public: measurementsVisible,
+            });
+
             // Update UserStore - this will now trigger PostStore.updateUser automatically
             await setProfile({
                 name: displayName,
-                avatar: avatarUrl ? (typeof avatarUrl === 'string' ? avatarUrl : avatarUrl) : undefined
+                avatar: finalAvatarUrl ? (typeof finalAvatarUrl === 'string' ? finalAvatarUrl : finalAvatarUrl) : undefined,
+                bio,
+                height,
+                bfs: bodyFat,
+                activity: userInfo.activity,
+                activityIcon: userInfo.activityIcon,
+                isPrivate: !profileVisible,
+                showMeals: mealVisible,
+                showWorkouts: workoutVisible,
+                showMacros: macroVisible,
+                showLikes: likeVisible,
+                showMeasurements: measurementsVisible,
             });
 
             Alert.alert('Success', 'Profile updated successfully');
@@ -61,8 +145,82 @@ export default function EditProfileScreen() {
         }
     };
 
+    const handleHeightPress = () => {
+        if (userInfo.units === 'imperial') {
+            // Parse current height like "6'3"
+            const match = height.match(/(\d+)'(\d+)/);
+            if (match) {
+                setTempFeet(parseInt(match[1]));
+                setTempInches(parseInt(match[2]));
+            }
+            setIsHeightModalVisible(true);
+        }
+    };
+
+    const saveImperialHeight = () => {
+        setHeight(`${tempFeet}'${tempInches}`);
+        setIsHeightModalVisible(false);
+    };
+
+    const renderRolodex = (data: number[], selectedValue: number, onValueChange: (val: number) => void, unit: string) => {
+        return (
+            <View style={styles.rolodexColumn}>
+                <FlatList
+                    data={data}
+                    keyExtractor={(item) => item.toString()}
+                    showsVerticalScrollIndicator={false}
+                    snapToInterval={40}
+                    decelerationRate="fast"
+                    renderItem={({ item }) => (
+                        <TouchableOpacity 
+                            onPress={() => onValueChange(item)}
+                            style={[styles.rolodexItem, selectedValue === item && styles.rolodexItemSelected]}
+                        >
+                            <Text style={[styles.rolodexText, selectedValue === item && styles.rolodexTextSelected]}>
+                                {item}{unit}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+                    contentContainerStyle={{ paddingVertical: 80 }}
+                    getItemLayout={(_, index) => ({ length: 40, offset: 40 * index, index })}
+                    initialScrollIndex={Math.max(0, data.indexOf(selectedValue))}
+                />
+            </View>
+        );
+    };
+
     return (
         <SafeAreaView style={styles.container}>
+            {/* Height Modal */}
+            <Modal
+                visible={isHeightModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setIsHeightModalVisible(false)}
+            >
+                <TouchableOpacity 
+                    style={styles.modalOverlay}
+                    activeOpacity={1} 
+                    onPress={() => setIsHeightModalVisible(false)}
+                >
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Select Height</Text>
+                        <View style={styles.rolodexContainer}>
+                            {renderRolodex(Array.from({ length: 5 }, (_, i) => i + 3), tempFeet, setTempFeet, "'")}
+                            {renderRolodex(Array.from({ length: 12 }, (_, i) => i), tempInches, setTempInches, '"')}
+                        </View>
+                        <TouchableOpacity style={styles.doneButton} onPress={saveImperialHeight}>
+                            <Text style={styles.doneButtonText}>Done</Text>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+            
+            <TribeSelectionModal 
+                visible={isTribeModalVisible} 
+                onClose={() => setIsTribeModalVisible(false)} 
+            />
+
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={28} color={Colors.primary} />
@@ -99,21 +257,85 @@ export default function EditProfileScreen() {
                         />
                     </View>
 
+                    {/* Bio */}
+                    <View style={styles.bioFieldColumn}>
+                        <Text style={styles.label}>Bio</Text>
+                        <TextInput
+                            style={styles.bioTextInput}
+                            value={bio}
+                            onChangeText={setBio}
+                            multiline
+                            maxLength={60}
+                            placeholder="Enter bio..."
+                            placeholderTextColor="#A0A0A0"
+                        />
+                    </View>
+
+                    {/* Measurements */}
+                    <View style={styles.fieldRow}>
+                        <Text style={styles.label}>Height</Text>
+                        {userInfo.units === 'imperial' ? (
+                            <TouchableOpacity style={styles.heightDisplay} onPress={handleHeightPress}>
+                                <Text style={styles.heightDisplayText}>{height}</Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <View style={styles.metricInputContainer}>
+                                <TextInput
+                                    style={styles.textInput}
+                                    value={height.replace(' cm', '')}
+                                    onChangeText={(val) => {
+                                        const clean = val.replace(/[^0-9]/g, '');
+                                        setHeight(clean ? `${clean} cm` : '');
+                                    }}
+                                    keyboardType="number-pad"
+                                    placeholder="cm"
+                                />
+                                <Text style={styles.unitSuffix}>cm</Text>
+                            </View>
+                        )}
+                    </View>
+
+                    <View style={styles.fieldRow}>
+                        <Text style={styles.label}>Body fat %</Text>
+                        <TextInput
+                            style={styles.textInput}
+                            value={bodyFat}
+                            onChangeText={(val) => {
+                                // Allow only numbers and a single decimal point
+                                const clean = val.replace(/[^0-9.]/g, '');
+                                // Prevent multiple decimal points
+                                if ((clean.match(/\./g) || []).length <= 1) {
+                                    setBodyFat(clean);
+                                }
+                            }}
+                            keyboardType="decimal-pad"
+                            placeholder="e.g. 8%"
+                            textAlign="center"
+                        />
+                    </View>
+
                     {/* Tribe Displayed */}
                     <View style={styles.fieldRow}>
                         <Text style={styles.label}>Tribe displayed</Text>
-                        <View style={styles.tribePill}>
+                        <TouchableOpacity 
+                            style={[styles.tribePill, selectedTribe ? { backgroundColor: selectedTribe.themeColor } : {}]} 
+                            onPress={() => setIsTribeModalVisible(true)}
+                        >
                             <Image
-                                source={{ uri: userInfo.tribeAvatar }}
+                                source={selectedTribe && selectedTribe.avatar 
+                                    ? { uri: typeof selectedTribe.avatar === 'string' ? selectedTribe.avatar : selectedTribe.avatar.uri } 
+                                    : { uri: userInfo.tribeAvatar || 'https://via.placeholder.com/150' }}
                                 style={styles.tribeAvatar}
                             />
-                            <Text style={styles.tribeText}>{userInfo.tribe}</Text>
-                        </View>
+                            <Text style={[styles.tribeText, { color: 'white' }]}>
+                                {selectedTribe ? selectedTribe.name : 'Join a Tribe'}
+                            </Text>
+                        </TouchableOpacity>
                     </View>
 
-                    {/* Profile Visibility */}
+                    {/* Account Privacy */}
                     <View style={styles.fieldRow}>
-                        <Text style={styles.label}>Profile visibility</Text>
+                        <Text style={styles.label}>Account privacy</Text>
                         <TouchableOpacity
                             style={[styles.toggleContainer, profileVisible ? styles.toggleActive : styles.toggleInactive]}
                             onPress={() => setProfileVisible(!profileVisible)}
@@ -121,6 +343,8 @@ export default function EditProfileScreen() {
                             <Ionicons name={profileVisible ? "earth" : "lock-closed"} size={16} color="white" />
                         </TouchableOpacity>
                     </View>
+
+                    <Text style={styles.sectionHeader}>Non-tribe member visibility*</Text>
 
                     {/* Meal Visibility */}
                     <View style={styles.fieldRow}>
@@ -177,6 +401,8 @@ export default function EditProfileScreen() {
                         </TouchableOpacity>
                     </View>
 
+                    <Text style={styles.footnote}>*Tribe-member visibility is determined by tribe settings</Text>
+
                     {/* Activity */}
                     <View style={styles.fieldRow}>
                         <Text style={styles.label}>Activity</Text>
@@ -185,7 +411,11 @@ export default function EditProfileScreen() {
                             onPress={() => router.push('/select-activity')}
                         >
                             <Text style={styles.goalText}>{userInfo.activity}</Text>
-                            <MaterialCommunityIcons name={userInfo.activityIcon as any} size={16} color={Colors.primary} />
+                            <ActivityIcon 
+                                activity={userInfo.activity} 
+                                icon={userInfo.activityIcon} 
+                                size={16} 
+                            />
                         </TouchableOpacity>
                     </View>
 
@@ -273,8 +503,34 @@ const styles = StyleSheet.create({
         color: Colors.primary,
         fontSize: 14,
         fontWeight: '600',
-        minWidth: 150,
+        flex: 1, 
+        maxWidth: 150, 
         textAlign: 'center',
+        borderWidth: 1,
+        borderColor: Colors.primary,
+    },
+    bioFieldColumn: {
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        justifyContent: 'flex-start',
+        backgroundColor: Colors.card,
+        borderRadius: 30,
+        paddingHorizontal: 20,
+        paddingVertical: 15,
+        gap: 10,
+    },
+    bioTextInput: {
+        backgroundColor: Colors.background,
+        borderRadius: 20,
+        paddingHorizontal: 15,
+        paddingVertical: 12,
+        color: Colors.primary,
+        fontSize: 14,
+        fontWeight: '600',
+        width: '100%',
+        minHeight: 100,
+        textAlignVertical: 'top',
+        textAlign: 'left',
         borderWidth: 1,
         borderColor: Colors.primary,
     },
@@ -330,5 +586,107 @@ const styles = StyleSheet.create({
         color: Colors.primary,
         fontWeight: '600',
         fontSize: 14,
+    },
+    sectionHeader: {
+        color: '#666',
+        fontSize: 14,
+        marginTop: 10,
+        marginBottom: -5,
+        marginLeft: 5,
+    },
+    footnote: {
+        color: '#666',
+        fontSize: 12,
+        marginTop: -5,
+        marginBottom: 10,
+        marginLeft: 5,
+    },
+    // Height Modal Styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContent: {
+        width: '80%',
+        backgroundColor: Colors.background,
+        borderRadius: 25,
+        padding: 20,
+        alignItems: 'center',
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: Colors.primary,
+        marginBottom: 20,
+    },
+    rolodexContainer: {
+        flexDirection: 'row',
+        height: 200,
+        width: '100%',
+        justifyContent: 'center',
+        marginBottom: 20,
+    },
+    rolodexColumn: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    rolodexItem: {
+        height: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: 80,
+    },
+    rolodexItemSelected: {
+        backgroundColor: Colors.card,
+        borderRadius: 10,
+    },
+    rolodexText: {
+        fontSize: 18,
+        color: '#999',
+    },
+    rolodexTextSelected: {
+        color: Colors.primary,
+        fontWeight: 'bold',
+        fontSize: 22,
+    },
+    doneButton: {
+        backgroundColor: Colors.primary,
+        paddingHorizontal: 30,
+        paddingVertical: 12,
+        borderRadius: 25,
+        width: '100%',
+        alignItems: 'center',
+    },
+    doneButtonText: {
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: 16,
+    },
+    heightDisplay: {
+        backgroundColor: Colors.background,
+        borderRadius: 20,
+        paddingHorizontal: 15,
+        paddingVertical: 10,
+        minWidth: 150,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: Colors.primary,
+    },
+    heightDisplayText: {
+        color: Colors.primary,
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    metricInputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    unitSuffix: {
+        color: Colors.primary,
+        fontWeight: 'bold',
+        fontSize: 16,
     },
 });

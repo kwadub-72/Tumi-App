@@ -100,9 +100,11 @@ export default function TribeView({ selectedDate }: TribeViewProps) {
                     name: ing.name,
                     brand: post.meal!.title,
                     servingSizeG: 100,
-                    servingSizeText: ing.amount || '100g',
-                    caloriesPer100g: ing.cals,
-                    macrosPer100g: { p: ing.macros.p, c: ing.macros.c, f: ing.macros.f },
+                    servingSizeText: '1 serving',
+                    caloriesPer100g: 200,
+                    macrosPer100g: { p: 25, c: 50, f: 10 },
+                    netCarbsPer100g: 45,
+                    servingUnits: [{ label: '100 g', amount: 100, unit: 'g', gramsPerUnit: 1 }]
                 };
                 addBookmark(food);
             });

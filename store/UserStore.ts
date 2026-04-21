@@ -31,6 +31,13 @@ interface UserState {
     trainingTarget: string;
     activity: string;
     activityIcon: string;
+    bio: string;
+    isPrivate: boolean;
+    showMeals: boolean;
+    showWorkouts: boolean;
+    showMacros: boolean;
+    showLikes: boolean;
+    showMeasurements: boolean;
 
     // Actions
     setProfile: (updates: Partial<UserState>) => void;
@@ -65,6 +72,13 @@ export const useUserStore = create<UserState>()(
             trainingTarget: 'Lean is law.',
             activity: 'Bodybuilder (Bulk)',
             activityIcon: 'hammer',
+            bio: 'TGBTG | Just a Chicago transplant figuring things out',
+            isPrivate: false,
+            showMeals: false,
+            showWorkouts: false,
+            showMacros: false,
+            showLikes: false,
+            showMeasurements: false,
 
             setProfile: async (updates) => {
                 const handle = get().handle;
