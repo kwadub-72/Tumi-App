@@ -14,6 +14,13 @@ export const DashboardCarousel: React.FC<DashboardCarouselProps> = ({ children }
     // Actually, in activity.tsx the ScrollView wraps everything. The dashboard container has padding: 20.
     // Let's just use the full container width. If we just assume the cards stretch, we can wrap them in a view of width SCREEN_WIDTH - 40.
 
+    // Jump to the first real item initially
+    useEffect(() => {
+        if (scrollViewRef.current) {
+            scrollViewRef.current.scrollTo({ x: itemWidth, animated: false });
+        }
+    }, [itemWidth]);
+
     const childrenArray = React.Children.toArray(children);
 
     // If only 1 child, no carousel needed.
@@ -25,13 +32,6 @@ export const DashboardCarousel: React.FC<DashboardCarouselProps> = ({ children }
     const firstItem = childrenArray[0];
     const lastItem = childrenArray[childrenArray.length - 1];
     const extendedChildren = [lastItem, ...childrenArray, firstItem];
-
-    // Jump to the first real item initially
-    useEffect(() => {
-        if (scrollViewRef.current) {
-            scrollViewRef.current.scrollTo({ x: itemWidth, animated: false });
-        }
-    }, [itemWidth]);
 
     const handleMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
         const xOffset = event.nativeEvent.contentOffset.x;

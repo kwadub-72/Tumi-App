@@ -10,9 +10,9 @@ interface HammerModalProps {
 }
 
 export default function HammerModal({ visible, onClose, activityName = '', activityIcon = 'hammer' }: HammerModalProps) {
-    const isPeach = activityName === 'Glute Growth';
-    const isBulk = activityName.toLowerCase().includes('bulk');
-    const isCut = activityName.toLowerCase().includes('cut');
+    const safeName = activityName || '';
+    const isBulk = safeName.toLowerCase().includes('bulk');
+    const isCut = safeName.toLowerCase().includes('cut');
 
     // Determine the symbol (+ or -)
     let symbol = '';
@@ -34,10 +34,10 @@ export default function HammerModal({ visible, onClose, activityName = '', activ
                             <MaterialCommunityIcons
                                 name={activityIcon as any}
                                 size={28}
-                                color={isPeach ? '#FFB07C' : "#F5F5DC"}
+                                color={"#F5F5DC"}
                             />
                             {symbol !== '' && (
-                                <Text style={[styles.symbol, isPeach && { color: '#FFB07C' }]}>{symbol}</Text>
+                                <Text style={[styles.symbol]}>{symbol}</Text>
                             )}
                         </View>
                     </View>

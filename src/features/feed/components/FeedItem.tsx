@@ -476,7 +476,7 @@ export default function FeedItem({
                                 <MaterialCommunityIcons
                                     name={post.user.activityIcon as any}
                                     size={16}
-                                    color={(post.user as any).activity === 'Glute Growth' ? '#FFB07C' : 'white'}
+                                    color='white'
                                 />
                                 {(post.user as any).activity?.toLowerCase().includes('bulk') && (
                                     <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold', marginLeft: 1, marginTop: -2 }}>+</Text>

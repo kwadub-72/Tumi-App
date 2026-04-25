@@ -11,9 +11,12 @@ import {
     Alert
 } from 'react-native';
 import { Colors } from '@/src/shared/theme/Colors';
+import { useAuthStore } from '@/store/AuthStore';
 
 export default function SettingsScreen() {
     const router = useRouter();
+
+    const { signOut } = useAuthStore();
 
     const handleLogout = () => {
         Alert.alert(
@@ -21,7 +24,14 @@ export default function SettingsScreen() {
             'Are you sure you want to logout?',
             [
                 { text: 'No', style: 'cancel' },
-                { text: 'Yes', onPress: () => router.replace('/') }
+                { 
+                    text: 'Yes', 
+                    onPress: async () => {
+                        await signOut();
+                        router.dismissAll();
+                        router.replace('/login');
+                    }
+                }
             ]
         );
     };

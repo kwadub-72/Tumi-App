@@ -40,6 +40,7 @@ export default function DashboardScreen() {
     const [dailyTotals, setDailyTotals] = useState({ cals: 0, macros: { p: 0, c: 0, f: 0 } });
     const [isFlipped, setIsFlipped] = useState(false);
     const [weights, setWeights] = useState<WeightEntry[]>([]);
+    const [estimatedWeight, setEstimatedWeight] = useState<number | null>(null);
     const [weekStart, setWeekStart] = useState(() => {
         const today = new Date();
         const sunday = new Date(today);
@@ -136,11 +137,17 @@ export default function DashboardScreen() {
         const loadWeights = async () => {
             const data = await WeightStore.loadWeights();
             setWeights(data);
+            const est = await WeightStore.getEstimatedWeight();
+            setEstimatedWeight(est);
         };
         loadWeights();
 
         const unsubPosts = PostStore.subscribe(calculate);
-        const unsubWeights = WeightStore.subscribe(setWeights);
+        const unsubWeights = WeightStore.subscribe(async (newData) => {
+            setWeights(newData);
+            const est = await WeightStore.getEstimatedWeight();
+            setEstimatedWeight(est);
+        });
 
         return () => {
             unsubPosts();
@@ -344,7 +351,7 @@ export default function DashboardScreen() {
                             
                             <View style={styles.weightBadge}>
                                 <Text style={styles.weightBadgeText}>
-                                    {currentWeekAverage ? `${parseFloat(currentWeekAverage).toFixed(1)} lbs` : '236.0 lbs'}
+                                    {estimatedWeight ? `${estimatedWeight.toFixed(1)} lbs` : '236.0 lbs'}
                                 </Text>
                             </View>
 

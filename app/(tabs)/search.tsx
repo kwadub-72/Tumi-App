@@ -234,6 +234,7 @@ export default function ExploreScreen() {
                                                 cardColor="#A8C0A8" // Matching Explore theme
                                                 themeColor="#4F6352"
                                                 onToggleFollow={() => handleToggleFollow(u.id)}
+                                                onPressCard={() => router.push({ pathname: '/user/[handle]', params: { handle: u.handle } } as any)}
                                             />
                                         </View>
                                     ))}
@@ -298,6 +299,7 @@ export default function ExploreScreen() {
                             setSelectedUserForModal(item);
                             setVerifiedVisible(true);
                         }}
+                        onPressCard={() => router.push({ pathname: '/user/[handle]', params: { handle: item.handle } } as any)}
                     />
                 )}
                 contentContainerStyle={styles.listContent}

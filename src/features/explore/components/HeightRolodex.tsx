@@ -30,7 +30,7 @@ export default function HeightRolodex({ minFt = 4, maxFt = 7, selectedFt, select
                     ftListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
                 }}
             >
-                <Text style={[styles.itemText, isSelected && styles.selectedItemText]}>{item}'</Text>
+                <Text style={[styles.itemText, isSelected && styles.selectedItemText]}>{item}&apos;</Text>
             </TouchableOpacity>
         );
     };
@@ -45,7 +45,7 @@ export default function HeightRolodex({ minFt = 4, maxFt = 7, selectedFt, select
                     inListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
                 }}
             >
-                <Text style={[styles.itemText, isSelected && styles.selectedItemText]}>{item}"</Text>
+                <Text style={[styles.itemText, isSelected && styles.selectedItemText]}>{item}&quot;</Text>
             </TouchableOpacity>
         );
     };

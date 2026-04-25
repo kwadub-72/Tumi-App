@@ -1,0 +1,260 @@
+
+> forge@1.0.0 lint
+> expo lint
+
+env: load .env
+env: export EXPO_PUBLIC_SUPABASE_URL EXPO_PUBLIC_SUPABASE_ANON_KEY
+
+/Users/kwadubsmac/Tumi App/app/(tabs)/_layout.tsx
+  11:11  warning  'pathname' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/app/(tabs)/activity.tsx
+    4:32   warning  'Image' is defined but never used                                                        @typescript-eslint/no-unused-vars
+    4:113  warning  '/Users/kwadubsmac/Tumi App/node_modules/react-native/index.js' imported multiple times  import/no-duplicates
+   19:33   warning  '/Users/kwadubsmac/Tumi App/node_modules/react-native/index.js' imported multiple times  import/no-duplicates
+   29:7    warning  'LEAGUE_DATA' is assigned a value but never used                                         @typescript-eslint/no-unused-vars
+   41:12   warning  'isFlipped' is assigned a value but never used                                           @typescript-eslint/no-unused-vars
+   41:23   warning  'setIsFlipped' is assigned a value but never used                                        @typescript-eslint/no-unused-vars
+  114:11   warning  'topGridWeight' is assigned a value but never used                                       @typescript-eslint/no-unused-vars
+  115:11   warning  'bottomGridWeight' is assigned a value but never used                                    @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/app/(tabs)/add.tsx
+    2:18  warning  'useLocalSearchParams' is defined but never used                 @typescript-eslint/no-unused-vars
+   28:16  warning  'SCREEN_WIDTH' is assigned a value but never used                @typescript-eslint/no-unused-vars
+  129:11  warning  'userInfo' is assigned a value but never used                    @typescript-eslint/no-unused-vars
+  303:22  warning  Array type using 'Array<T>' is forbidden. Use 'T[]' instead      @typescript-eslint/array-type
+  485:50  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+
+/Users/kwadubsmac/Tumi App/app/(tabs)/index.tsx
+  17:1  warning  Import in body of module; reorder to top                                                                 import/first
+  30:8  warning  React Hook useEffect has a missing dependency: 'init'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/kwadubsmac/Tumi App/app/(tabs)/profile.tsx
+    9:5   warning  'Pressable' is defined but never used                                                                                @typescript-eslint/no-unused-vars
+   36:16  warning  'height' is assigned a value but never used                                                                          @typescript-eslint/no-unused-vars
+   57:13  warning  'myTribes' is assigned a value but never used                                                                        @typescript-eslint/no-unused-vars
+   57:38  warning  'selectTribe' is assigned a value but never used                                                                     @typescript-eslint/no-unused-vars
+  141:8   warning  React Hook useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array          react-hooks/exhaustive-deps
+  147:8   warning  React Hook useEffect has a missing dependency: 'initTribes'. Either include it or remove the dependency array        react-hooks/exhaustive-deps
+  153:12  warning  React Hook React.useCallback has a missing dependency: 'loadData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/kwadubsmac/Tumi App/app/(tabs)/search.tsx
+   6:22  warning  '/Users/kwadubsmac/Tumi App/src/shared/models/types.ts' imported multiple times  import/no-duplicates
+  15:23  warning  '/Users/kwadubsmac/Tumi App/src/shared/models/types.ts' imported multiple times  import/no-duplicates
+  88:19  warning  'myStats' is assigned a value but never used                                     @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/app/_layout.tsx
+   1:10  warning  'DarkTheme' is defined but never used                                                                                       @typescript-eslint/no-unused-vars
+  21:8   warning  React Hook useEffect has a missing dependency: 'initialize'. Either include it or remove the dependency array               react-hooks/exhaustive-deps
+  40:8   warning  React Hook useEffect has missing dependencies: 'router' and 'segments'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  46:11  warning  'colorScheme' is assigned a value but never used                                                                            @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/app/add-exercise.tsx
+   24:20  warning  'FeedPost' is defined but never used                             @typescript-eslint/no-unused-vars
+   27:10  warning  'PostStore' is defined but never used                            @typescript-eslint/no-unused-vars
+  327:62  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+
+/Users/kwadubsmac/Tumi App/app/create-tribe.tsx
+   9:5   warning  'Switch' is defined but never used           @typescript-eslint/no-unused-vars
+  78:15  warning  'config' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/app/edit-profile.tsx
+   1:20  warning  'MaterialCommunityIcons' is defined but never used  @typescript-eslint/no-unused-vars
+   4:27  warning  'useEffect' is defined but never used               @typescript-eslint/no-unused-vars
+  20:10  warning  'PostStore' is defined but never used               @typescript-eslint/no-unused-vars
+  88:25  warning  'data' is assigned a value but never used           @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/app/email-confirmed.tsx
+   7:5  warning  'Alert' is defined but never used                                                                                      @typescript-eslint/no-unused-vars
+  40:8  warning  React Hook useEffect has a missing dependency: 'handleConfirmation'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/kwadubsmac/Tumi App/app/macro-update.tsx
+    3:38  warning  'useMemo' is defined but never used                                                                                 @typescript-eslint/no-unused-vars
+   10:5   warning  'KeyboardAvoidingView' is defined but never used                                                                    @typescript-eslint/no-unused-vars
+   11:5   warning  'Platform' is defined but never used                                                                                @typescript-eslint/no-unused-vars
+   12:5   warning  'TouchableWithoutFeedback' is defined but never used                                                                @typescript-eslint/no-unused-vars
+   13:5   warning  'Keyboard' is defined but never used                                                                                @typescript-eslint/no-unused-vars
+   22:5   warning  'withTiming' is defined but never used                                                                              @typescript-eslint/no-unused-vars
+   73:8   warning  React Hook useEffect has a missing dependency: 'userInfo.handle'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+   87:8   warning  React Hook useEffect has a missing dependency: 'translateY'. Either include it or remove the dependency array       react-hooks/exhaustive-deps
+  211:15  warning  'remainingWidth' is assigned a value but never used                                                                 @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/app/meal-entry.tsx
+   15:10  warning  'USDAFoodItem' is defined but never used                                                                                @typescript-eslint/no-unused-vars
+   52:11  warning  'isOverflowing' is assigned a value but never used                                                                      @typescript-eslint/no-unused-vars
+  162:11  warning  'servingSizeLabel' is assigned a value but never used                                                                   @typescript-eslint/no-unused-vars
+  178:8   warning  React Hook useEffect has a missing dependency: 'servingUnits.length'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/kwadubsmac/Tumi App/app/messages/[id].tsx
+  14:5  warning  'Keyboard' is defined but never used                                                                         @typescript-eslint/no-unused-vars
+  62:8  warning  React Hook useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/kwadubsmac/Tumi App/app/network/[handle].tsx
+  25:12  warning  'targetProfile' is assigned a value but never used                                                            @typescript-eslint/no-unused-vars
+  32:8   warning  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/kwadubsmac/Tumi App/app/post/[id].tsx
+   4:69  warning  'Modal' is defined but never used                     @typescript-eslint/no-unused-vars
+   4:76  warning  'Pressable' is defined but never used                 @typescript-eslint/no-unused-vars
+  23:24  warning  'setCurrentTab' is assigned a value but never used    @typescript-eslint/no-unused-vars
+  24:26  warning  'setSelectedDate' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/app/settings/change-password.tsx
+  149:27  warning  'tempSession' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/app/settings/social/[platform].tsx
+  1:20  warning  'MaterialCommunityIcons' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/app/settings/units.tsx
+  1:20  warning  'MaterialCommunityIcons' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/app/signup/body-metrics.tsx
+   5:20  warning  'MaterialCommunityIcons' is defined but never used  @typescript-eslint/no-unused-vars
+  15:11  warning  'params' is assigned a value but never used         @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/app/signup/confirm-macros.tsx
+   1:17  warning  'useState' is defined but never used             @typescript-eslint/no-unused-vars
+   2:52  warning  'UIManager' is defined but never used            @typescript-eslint/no-unused-vars
+   2:63  warning  'Platform' is defined but never used             @typescript-eslint/no-unused-vars
+   2:73  warning  'Image' is defined but never used                @typescript-eslint/no-unused-vars
+  10:7   warning  'SAGE_GREEN' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  21:11  warning  'MacroPill' is assigned a value but never used   @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/app/signup/maintenance-strategy.tsx
+  14:7  warning  'SAGE_GREEN' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  16:7  warning  'LIGHT_SAGE' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/app/signup/manual-macros.tsx
+  10:7  warning  'SAGE_GREEN' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/app/signup/privacy.tsx
+  2:60  warning  'ScrollView' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/app/signup/tribe-macros.tsx
+  13:9  warning  'width' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/app/signup/update-plan.tsx
+  14:7  warning  'SAGE_GREEN' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/app/signup/welcome.tsx
+   2:10  warning  'View' is defined but never used                                                                             @typescript-eslint/no-unused-vars
+   2:52  warning  'Image' is defined but never used                                                                            @typescript-eslint/no-unused-vars
+  21:8   warning  React Hook useEffect has a missing dependency: 'fadeAnim'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/kwadubsmac/Tumi App/app/user/[handle].tsx
+    2:43  warning  'useFocusEffect' is defined but never used                                                                     @typescript-eslint/no-unused-vars
+    3:38  warning  'useMemo' is defined but never used                                                                            @typescript-eslint/no-unused-vars
+    8:5   warning  'Platform' is defined but never used                                                                           @typescript-eslint/no-unused-vars
+   35:16  warning  'height' is assigned a value but never used                                                                    @typescript-eslint/no-unused-vars
+  182:8   warning  React Hook useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array    react-hooks/exhaustive-deps
+  188:8   warning  React Hook useEffect has a missing dependency: 'initTribes'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  504:19  warning  'firstWordCap' is assigned a value but never used                                                              @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/app/weight-history.tsx
+   12:5   warning  'Animated' is defined but never used                    @typescript-eslint/no-unused-vars
+   15:10  warning  'Colors' is defined but never used                      @typescript-eslint/no-unused-vars
+   26:7   warning  'CHART_PADDING_TOP' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  152:16  warning  'y' is assigned a value but never used                  @typescript-eslint/no-unused-vars
+  173:16  warning  'y' is assigned a value but never used                  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/components/CommentSheet.tsx
+   60:8   warning  React Hook useEffect has a missing dependency: 'translateY'. Either include it or remove the dependency array                                                                                       react-hooks/exhaustive-deps
+  131:28  error    React Hook "useSharedValue" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?    react-hooks/rules-of-hooks
+  132:27  error    React Hook "useSharedValue" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?    react-hooks/rules-of-hooks
+  148:24  error    React Hook "useAnimatedStyle" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?  react-hooks/rules-of-hooks
+  152:28  error    React Hook "useAnimatedStyle" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?  react-hooks/rules-of-hooks
+
+/Users/kwadubsmac/Tumi App/components/HammerModal.tsx
+  3:10  warning  'Colors' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/components/ui/Toast.tsx
+  33:8  warning  React Hook useEffect has missing dependencies: 'duration', 'onHide', and 'opacity'. Either include them or remove the dependency array. If 'onHide' changes too often, find the parent component that defines it and wrap that definition in useCallback  react-hooks/exhaustive-deps
+
+/Users/kwadubsmac/Tumi App/src/features/explore/components/ExploreProfileCard.tsx
+  1:10  warning  'Ionicons' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/src/features/explore/components/FilterModal.tsx
+    5:10  warning  'Colors' is defined but never used                               @typescript-eslint/no-unused-vars
+   29:11  warning  'isProfiles' is assigned a value but never used                  @typescript-eslint/no-unused-vars
+  266:85  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+
+/Users/kwadubsmac/Tumi App/src/features/explore/components/HeightRolodex.tsx
+   1:25  warning  'useEffect' is defined but never used                            @typescript-eslint/no-unused-vars
+  33:94  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+  48:94  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`  react/no-unescaped-entities
+
+/Users/kwadubsmac/Tumi App/src/features/explore/components/RangeSlider.tsx
+   2:48  warning  'Dimensions' is defined but never used                @typescript-eslint/no-unused-vars
+  27:11  warning  'valueToPosition' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/src/features/explore/components/RolodexPicker.tsx
+  3:10  warning  'ScrollView' is defined but never used  @typescript-eslint/no-unused-vars
+  3:64  warning  'Dimensions' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/src/features/feed/components/FeedItem.tsx
+   6:30  warning  'Meal' is defined but never used                    @typescript-eslint/no-unused-vars
+   6:36  warning  'Workout' is defined but never used                 @typescript-eslint/no-unused-vars
+   6:45  warning  'MacroUpdate' is defined but never used             @typescript-eslint/no-unused-vars
+  50:21  warning  'setIsMuted' is assigned a value but never used     @typescript-eslint/no-unused-vars
+  80:19  warning  'posterTargets' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/src/features/home/components/DiaryView.tsx
+  20:22  warning  'profile' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/src/features/home/components/FollowingView.tsx
+  21:22  warning  'profile' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/src/features/home/components/TribeSelectionModal.tsx
+   5:10  warning  'Colors' is defined but never used                  @typescript-eslint/no-unused-vars
+  15:48  warning  'selectedTribe' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/src/features/home/components/TribeView.tsx
+  21:22  warning  'profile' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/src/features/meal-logging/components/MealLoggerSheet.tsx
+  159:8  warning  React Hook useEffect has a missing dependency: 'translateY'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/kwadubsmac/Tumi App/src/features/tribes/components/EditCompetitionModal.tsx
+  72:11  warning  'updatePoint' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/src/features/tribes/components/TribeIcons.tsx
+  2:34  warning  'Text' is defined but never used        @typescript-eslint/no-unused-vars
+  2:40  warning  'StyleSheet' is defined but never used  @typescript-eslint/no-unused-vars
+  3:34  warning  'Ionicons' is defined but never used    @typescript-eslint/no-unused-vars
+  4:10  warning  'TribeType' is defined but never used   @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/src/features/tribes/components/TribeInfoModal.tsx
+   4:10  warning  'BlurView' is defined but never used                                                                         @typescript-eslint/no-unused-vars
+  43:8   warning  React Hook useEffect has a missing dependency: 'fadeAnim'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/kwadubsmac/Tumi App/src/features/tribes/components/dashboards/DashboardCarousel.tsx
+  30:5  error  React Hook "useEffect" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?  react-hooks/rules-of-hooks
+
+/Users/kwadubsmac/Tumi App/src/features/tribes/screens/TribeProfileScreen.tsx
+  2:78  warning  'FlatList' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/src/features/workout-logging/components/WorkoutLoggerSheet.tsx
+    7:5   warning  'FlatList' is defined but never used                                                                                                        @typescript-eslint/no-unused-vars
+  251:8   warning  React Hook useEffect has a missing dependency: 'translateY'. Either include it or remove the dependency array                               react-hooks/exhaustive-deps
+  276:8   warning  React Hook useEffect has missing dependencies: 'isTucked', 'translateY', and 'visible'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  288:8   warning  React Hook useEffect has missing dependencies: 'isTucked' and 'translateY'. Either include them or remove the dependency array              react-hooks/exhaustive-deps
+  360:46  warning  Array type using 'Array<T>' is forbidden. Use 'T[]' instead                                                                                 @typescript-eslint/array-type
+
+/Users/kwadubsmac/Tumi App/src/features/workout-logging/hooks/useExerciseSearch.ts
+  15:7  warning  'PAGE_SIZE' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/src/shared/services/SupabasePostService.ts
+  2:29  warning  'Ingredient' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/src/shared/services/USDAFoodService.ts
+  91:9  warning  'defaultUnit' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/src/shared/utils/FakeDataGenerator.ts
+  30:7  warning  'FAKE_ACTIVITY_ICONS' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/kwadubsmac/Tumi App/src/store/UserTribeStore.ts
+  4:17  warning  'User' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 142 problems (10 errors, 132 warnings)
+  0 errors and 5 warnings potentially fixable with the `--fix` option.
+

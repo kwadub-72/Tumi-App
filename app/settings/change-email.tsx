@@ -8,25 +8,87 @@ import {
     TouchableOpacity,
     View,
     TextInput,
-    Alert
+    Alert,
+    ActivityIndicator,
+    Keyboard
 } from 'react-native';
 import { Colors } from '@/src/shared/theme/Colors';
 import { useUserStore } from '@/store/UserStore';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/src/shared/services/supabase';
+import { createClient } from '@supabase/supabase-js';
 
 export default function ChangeEmailScreen() {
     const router = useRouter();
-    const { email, setProfile } = useUserStore();
+    const { email } = useUserStore();
     const [newEmail, setNewEmail] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
 
-    const handleSave = () => {
-        if (!newEmail.includes('@')) {
-            Alert.alert('Error', 'Please enter a valid email address');
+    const handleSave = async () => {
+        if (!newEmail || !newEmail.includes('@')) {
+            Alert.alert('Invalid Email', 'Please enter a valid email address');
             return;
         }
-        setProfile({ email: newEmail });
-        Alert.alert('Success', 'Email updated successfully', [
-            { text: 'OK', onPress: () => router.back() }
-        ]);
+
+        if (newEmail.toLowerCase() === email.toLowerCase()) {
+            Alert.alert('No Change', 'Please enter a different email address than your current one.');
+            return;
+        }
+
+        Keyboard.dismiss();
+        setIsLoading(true);
+
+        try {
+            // IMPORTANT: We use getSession() (reads in-memory cache, no lock)
+            // NOT getUser() (network call that deadlocks with AuthStore's storage listener).
+            const { data: { session } } = await supabase.auth.getSession();
+
+            if (!session?.user) {
+                Alert.alert('Authentication Error', 'You must be logged in to change your email.');
+                setIsLoading(false);
+                return;
+            }
+
+            // Route the write through a stateless tempClient to avoid
+            // the main client's AsyncStorage lock deadlock.
+            const tempClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                auth: { persistSession: false, autoRefreshToken: false, storage: undefined },
+            });
+
+            // tempClient needs an active session before it can update the user.
+            // We re-use the existing access token directly via setSession.
+            await tempClient.auth.setSession({
+                access_token: session.access_token,
+                refresh_token: session.refresh_token,
+            });
+
+            // emailRedirectTo tells Supabase where to send the user after they click
+            // the confirmation link. This MUST be on the allowlist in:
+            //   Supabase Dashboard → Authentication → URL Configuration → Redirect URLs
+            // Add both: forge://email-confirmed   AND   exp://localhost:8081/--/email-confirmed
+            const { error } = await tempClient.auth.updateUser(
+                { email: newEmail.trim() },
+                { emailRedirectTo: 'forge://email-confirmed' }
+            );
+
+            if (error) {
+                console.error('Email update error:', error);
+                Alert.alert('Update Failed', error.message);
+                return;
+            }
+
+            Alert.alert(
+                'Check Your Inbox',
+                `A confirmation link has been sent to ${newEmail}. \n\nIMPORTANT: If you have "Secure Email Change" enabled in Supabase, you must also click the link sent to your CURRENT email (${email}) to confirm the switch.`,
+                [
+                    { text: 'Got it', onPress: () => router.back() }
+                ]
+            );
+        } catch (e: any) {
+            console.error('[ChangeEmail] Unexpected error:', e);
+            Alert.alert('Error', e.message || 'An unexpected error occurred. Please check your network connection.');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -55,11 +117,20 @@ export default function ChangeEmailScreen() {
                         onChangeText={setNewEmail}
                         keyboardType="email-address"
                         autoCapitalize="none"
+                        editable={!isLoading}
                     />
                 </View>
 
-                <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-                    <Text style={styles.saveButtonText}>Save Changes</Text>
+                <TouchableOpacity 
+                    style={[styles.saveButton, isLoading && styles.saveButtonDisabled]} 
+                    onPress={handleSave}
+                    disabled={isLoading}
+                >
+                    {isLoading ? (
+                        <ActivityIndicator color="white" />
+                    ) : (
+                        <Text style={styles.saveButtonText}>Save Changes</Text>
+                    )}
                 </TouchableOpacity>
             </View>
         </SafeAreaView>
@@ -130,6 +201,9 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginTop: 10,
+    },
+    saveButtonDisabled: {
+        opacity: 0.7,
     },
     saveButtonText: {
         color: 'white',

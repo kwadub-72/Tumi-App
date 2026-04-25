@@ -1,4 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SupabaseWeightService } from '../src/shared/services/SupabaseWeightService';
+import { supabase } from '../src/shared/services/supabase';
 
 export interface WeightEntry {
     date: string; // YYYY-MM-DD format
@@ -6,43 +7,50 @@ export interface WeightEntry {
     timestamp: number;
 }
 
-const STORAGE_KEY = 'forge_weights';
-
 type Listener = (weights: WeightEntry[]) => void;
 let listeners: Listener[] = [];
 
 export const WeightStore = {
     async loadWeights(): Promise<WeightEntry[]> {
-        try {
-            const json = await AsyncStorage.getItem(STORAGE_KEY);
-            return json ? JSON.parse(json) : [];
-        } catch (e) {
-            console.error('Failed to load weights', e);
-            return [];
-        }
-    },
-
-    async saveWeights(weights: WeightEntry[]): Promise<void> {
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(weights));
-        listeners.forEach(l => l(weights));
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user?.id) return [];
+        
+        const weights = await SupabaseWeightService.getWeights(session.user.id);
+        return weights.map(w => ({
+            date: w.date,
+            weight: w.weight,
+            timestamp: new Date(w.date + 'T12:00:00').getTime()
+        }));
     },
 
     async addWeight(entry: WeightEntry): Promise<void> {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user?.id) return;
+
+        await SupabaseWeightService.addWeight(session.user.id, entry.weight, entry.date);
         const weights = await this.loadWeights();
-        // Remove existing entry for the same date if any
-        const filtered = weights.filter(w => w.date !== entry.date);
-        const updated = [...filtered, entry].sort((a, b) => a.timestamp - b.timestamp);
-        await this.saveWeights(updated);
+        listeners.forEach(l => l(weights));
     },
 
     async clearWeights(): Promise<void> {
-        await this.saveWeights([]);
+        // We typically don't want to clear all weights from DB accidentally, 
+        // but if needed, we'd need a delete-all method. 
+        // For now, we'll just skip this or implement if requested.
     },
 
     async deleteWeight(date: string): Promise<void> {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user?.id) return;
+
+        await SupabaseWeightService.deleteWeight(session.user.id, date);
         const weights = await this.loadWeights();
-        const updated = weights.filter(w => w.date !== date);
-        await this.saveWeights(updated);
+        listeners.forEach(l => l(weights));
+    },
+
+    async getEstimatedWeight(): Promise<number | null> {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user?.id) return null;
+        return SupabaseWeightService.getEstimatedWeight(session.user.id);
     },
 
     subscribe(listener: Listener) {

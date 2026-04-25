@@ -8,11 +8,12 @@ interface MemberCardProps {
     cardColor?: string;
     themeColor?: string; // Color for the active follow button
     onToggleFollow: (id: string) => void;
+    onPressCard?: () => void;
 }
 
-export default function MemberCard({ item, cardColor = '#333', themeColor = '#2F3A27', onToggleFollow }: MemberCardProps) {
+export default function MemberCard({ item, cardColor = '#333', themeColor = '#2F3A27', onToggleFollow, onPressCard }: MemberCardProps) {
     return (
-        <View style={[styles.memberCard, { backgroundColor: cardColor }]}>
+        <TouchableOpacity style={[styles.memberCard, { backgroundColor: cardColor }]} onPress={onPressCard} activeOpacity={0.9}>
             <Image source={{ uri: typeof item.avatar === 'string' ? item.avatar : 'https://i.pravatar.cc/150' }} style={styles.avatar} />
 
             <View style={styles.info}>
@@ -39,7 +40,7 @@ export default function MemberCard({ item, cardColor = '#333', themeColor = '#2F
                     color={item.isFollowing ? "white" : cardColor}
                 />
             </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
     );
 }
 

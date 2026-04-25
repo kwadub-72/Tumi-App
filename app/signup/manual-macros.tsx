@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView, TouchableWithoutFeedback, Keyboard, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -13,6 +13,10 @@ const DARK_GREEN = '#2F3A27';
 export default function SignupManualMacros() {
     const router = useRouter();
     const params = useLocalSearchParams();
+
+    const proteinRef = useRef<TextInput>(null);
+    const carbsRef = useRef<TextInput>(null);
+    const fatsRef = useRef<TextInput>(null);
 
     const initP = params.p ? params.p.toString() : '';
     const initC = params.c ? params.c.toString() : '';
@@ -32,6 +36,10 @@ export default function SignupManualMacros() {
     }, [protein, carbs, fats]);
 
     const handleNext = () => {
+        if (!protein || !carbs || !fats) {
+            Alert.alert("Required", "Please enter a value for Protein, Carbs, and Fats to proceed.");
+            return;
+        }
         router.push({
             pathname: '/signup/confirm-macros',
             params: {
@@ -43,83 +51,102 @@ export default function SignupManualMacros() {
         });
     };
 
-    const MacroRow = ({ icon, value, onChange, placeholder }: any) => (
+    const MacroRow = ({ icon, value, onChange, placeholder, inputRef }: any) => (
         <View style={styles.macroRow}>
-            <View style={styles.labelPill}>
-                <Text style={styles.labelText}>...g</Text>
-            </View>
             <MaterialCommunityIcons name={icon} size={30} color={DARK_GREEN} style={styles.icon} />
-            <View style={styles.inputPill}>
-                <TextInput
-                    style={styles.input}
-                    value={value}
-                    onChangeText={onChange}
-                    placeholder={placeholder}
-                    placeholderTextColor="rgba(47, 58, 39, 0.5)"
-                    keyboardType="numeric"
-                />
-            </View>
+            <TouchableOpacity 
+                activeOpacity={1} 
+                style={styles.inputPill}
+                onPress={() => inputRef.current?.focus()}
+            >
+                <View style={styles.inputWrapper} pointerEvents="none">
+                    <TextInput
+                        ref={inputRef}
+                        style={styles.input}
+                        value={value}
+                        onChangeText={(text) => {
+                            const num = text.replace(/[^0-9]/g, '');
+                            onChange(num);
+                        }}
+                        placeholder="0"
+                        placeholderTextColor="rgba(47, 58, 39, 0.5)"
+                        keyboardType="numeric"
+                        returnKeyType="done"
+                        onSubmitEditing={() => Keyboard.dismiss()}
+                    />
+                    <Text style={styles.suffix}>g</Text>
+                </View>
+            </TouchableOpacity>
         </View>
     );
 
     return (
-        <SafeAreaView style={styles.container}>
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={{ flex: 1 }}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
-            >
-                <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-                    {/* Header */}
-                    <View style={styles.header}>
-                        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                            <Ionicons name="arrow-back" size={28} color={DARK_GREEN} />
-                        </TouchableOpacity>
-                        <TabonoLogo size={40} color={DARK_GREEN} />
-                        <View style={{ width: 28 }} />
-                    </View>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <SafeAreaView style={styles.container}>
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={{ flex: 1 }}
+                    keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+                >
+                    <ScrollView 
+                        contentContainerStyle={styles.scrollContent} 
+                        keyboardShouldPersistTaps="handled"
+                        showsVerticalScrollIndicator={false}
+                    >
+                        {/* Header */}
+                        <View style={styles.header}>
+                            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                                <Ionicons name="arrow-back" size={28} color={DARK_GREEN} />
+                            </TouchableOpacity>
+                            <TabonoLogo size={40} color={DARK_GREEN} />
+                            <View style={{ width: 28 }} />
+                        </View>
 
-                    <View style={styles.content}>
-                        <Text style={styles.title}>Set custom macros</Text>
+                        <View style={styles.content}>
+                            <Text style={styles.title}>Set custom macros</Text>
 
-                        {/* Calories Display */}
-                        <View style={styles.caloriesContainer}>
-                            <MaterialCommunityIcons name="fire" size={40} color={DARK_GREEN} />
-                            <View style={styles.caloriesPill}>
-                                <Text style={styles.caloriesText}>{calories} cals</Text>
+                            {/* Calories Display */}
+                            <View style={styles.caloriesContainer}>
+                                <MaterialCommunityIcons name="fire" size={40} color={DARK_GREEN} />
+                                <View style={styles.caloriesPill}>
+                                    <Text style={styles.caloriesText}>{calories} cals</Text>
+                                </View>
                             </View>
-                        </View>
 
-                        {/* Macro Inputs */}
-                        <View style={styles.form}>
-                            <MacroRow
-                                icon="food-drumstick"
-                                value={protein}
-                                onChange={setProtein}
-                                placeholder="200g"
-                            />
-                            <MacroRow
-                                icon="barley"
-                                value={carbs}
-                                onChange={setCarbs}
-                                placeholder="200g"
-                            />
-                            <MacroRow
-                                icon="water"
-                                value={fats}
-                                onChange={setFats}
-                                placeholder="200g"
-                            />
-                        </View>
+                            {/* Macro Inputs */}
+                            <View style={styles.form}>
+                                <MacroRow
+                                    icon="food-drumstick"
+                                    value={protein}
+                                    onChange={setProtein}
+                                    placeholder="0"
+                                    inputRef={proteinRef}
+                                />
+                                <MacroRow
+                                    icon="barley"
+                                    value={carbs}
+                                    onChange={setCarbs}
+                                    placeholder="0"
+                                    inputRef={carbsRef}
+                                />
+                                <MacroRow
+                                    icon="water"
+                                    value={fats}
+                                    onChange={setFats}
+                                    placeholder="0"
+                                    inputRef={fatsRef}
+                                />
+                            </View>
 
-                        {/* Next Button */}
-                        <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
-                            <Ionicons name="arrow-forward" size={30} color={CREAM_COLOR} />
-                        </TouchableOpacity>
-                    </View>
-                </ScrollView>
-            </KeyboardAvoidingView>
-        </SafeAreaView>
+                            {/* Next Button - Moved into the flow to handle keyboard better */}
+                            <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
+                                <Ionicons name="arrow-forward" size={30} color={CREAM_COLOR} />
+                            </TouchableOpacity>
+                        </View>
+                    </ScrollView>
+                </KeyboardAvoidingView>
+            </SafeAreaView>
+        </TouchableWithoutFeedback>
     );
 }
 
@@ -127,6 +154,9 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: BG_COLOR,
+    },
+    scrollContent: {
+        flexGrow: 1,
     },
     header: {
         flexDirection: 'row',
@@ -143,12 +173,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingTop: 20,
         paddingHorizontal: 20,
+        paddingBottom: 40,
     },
     title: {
         fontSize: 32,
         color: DARK_GREEN,
         textAlign: 'center',
-        fontWeight: '400', // Thin
+        fontWeight: 'bold',
         marginBottom: 30,
     },
     caloriesContainer: {
@@ -161,7 +192,7 @@ const styles = StyleSheet.create({
     },
     caloriesPill: {
         flex: 1,
-        backgroundColor: '#4F6352', // Dark Green
+        backgroundColor: '#4F6352',
         height: 60,
         borderRadius: 30,
         justifyContent: 'center',
@@ -175,25 +206,12 @@ const styles = StyleSheet.create({
     form: {
         width: '100%',
         gap: 20,
+        marginBottom: 40,
     },
     macroRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
-    },
-    labelPill: {
-        width: 80,
-        height: 60,
-        borderRadius: 30,
-        borderWidth: 1,
-        borderColor: DARK_GREEN,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: 'transparent',
-    },
-    labelText: {
-        color: 'rgba(47, 58, 39, 0.5)',
-        fontSize: 16,
+        gap: 15,
     },
     icon: {
         width: 30,
@@ -212,22 +230,32 @@ const styles = StyleSheet.create({
         shadowRadius: 2,
         elevation: 1,
     },
+    inputWrapper: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 2,
+    },
     input: {
         fontSize: 18,
         color: DARK_GREEN,
         fontWeight: 'bold',
         textAlign: 'center',
-        height: '100%',
+        minWidth: 20,
+    },
+    suffix: {
+        fontSize: 18,
+        color: DARK_GREEN,
+        fontWeight: 'bold',
     },
     nextButton: {
-        position: 'absolute',
-        bottom: 50,
+        marginTop: 'auto',
+        marginBottom: 20,
         width: 60,
         height: 60,
         borderRadius: 30,
         backgroundColor: '#4F6352',
         justifyContent: 'center',
         alignItems: 'center',
-        alignSelf: 'center',
     },
 });

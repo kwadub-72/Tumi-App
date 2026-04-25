@@ -1,14 +1,16 @@
 export interface ActivityOption {
     name: string;
     icon: string; // MaterialCommunityIcons name
+    displayName?: string;
+    modifier?: '+' | '-';
 }
 
 export const ACTIVITIES: ActivityOption[] = [
-    { name: 'Bodybuilder (Bulk)', icon: 'hammer' },
-    { name: 'Bodybuilder (Cut)', icon: 'hammer' },
+    { name: 'Bodybuilder (Bulk)', displayName: 'Bodybuilder (bulk)', icon: 'hammer', modifier: '+' },
+    { name: 'Bodybuilder (Cut)', displayName: 'Bodybuilder (cut)', icon: 'hammer', modifier: '-' },
     { name: 'Powerlifting', icon: 'weight-lifter' },
-    { name: 'Bulk (General)', icon: 'format-paint' },
-    { name: 'Cut (General)', icon: 'format-paint' },
+    { name: 'Bulk (General)', displayName: 'General bulk', icon: 'format-paint', modifier: '+' },
+    { name: 'Cut (General)', displayName: 'General cut', icon: 'format-paint', modifier: '-' },
     { name: 'Glute Growth', icon: 'cake-variant' },
     { name: 'Basketball', icon: 'basketball' },
     { name: 'Soccer', icon: 'soccer' },

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, SafeAreaView, ActivityIndicator, Keyboard, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, SafeAreaView, ActivityIndicator, Keyboard, TouchableWithoutFeedback, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/src/shared/theme/Colors';
@@ -8,6 +8,7 @@ import { SupabaseNetworkService } from '@/src/shared/services/SupabaseNetworkSer
 import { useAuthStore } from '@/store/AuthStore';
 import { User } from '@/src/shared/models/types';
 import { supabase } from '@/src/shared/services/supabase';
+import { useNetworkStore } from '@/src/store/NetworkStore';
 
 type TabType = 'followers' | 'following';
 
@@ -24,6 +25,8 @@ export default function NetworkScreen() {
     const [loading, setLoading] = useState(true);
     const [targetProfile, setTargetProfile] = useState<{ id: string; handle: string } | null>(null);
 
+    const networkStore = useNetworkStore();
+    
     // Track which users were unfollowed during this session in the 'following' tab
     const [unfollowedInSession, setUnfollowedInSession] = useState<Set<string>>(new Set());
 
@@ -52,15 +55,13 @@ export default function NetworkScreen() {
                 SupabaseNetworkService.getFollowing(profile.id)
             ]);
 
-            // If we are looking at our own profile, we also need to know who WE have requested
-            let userRequests: string[] = [];
-            if (session?.user?.id) {
-                userRequests = await SupabaseNetworkService.getFollowRequests(session.user.id);
-            }
-
             setFollowers(followersData);
             setFollowing(followingData);
-            setRequests(userRequests);
+
+            // Sync network store if needed
+            if (!networkStore.initialized && session?.user?.id) {
+                await networkStore.init(session.user.id);
+            }
         } catch (e) {
             console.error(e);
         } finally {
@@ -71,38 +72,53 @@ export default function NetworkScreen() {
     const handleToggleFollow = async (user: User) => {
         if (!session?.user?.id) return;
 
-        const isCurrentlyFollowing = following.some(f => f.id === user.id) && !unfollowedInSession.has(user.id);
-        const isRequested = requests.includes(user.id);
+        const isCurrentlyFollowing = networkStore.isFollowing(user.id);
+        const isRequested = networkStore.isRequested(user.id);
         
         const currentState = isCurrentlyFollowing ? 'following' : (isRequested ? 'requested' : 'none');
 
-        const { success, newState } = await SupabaseNetworkService.toggleFollow(
-            session.user.id,
-            user.id,
-            currentState === 'following',
-            user.isPrivate || false
-        );
+        if (isCurrentlyFollowing && user.isPrivate) {
+            Alert.alert(
+                "Unfollow Private User?",
+                "Are you sure you want to unfollow? You will need to request to follow them again.",
+                [
+                    { text: "Cancel", style: "cancel" },
+                    { 
+                        text: "Unfollow", 
+                        style: "destructive",
+                        onPress: async () => {
+                            const { success, newState } = await networkStore.toggleFollow(
+                                session.user.id,
+                                user.id,
+                                user.isPrivate || false
+                            );
+                            if (success) handleToggleSuccess(user, newState);
+                        }
+                    }
+                ]
+            );
+        } else {
+            const { success, newState } = await networkStore.toggleFollow(
+                session.user.id,
+                user.id,
+                user.isPrivate || false
+            );
+            if (success) handleToggleSuccess(user, newState);
+        }
+    };
 
-        if (success) {
-            if (newState === 'none') {
-                if (activeTab === 'following') {
-                    // "Latch" logic: mark as unfollowed in session but don't remove from list
-                    setUnfollowedInSession(prev => new Set(prev).add(user.id));
-                }
-                setRequests(prev => prev.filter(id => id !== user.id));
-                setFollowing(prev => prev.filter(f => f.id !== user.id));
-            } else if (newState === 'following') {
-                // If it was in unfollowedInSession, remove it
-                setUnfollowedInSession(prev => {
-                    const next = new Set(prev);
-                    next.delete(user.id);
-                    return next;
-                });
-                setFollowing(prev => [...prev, user]);
-                setRequests(prev => prev.filter(id => id !== user.id));
-            } else if (newState === 'requested') {
-                setRequests(prev => [...prev, user.id]);
+    const handleToggleSuccess = (user: User, newState: string) => {
+        if (newState === 'none') {
+            // "Latch" logic: mark as unfollowed in session but don't remove from list if looking at our own following
+            if (activeTab === 'following' && targetProfile?.id === session?.user?.id) {
+                setUnfollowedInSession(prev => new Set(prev).add(user.id));
             }
+        } else if (newState === 'following') {
+            setUnfollowedInSession(prev => {
+                const next = new Set(prev);
+                next.delete(user.id);
+                return next;
+            });
         }
     };
 
@@ -116,8 +132,8 @@ export default function NetworkScreen() {
 
     const getFollowState = (userId: string) => {
         if (unfollowedInSession.has(userId)) return 'none';
-        if (following.some(f => f.id === userId)) return 'following';
-        if (requests.includes(userId)) return 'requested';
+        if (networkStore.isFollowing(userId)) return 'following';
+        if (networkStore.isRequested(userId)) return 'requested';
         return 'none';
     };
 
@@ -186,7 +202,7 @@ export default function NetworkScreen() {
                         user={item}
                         followState={getFollowState(item.id)}
                         onToggleFollow={() => handleToggleFollow(item)}
-                        onPress={() => router.push('/in-development')}
+                        onPress={() => router.push({ pathname: '/user/[handle]', params: { handle: item.handle } } as any)}
                     />
                 )}
                 ListEmptyComponent={

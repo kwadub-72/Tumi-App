@@ -482,7 +482,7 @@ export default function AddMealScreen() {
                     <Ionicons name="restaurant-outline" size={56} color={Colors.primary + '44'} />
                     <Text style={styles.emptyText}>No meals logged yet</Text>
                     <Text style={styles.emptySubText}>
-                        Your followed users haven't logged any meals
+                        Your followed users haven&apos;t logged any meals
                     </Text>
                 </View>
             );

@@ -263,7 +263,7 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
                                                 style={styles.inputContainer}
                                                 onPress={() => setShowHeightRolodex(true)}
                                             >
-                                                <Text style={styles.inputValue}>{ft}'{inch}</Text>
+                                                <Text style={styles.inputValue}>{ft}&apos;{inch}</Text>
                                             </TouchableOpacity>
                                         )}
                                     </View>

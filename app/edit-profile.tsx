@@ -337,10 +337,12 @@ export default function EditProfileScreen() {
                     <View style={styles.fieldRow}>
                         <Text style={styles.label}>Account privacy</Text>
                         <TouchableOpacity
-                            style={[styles.toggleContainer, profileVisible ? styles.toggleActive : styles.toggleInactive]}
+                            style={[styles.switchContainer, profileVisible ? { backgroundColor: Colors.primary, alignItems: 'flex-end' } : { backgroundColor: '#888', alignItems: 'flex-start' }]}
                             onPress={() => setProfileVisible(!profileVisible)}
                         >
-                            <Ionicons name={profileVisible ? "earth" : "lock-closed"} size={16} color="white" />
+                            <View style={styles.switchKnob}>
+                                <Ionicons name={profileVisible ? 'earth' : 'lock-closed'} size={14} color={profileVisible ? Colors.primary : '#888'} />
+                            </View>
                         </TouchableOpacity>
                     </View>
 
@@ -350,10 +352,12 @@ export default function EditProfileScreen() {
                     <View style={styles.fieldRow}>
                         <Text style={styles.label}>Meal visibility</Text>
                         <TouchableOpacity
-                            style={[styles.toggleContainer, mealVisible ? styles.toggleActive : styles.toggleInactive]}
+                            style={[styles.switchContainer, mealVisible ? { backgroundColor: Colors.primary, alignItems: 'flex-end' } : { backgroundColor: '#888', alignItems: 'flex-start' }]}
                             onPress={() => setMealVisible(!mealVisible)}
                         >
-                            <Ionicons name={mealVisible ? "earth" : "lock-closed"} size={16} color="white" />
+                            <View style={styles.switchKnob}>
+                                <Ionicons name={mealVisible ? 'earth' : 'lock-closed'} size={14} color={mealVisible ? Colors.primary : '#888'} />
+                            </View>
                         </TouchableOpacity>
                     </View>
 
@@ -361,10 +365,12 @@ export default function EditProfileScreen() {
                     <View style={styles.fieldRow}>
                         <Text style={styles.label}>Workout visibility</Text>
                         <TouchableOpacity
-                            style={[styles.toggleContainer, workoutVisible ? styles.toggleActive : styles.toggleInactive]}
+                            style={[styles.switchContainer, workoutVisible ? { backgroundColor: Colors.primary, alignItems: 'flex-end' } : { backgroundColor: '#888', alignItems: 'flex-start' }]}
                             onPress={() => setWorkoutVisible(!workoutVisible)}
                         >
-                            <Ionicons name={workoutVisible ? "earth" : "lock-closed"} size={16} color="white" />
+                            <View style={styles.switchKnob}>
+                                <Ionicons name={workoutVisible ? 'earth' : 'lock-closed'} size={14} color={workoutVisible ? Colors.primary : '#888'} />
+                            </View>
                         </TouchableOpacity>
                     </View>
 
@@ -372,21 +378,25 @@ export default function EditProfileScreen() {
                     <View style={styles.fieldRow}>
                         <Text style={styles.label}>Macro visibility</Text>
                         <TouchableOpacity
-                            style={[styles.toggleContainer, macroVisible ? styles.toggleActive : styles.toggleInactive]}
+                            style={[styles.switchContainer, macroVisible ? { backgroundColor: Colors.primary, alignItems: 'flex-end' } : { backgroundColor: '#888', alignItems: 'flex-start' }]}
                             onPress={() => setMacroVisible(!macroVisible)}
                         >
-                            <Ionicons name={macroVisible ? "earth" : "lock-closed"} size={16} color="white" />
+                            <View style={styles.switchKnob}>
+                                <Ionicons name={macroVisible ? 'earth' : 'lock-closed'} size={14} color={macroVisible ? Colors.primary : '#888'} />
+                            </View>
                         </TouchableOpacity>
                     </View>
 
                     {/* Like Visibility */}
                     <View style={styles.fieldRow}>
-                        <Text style={styles.label}>Like visiblity</Text>
+                        <Text style={styles.label}>Like visibility</Text>
                         <TouchableOpacity
-                            style={[styles.toggleContainer, likeVisible ? styles.toggleActive : styles.toggleInactive]}
+                            style={[styles.switchContainer, likeVisible ? { backgroundColor: Colors.primary, alignItems: 'flex-end' } : { backgroundColor: '#888', alignItems: 'flex-start' }]}
                             onPress={() => setLikeVisible(!likeVisible)}
                         >
-                            <Ionicons name={likeVisible ? "earth" : "lock-closed"} size={16} color="white" />
+                            <View style={styles.switchKnob}>
+                                <Ionicons name={likeVisible ? 'earth' : 'lock-closed'} size={14} color={likeVisible ? Colors.primary : '#888'} />
+                            </View>
                         </TouchableOpacity>
                     </View>
 
@@ -394,10 +404,12 @@ export default function EditProfileScreen() {
                     <View style={styles.fieldRow}>
                         <Text style={styles.label}>Measurements</Text>
                         <TouchableOpacity
-                            style={[styles.toggleContainer, measurementsVisible ? styles.toggleActive : styles.toggleInactive]}
+                            style={[styles.switchContainer, measurementsVisible ? { backgroundColor: Colors.primary, alignItems: 'flex-end' } : { backgroundColor: '#888', alignItems: 'flex-start' }]}
                             onPress={() => setMeasurementsVisible(!measurementsVisible)}
                         >
-                            <Ionicons name={measurementsVisible ? "earth" : "lock-closed"} size={16} color="white" />
+                            <View style={styles.switchKnob}>
+                                <Ionicons name={measurementsVisible ? 'earth' : 'lock-closed'} size={14} color={measurementsVisible ? Colors.primary : '#888'} />
+                            </View>
                         </TouchableOpacity>
                     </View>
 
@@ -555,21 +567,25 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontStyle: 'italic',
     },
-    toggleContainer: {
-        width: 50,
-        height: 30,
-        borderRadius: 15,
-        backgroundColor: '#666',
+    switchContainer: {
+        width: 56,
+        height: 32,
+        borderRadius: 16,
+        padding: 3,
         justifyContent: 'center',
-        paddingHorizontal: 4,
     },
-    toggleActive: {
-        backgroundColor: Colors.primary,
-        alignItems: 'flex-end',
-    },
-    toggleInactive: {
-        backgroundColor: '#666',
-        alignItems: 'flex-start',
+    switchKnob: {
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        backgroundColor: 'white',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 1,
+        elevation: 2,
     },
     goalPill: {
         flexDirection: 'row',

@@ -16,11 +16,12 @@ export const ActivityIcon: React.FC<ActivityIconProps> = ({
     color = Colors.primary, 
     size = 18 
 }) => {
-    const isBulk = activity.toLowerCase().includes('bulk');
-    const isCut = activity.toLowerCase().includes('cut');
+    const safeActivity = activity || '';
+    const isBulk = safeActivity.toLowerCase().includes('bulk');
+    const isCut = safeActivity.toLowerCase().includes('cut');
     
     // Default color for Glute Growth is peach-ish if it's the primary hammer
-    const finalColor = activity === 'Glute Growth' ? '#FFB07C' : color;
+    const finalColor = color;
 
     return (
         <View style={styles.container}>

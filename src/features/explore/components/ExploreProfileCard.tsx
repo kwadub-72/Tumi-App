@@ -8,15 +8,15 @@ interface ExploreProfileCardProps {
     onToggleFollow: () => void;
     onPressHammer: () => void;
     onPressStatus: () => void;
+    onPressCard?: () => void;
 }
 
-export default function ExploreProfileCard({ user, onToggleFollow, onPressHammer, onPressStatus }: ExploreProfileCardProps) {
-    const isPeach = user.activity === 'Glute Growth';
+export default function ExploreProfileCard({ user, onToggleFollow, onPressHammer, onPressStatus, onPressCard }: ExploreProfileCardProps) {
     const isBulk = user.activity?.toLowerCase().includes('bulk');
     const isCut = user.activity?.toLowerCase().includes('cut');
 
     return (
-        <View style={styles.card}>
+        <TouchableOpacity style={styles.card} onPress={onPressCard} activeOpacity={0.9}>
             <View style={styles.topSection}>
                 <Image source={typeof user.avatar === 'string' ? { uri: user.avatar } : user.avatar} style={styles.avatar} />
                 <View style={styles.infoCol}>
@@ -37,7 +37,7 @@ export default function ExploreProfileCard({ user, onToggleFollow, onPressHammer
                                 <MaterialCommunityIcons
                                     name={user.activityIcon as any}
                                     size={20}
-                                    color={isPeach ? '#FFB07C' : "white"}
+                                    color={"white"}
                                 />
                                 {isBulk && <Text style={styles.symbol}>+</Text>}
                                 {isCut && <Text style={styles.symbol}>-</Text>}
@@ -82,7 +82,7 @@ export default function ExploreProfileCard({ user, onToggleFollow, onPressHammer
                     <Text style={styles.metricLabel}>updates</Text>
                 </View>
             </View>
-        </View>
+        </TouchableOpacity>
     );
 }
 

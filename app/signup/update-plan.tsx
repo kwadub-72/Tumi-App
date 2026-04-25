@@ -23,20 +23,17 @@ export default function SignupUpdatePlan() {
         router.push('/signup/privacy');
     };
 
-    const OptionCard = ({ type, title, subtitle, desc, isSelected, onPress }: any) => (
+    const OptionCard = ({ title, subtitle, desc, isSelected, onPress }: any) => (
         <TouchableOpacity
             style={[styles.card, isSelected && styles.selectedCard]}
             onPress={onPress}
             activeOpacity={0.9}
         >
-            <View style={styles.cardHeader}>
-                <Text style={styles.cardSubtitle}>{subtitle}</Text>
-            </View>
-            <Text style={[styles.cardTitle, isSelected && { color: 'white' }]}>{title}</Text>
-
-            <Text style={[styles.cardDesc, isSelected && { color: 'rgba(255,255,255,0.9)' }]}>
-                {desc}
+            <Text style={[styles.cardSubtitle, isSelected ? { color: '#C4D6C4' } : { color: DARK_GREEN }]}>
+                {subtitle}
             </Text>
+            <Text style={styles.cardTitle}>{title}</Text>
+            <Text style={styles.cardDesc}>{desc}</Text>
         </TouchableOpacity>
     );
 
@@ -56,7 +53,6 @@ export default function SignupUpdatePlan() {
 
                 <View style={styles.cardsContainer}>
                     <OptionCard
-                        type="tribe"
                         title="Tribe-generated"
                         subtitle="Recommended"
                         desc="Tribe recommends weekly macro adjustments"
@@ -65,7 +61,6 @@ export default function SignupUpdatePlan() {
                     />
 
                     <OptionCard
-                        type="manual"
                         title="Manual"
                         subtitle="Best for users who know their targets"
                         desc="Manually update macro targets"
@@ -106,7 +101,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
     },
     title: {
-        fontSize: 24,
+        fontSize: 32,
         color: DARK_GREEN,
         textAlign: 'center',
         fontWeight: 'bold',
@@ -118,35 +113,42 @@ const styles = StyleSheet.create({
         gap: 20,
     },
     card: {
-        backgroundColor: '#C4D6C4', // Muted/Light Sage when unselected
-        borderRadius: 20,
+        backgroundColor: SAGE_GREEN,
+        borderRadius: 30,
         padding: 20,
         borderWidth: 1,
-        borderColor: 'transparent',
+        borderColor: DARK_GREEN,
+        alignItems: 'center',
     },
     selectedCard: {
-        backgroundColor: '#4F6352',
+        backgroundColor: '#4F6352', 
         borderColor: DARK_GREEN,
-    },
-    cardHeader: {
-        marginBottom: 5,
     },
     cardSubtitle: {
         fontSize: 12,
-        color: 'rgba(47, 58, 39, 0.6)',
-        textTransform: 'uppercase',
-        fontWeight: 'bold',
         fontStyle: 'italic',
+        fontWeight: 'bold',
+        marginBottom: 5,
+        textAlign: 'center',
     },
     cardTitle: {
-        fontSize: 24,
+        fontSize: 32,
         fontWeight: 'bold',
-        color: DARK_GREEN,
-        marginBottom: 10,
+        color: 'white',
+        textAlign: 'center',
+    },
+    cardDots: {
+        fontSize: 24,
+        color: 'white',
+        textAlign: 'center',
+        marginTop: -10,
+        marginBottom: 5,
+        fontWeight: 'bold',
     },
     cardDesc: {
         fontSize: 14,
-        color: DARK_GREEN,
+        color: 'white',
+        textAlign: 'center',
         lineHeight: 20,
     },
     nextButton: {

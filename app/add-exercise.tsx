@@ -324,7 +324,7 @@ export default function AddExerciseScreen() {
                 ) : error ? (
                     <View style={styles.centered}>
                         <Ionicons name="cloud-offline-outline" size={56} color={Colors.primary + '66'} />
-                        <Text style={styles.emptyText}>Couldn't load exercises</Text>
+                        <Text style={styles.emptyText}>Couldn&apos;t load exercises</Text>
                         <Text style={styles.emptySubText}>{error}</Text>
                     </View>
                 ) : results.length === 0 ? (

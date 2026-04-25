@@ -38,6 +38,8 @@ interface UserState {
     showMacros: boolean;
     showLikes: boolean;
     showMeasurements: boolean;
+    instagramLink: string;
+    tiktokLink: string;
 
     // Actions
     setProfile: (updates: Partial<UserState>) => void;
@@ -79,6 +81,8 @@ export const useUserStore = create<UserState>()(
             showMacros: false,
             showLikes: false,
             showMeasurements: false,
+            instagramLink: '',
+            tiktokLink: '',
 
             setProfile: async (updates) => {
                 const handle = get().handle;

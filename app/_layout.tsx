@@ -8,11 +8,13 @@ import 'react-native-reanimated';
 
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useAuthStore } from '../store/AuthStore';
+import { useNetworkStore } from '@/src/store/NetworkStore';
 
 SplashScreen.preventAutoHideAsync();
 
 function AuthGate({ children }: { children: React.ReactNode }) {
     const { session, loading, initialize } = useAuthStore();
+    const { init: initNetwork, clear: clearNetwork } = useNetworkStore();
     const router = useRouter();
     const segments = useSegments();
 
@@ -25,13 +27,20 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
         const inTabs = segments[0] === '(tabs)';
         const inAuth = segments[0] === 'login' || segments[0] === 'signup';
+        // Never redirect away from the deep-link callback screens
+        const inCallback = segments[0] === 'email-confirmed';
+
+        if (inCallback) return;
 
         if (!session && inTabs) {
-            // Not signed in but trying to access tabs — go to login
+            clearNetwork();
             router.replace('/login');
         } else if (session && (inAuth || !segments[0])) {
-            // Signed in but on auth screens or root — go to tabs
+            initNetwork(session.user.id);
             router.replace('/(tabs)');
+        } else if (session) {
+            // Already in tabs but maybe just reloaded
+            initNetwork(session.user.id);
         }
 
         SplashScreen.hideAsync();
@@ -51,6 +60,7 @@ export default function RootLayout() {
                         <Stack.Screen name="index" />
                         <Stack.Screen name="login" />
                         <Stack.Screen name="(tabs)" />
+                        <Stack.Screen name="email-confirmed" />
                         <Stack.Screen name="scan" options={{ presentation: 'fullScreenModal' }} />
                         <Stack.Screen name="scan-result" options={{ presentation: 'transparentModal', animation: 'fade' }} />
                         <Stack.Screen name="camera-capture" options={{ presentation: 'fullScreenModal' }} />

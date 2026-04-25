@@ -42,12 +42,19 @@ export default function SignupFocus() {
                     <Text style={styles.label}>Select a focus</Text>
                     <TouchableOpacity style={styles.pill} onPress={() => setModalVisible(true)}>
                         <Text style={styles.pillText}>
-                            {focus || "Select focus"}
+                            {selectedActivity ? (selectedActivity.displayName || selectedActivity.name) : (focus || "Select focus")}
                         </Text>
-                        {selectedActivity && (
-                            <MaterialCommunityIcons name={selectedActivity.icon as any} size={24} color={DARK_GREEN} />
-                        )}
-                        {!focus && <Ionicons name="add" size={24} color={DARK_GREEN} />}
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            {selectedActivity && (
+                                <>
+                                    <MaterialCommunityIcons name={selectedActivity.icon as any} size={24} color={DARK_GREEN} />
+                                    {selectedActivity.modifier && (
+                                        <MaterialCommunityIcons name={selectedActivity.modifier === '+' ? 'plus' : 'minus'} size={24} color={DARK_GREEN} />
+                                    )}
+                                </>
+                            )}
+                            {!focus && <Ionicons name="add" size={24} color={DARK_GREEN} />}
+                        </View>
                     </TouchableOpacity>
                 </View>
 
@@ -116,6 +123,7 @@ const styles = StyleSheet.create({
     },
     inputContainer: {
         width: '100%',
+        alignSelf: 'stretch',
         gap: 10,
     },
     label: {
@@ -127,18 +135,23 @@ const styles = StyleSheet.create({
     pill: {
         backgroundColor: SAGE_GREEN, // Light Green from image
         borderRadius: 30,
-        height: 60,
+        minHeight: 60,
+        width: '100%',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
+        paddingVertical: 15,
         borderWidth: 1,
         borderColor: 'rgba(47, 58, 39, 0.2)',
+        overflow: 'hidden',
     },
     pillText: {
         color: DARK_GREEN,
         fontSize: 18,
         fontWeight: '600',
+        flexShrink: 1,
+        marginRight: 10,
     },
     nextButton: {
         position: 'absolute',

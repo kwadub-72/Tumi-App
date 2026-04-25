@@ -33,7 +33,6 @@ export default function SelectActivityScreen() {
 
     const renderItem = ({ item }: { item: ActivityOption }) => {
         const isSelected = userInfo.activity === item.name;
-        const isPeach = item.name === 'Glute Growth';
         const isBulk = item.name.toLowerCase().includes('bulk');
         const isCut = item.name.toLowerCase().includes('cut');
         let symbol = '';
@@ -51,11 +50,11 @@ export default function SelectActivityScreen() {
                             <MaterialCommunityIcons
                                 name={item.icon as any}
                                 size={28}
-                                color={isSelected ? 'white' : (isPeach ? '#FFB07C' : Colors.primary)}
+                                color={isSelected ? 'white' : Colors.primary}
                             />
                             {symbol !== '' && (
                                 <Text style={{
-                                    color: isSelected ? 'white' : (isPeach ? '#FFB07C' : Colors.primary),
+                                    color: isSelected ? 'white' : Colors.primary,
                                     fontSize: 14,
                                     fontWeight: 'bold',
                                     marginLeft: 1,

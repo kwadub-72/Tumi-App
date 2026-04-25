@@ -117,7 +117,7 @@ export default function PostDetailScreen() {
                             <MaterialCommunityIcons
                                 name={item.user.activityIcon as any}
                                 size={14}
-                                color={(item.user as any).activity === 'Glute Growth' ? '#FFB07C' : 'white'}
+                                color='white'
                             />
                         )}
                     </View>

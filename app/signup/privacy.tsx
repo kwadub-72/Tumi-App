@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView } from 're
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
 
 const CREAM_COLOR = '#EAE8D9';
@@ -21,7 +22,16 @@ export default function SignupPrivacy() {
         likes: false,
     });
 
-    const handleNext = () => {
+    const handleNext = async () => {
+        // We invert profile because the UI calls it "Account privacy" (true means private)
+        // Wait, `privacySettings.profile` is labeled "Account privacy". So true means private.
+        await AsyncStorage.setItem('signup_isPrivate', privacySettings.profile.toString());
+        await AsyncStorage.setItem('signup_showMeals', privacySettings.mealLog.toString());
+        await AsyncStorage.setItem('signup_showWorkouts', privacySettings.workoutLog.toString());
+        await AsyncStorage.setItem('signup_showMacros', privacySettings.macroUpdate.toString());
+        await AsyncStorage.setItem('signup_showMeasurements', privacySettings.bodyStat.toString());
+        await AsyncStorage.setItem('signup_showLikes', privacySettings.likes.toString());
+        
         router.push('/signup/welcome');
     };
 
@@ -32,18 +42,21 @@ export default function SignupPrivacy() {
     const SettingRow = ({ label, value, onToggle }: any) => (
         <View style={styles.settingRow}>
             <Text style={styles.settingLabel}>{label}</Text>
-            <Switch
-                value={value}
-                onValueChange={onToggle}
-                trackColor={{ false: '#767577', true: DARK_GREEN }}
-                thumbColor={CREAM_COLOR}
-            />
-            <Ionicons
-                name={value ? "lock-closed" : "earth"}
-                size={16}
-                color="white"
-                style={styles.privacyIcon}
-            />
+            <TouchableOpacity
+                style={[
+                    styles.switchContainer, 
+                    value ? { backgroundColor: DARK_GREEN, alignItems: 'flex-end' } : { backgroundColor: '#767577', alignItems: 'flex-start' }
+                ]}
+                onPress={onToggle}
+            >
+                <View style={styles.switchKnob}>
+                    <Ionicons 
+                        name={value ? 'earth' : 'lock-closed'} 
+                        size={14} 
+                        color={value ? DARK_GREEN : '#767577'} 
+                    />
+                </View>
+            </TouchableOpacity>
         </View>
     );
 
@@ -60,15 +73,19 @@ export default function SignupPrivacy() {
             </View>
 
             <View style={styles.content}>
-                <Text style={styles.title}>Privacy settings</Text>
+                <Text style={styles.title}>Personalize your privacy</Text>
 
                 <View style={styles.settingsList}>
-                    <SettingRow label="Profile privacy" value={privacySettings.profile} onToggle={() => toggle('profile')} />
-                    <SettingRow label="Meal log privacy" value={privacySettings.mealLog} onToggle={() => toggle('mealLog')} />
-                    <SettingRow label="Workout log privacy" value={privacySettings.workoutLog} onToggle={() => toggle('workoutLog')} />
-                    <SettingRow label="Macro update privacy" value={privacySettings.macroUpdate} onToggle={() => toggle('macroUpdate')} />
-                    <SettingRow label="Body stat visibility" value={privacySettings.bodyStat} onToggle={() => toggle('bodyStat')} />
-                    <SettingRow label="Like privacy" value={privacySettings.likes} onToggle={() => toggle('likes')} />
+                    <SettingRow label="Account privacy" value={privacySettings.profile} onToggle={() => toggle('profile')} />
+                    
+                    <Text style={styles.sectionHeader}>Non-tribe member visibility*</Text>
+                    
+                    <SettingRow label="Meal log visibility" value={privacySettings.mealLog} onToggle={() => toggle('mealLog')} />
+                    <SettingRow label="Workout log visibility" value={privacySettings.workoutLog} onToggle={() => toggle('workoutLog')} />
+                    <SettingRow label="Macro log visibility" value={privacySettings.macroUpdate} onToggle={() => toggle('macroUpdate')} />
+                    <SettingRow label="Body metric visibility" value={privacySettings.bodyStat} onToggle={() => toggle('bodyStat')} />
+                    
+                    <Text style={styles.footnote}>*Tribe-member visibility is determined by tribe settings</Text>
                 </View>
 
                 <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
@@ -97,15 +114,15 @@ const styles = StyleSheet.create({
     content: {
         flex: 1,
         alignItems: 'center',
-        paddingTop: 50,
         paddingHorizontal: 20,
     },
     title: {
-        fontSize: 24,
+        fontSize: 32,
         color: DARK_GREEN,
         textAlign: 'center',
-        marginVertical: 20,
         fontWeight: 'bold',
+        marginBottom: 30,
+        marginTop: 10,
     },
     settingsList: {
         width: '100%',
@@ -116,19 +133,49 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         backgroundColor: SAGE_GREEN,
-        height: 55,
-        borderRadius: 27.5,
+        height: 60,
+        borderRadius: 30,
         paddingHorizontal: 20,
-        paddingRight: 50, // space for icon
     },
     settingLabel: {
         color: DARK_GREEN,
         fontWeight: 'bold',
-        fontSize: 16,
+        fontSize: 18,
     },
-    privacyIcon: {
-        position: 'absolute',
-        right: 15,
+    sectionHeader: {
+        color: DARK_GREEN,
+        fontSize: 14,
+        marginTop: 10,
+        marginBottom: -5,
+        marginLeft: 5,
+        fontWeight: '600',
+    },
+    footnote: {
+        color: DARK_GREEN,
+        fontSize: 12,
+        marginTop: 5,
+        marginLeft: 5,
+        opacity: 0.7,
+    },
+    switchContainer: {
+        width: 56,
+        height: 32,
+        borderRadius: 16,
+        padding: 3,
+        justifyContent: 'center',
+    },
+    switchKnob: {
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        backgroundColor: 'white',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 1,
+        elevation: 2,
     },
     nextButton: {
         position: 'absolute',

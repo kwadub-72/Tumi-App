@@ -32,6 +32,7 @@ import { FeedPost } from '@/src/shared/models/types';
 import { Colors } from '@/src/shared/theme/Colors';
 import { useUserStore } from '../../store/UserStore';
 import { useUserTribeStore } from '@/src/store/UserTribeStore';
+import { WeightStore } from '@/store/WeightStore';
 
 const { width, height } = Dimensions.get('window');
 
@@ -58,23 +59,59 @@ export default function ProfileScreen() {
 
     // Animation & Pager Refs
     const scrollX = React.useRef(new Animated.Value(0)).current;
+    const scrollY = React.useRef(new Animated.Value(0)).current;
     const pagerRef = React.useRef<ScrollView>(null);
     const tabs: TabType[] = ['meals', 'workouts', 'likes', 'macros'];
-    
-    const EMPTY_TAB_HEIGHT = 300; // Fixed height when a tab has no posts
 
+    // Collapsible header
+    const [headerHeight, setHeaderHeight] = useState(0);
+    // Store each tab's scroll offset so we can restore it on switch
+    const tabScrollOffsets = React.useRef<Record<TabType, number>>({ meals: 0, workouts: 0, likes: 0, macros: 0 });
+    const activeTabRef = React.useRef<TabType>('meals');
+
+    // Derived: translate the header up as user scrolls
+    const headerTranslateY = scrollY.interpolate({
+        inputRange: [0, headerHeight],
+        outputRange: [0, -headerHeight],
+        extrapolate: 'clamp',
+    });
+
+    const handleScroll = (tab: TabType) => (e: any) => {
+        const y = e.nativeEvent.contentOffset.y;
+        tabScrollOffsets.current[tab] = y;
+        // Drive shared scrollY (JS thread is fine here — only affects header transform)
+        scrollY.setValue(Math.max(0, y));
+    };
+
+    const handleTabSwitch = (tab: TabType, index: number) => {
+        activeTabRef.current = tab;
+        setActiveTab(tab);
+        pagerRef.current?.scrollTo({ x: index * width, animated: true });
+        // Restore this tab's previously saved scroll position for the header
+        const savedY = tabScrollOffsets.current[tab];
+        scrollY.setValue(Math.max(0, savedY));
+    };
+
+    // Helper to get posts for a given tab
+    const getTabPosts = (tab: TabType) => posts.filter(p => {
+        if (tab === 'likes') return p.isLiked;
+        if (tab === 'meals') return p.meal && p.user.handle === userInfo.handle;
+        if (tab === 'workouts') return p.workout && p.user.handle === userInfo.handle;
+        if (tab === 'macros') return p.macroUpdate && p.user.handle === userInfo.handle;
+        return false;
+    });
     const loadData = async (silent = false) => {
         if (!session?.user?.id) return;
         if (!silent) setRefreshing(true);
         
-        // Load profile, posts, and counts in parallel
-        const [profilePosts, counts, { data: profileData }] = await Promise.all([
+        const [profilePosts, counts, { data: profileData }, estimatedWeight] = await Promise.all([
             SupabasePostService.getFeed({
                 userId: session.user.id,
                 feedType: 'profile'
             }),
             SupabaseNetworkService.getFollowCounts(session.user.id),
-            supabase.from('profiles').select('*').eq('id', session.user.id).single()
+            supabase.from('profiles').select('*').eq('id', session.user.id).single(),
+            WeightStore.getEstimatedWeight()
         ]);
 
         setPosts(profilePosts);
@@ -89,10 +126,12 @@ export default function ProfileScreen() {
                 followers: counts.followers,
                 following: counts.following,
                 height: profileData.height,
-                weight: profileData.weight_lbs,
+                weight: estimatedWeight ?? profileData.weight_lbs,
                 bfs: profileData.body_fat_pct,
                 // tribe: profileData.tribe, // Prevent wiping until tribes are implemented in backend
                 bio: profileData.bio,
+                instagramLink: profileData.instagram_link ?? '',
+                tiktokLink: profileData.tiktok_link ?? '',
             });
         }
         if (!silent) setRefreshing(false);
@@ -234,29 +273,47 @@ export default function ProfileScreen() {
                                 )}
                             </TouchableOpacity>
                         )}
-                        <ActivityIcon 
-                            activity={userInfo.activity} 
-                            icon={userInfo.activityIcon} 
-                            size={18} 
-                        />
+                        <TouchableOpacity onPress={() => setHammerModalVisible(true)}>
+                            <ActivityIcon 
+                                activity={userInfo.activity} 
+                                icon={userInfo.activityIcon} 
+                                size={18} 
+                            />
+                        </TouchableOpacity>
                     </View>
 
                     {/* Stats */}
                     <Text style={styles.statsText}>
-                        {displayHeight} • {displayWeight} • {userInfo.bfs}% BF
+                        {displayHeight} • {displayWeight} • {(userInfo.bfs?.toString() ?? '--').replace('%', '')}% BF
                     </Text>
 
                     {/* Tribe */}
-                    <View style={styles.tribeRow}>
-                        <Text style={[styles.tribeText, selectedTribe ? { color: selectedTribe.themeColor } : null]}>
-                            {selectedTribe ? selectedTribe.name : 'Join a Tribe'}
-                        </Text>
-                    </View>
+                    {selectedTribe && (
+                        <View style={styles.tribeRow}>
+                            <Text style={[styles.tribeText, { color: selectedTribe.themeColor }]}>
+                                {selectedTribe.name}
+                            </Text>
+                        </View>
+                    )}
 
                     {/* Socials */}
-                    <View style={styles.socialsRow}>
-                        <MaterialCommunityIcons name="instagram" size={24} color={Colors.primary} style={styles.socialIcon} />
-                        <Ionicons name="logo-tiktok" size={22} color={Colors.primary} style={styles.socialIcon} />
+                    <View style={[styles.socialsRow, !selectedTribe && { marginTop: -4 }]}>
+                        <TouchableOpacity
+                            onPress={() => {
+                                if (userInfo.instagramLink) Linking.openURL(userInfo.instagramLink);
+                            }}
+                            style={[styles.socialIconBtn, !userInfo.instagramLink && styles.socialIconInactive]}
+                        >
+                            <MaterialCommunityIcons name="instagram" size={24} color={userInfo.instagramLink ? Colors.primary : '#C0C0C0'} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => {
+                                if (userInfo.tiktokLink) Linking.openURL(userInfo.tiktokLink);
+                            }}
+                            style={[styles.socialIconBtn, !userInfo.tiktokLink && styles.socialIconInactive]}
+                        >
+                            <Ionicons name="logo-tiktok" size={22} color={userInfo.tiktokLink ? Colors.primary : '#C0C0C0'} />
+                        </TouchableOpacity>
                     </View>
                 </View>
             </View>
@@ -308,8 +365,7 @@ export default function ProfileScreen() {
                         key={tab}
                         style={[styles.tabItem]} 
                         onPress={() => {
-                            setActiveTab(tab);
-                            pagerRef.current?.scrollTo({ x: index * width, animated: true });
+                            handleTabSwitch(tab, index);
                         }}
                     >
                         {tab === 'meals' || tab === 'workouts' ? (
@@ -386,36 +442,11 @@ export default function ProfileScreen() {
         );
     };
 
-    const renderTabContent = (type: TabType) => {
-        const tabPosts = posts.filter(p => {
-            if (type === 'likes') return p.isLiked;
-            if (type === 'meals') return p.meal && p.user.handle === userInfo.handle;
-            if (type === 'workouts') return p.workout && p.user.handle === userInfo.handle;
-            if (type === 'macros') return p.macroUpdate && p.user.handle === userInfo.handle;
-            return false;
-        });
+    // Posts are rendered directly inside each tab's FlatList.
+    // This alias keeps renderEmptyState calls readable at the call site.
+    const getEmptyStateForTab = (type: TabType) => renderEmptyState(type);
 
-        const isEmpty = tabPosts.length === 0;
-        if (isEmpty) return renderEmptyState(type);
 
-        return (
-            <View style={{ width: width, paddingHorizontal: 16, paddingBottom: 32 }}>
-                {tabPosts.map((item) => (
-                    <View key={item.id} style={{ marginBottom: 16 }}>
-                        <FeedItem
-                            post={item}
-                            onPressOptions={() => handleOptions(item)}
-                            onPressComment={() => handleCommentPress(item)}
-                            onPressLike={() => toggleLike(item)}
-                            onPressVerified={() => setVerifiedModalVisible(true)}
-                            onPressHammer={() => setHammerModalVisible(true)}
-                        />
-                    </View>
-                ))}
-            </View>
-        );
-    };
- 
     return (
         <View style={styles.container}>
             <VerifiedModal visible={isVerifiedModalVisible} onClose={() => setVerifiedModalVisible(false)} status={userInfo.status} />
@@ -433,58 +464,94 @@ export default function ProfileScreen() {
                 }}
                 comments={activePost?.comments || []}
             />
- 
-            <FlatList
-                data={[1]}
-                renderItem={() => (
-                    <View>
-                        <View style={[styles.headerContainer, { paddingTop: insets.top }]}>
-                            {renderHeaderContent()}
-                        </View>
-                        <Animated.ScrollView
-                            ref={pagerRef as any}
-                            horizontal
-                            pagingEnabled
-                            showsHorizontalScrollIndicator={false}
-                            onScroll={Animated.event(
-                                [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-                                { useNativeDriver: true }
-                            )}
-                            onMomentumScrollEnd={(e) => {
-                                const index = Math.round(e.nativeEvent.contentOffset.x / width);
-                                setActiveTab(tabs[index]);
-                            }}
-                            scrollEventThrottle={16}
-                            // No fixed height here — the outer FlatList handles all vertical scrolling.
-                            // Each tab View controls its own height based on content.
-                        >
-                            {tabs.map((tab) => {
-                                // Determine how many posts are in this tab
-                                const tabPostCount = posts.filter(p => {
-                                    if (tab === 'likes') return p.isLiked;
-                                    if (tab === 'meals') return p.meal && p.user.handle === userInfo.handle;
-                                    if (tab === 'workouts') return p.workout && p.user.handle === userInfo.handle;
-                                    if (tab === 'macros') return p.macroUpdate && p.user.handle === userInfo.handle;
-                                    return false;
-                                }).length;
-                                return (
-                                    <View 
-                                        key={tab}
-                                        // Empty tabs: fixed short height prevents phantom scrolling.
-                                        // Tabs with posts: auto-height so all posts render and outer FlatList can scroll.
-                                        style={{ width, height: tabPostCount === 0 ? EMPTY_TAB_HEIGHT : undefined }}
-                                    >
-                                        {renderTabContent(tab)}
-                                    </View>
-                                );
-                            })}
-                        </Animated.ScrollView>
-                    </View>
+
+            {/*
+             * Horizontal pager fills the ENTIRE container from top=0.
+             * Each FlatList has paddingTop=headerHeight so the first item
+             * starts below the floating header. As the user scrolls, the
+             * header translates upward (see below), reclaiming that space.
+             */}
+            <Animated.ScrollView
+                ref={pagerRef as any}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onScroll={Animated.event(
+                    [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+                    { useNativeDriver: true }
                 )}
-                keyExtractor={() => 'main'}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadData} tintColor={Colors.primary} />}
-                contentContainerStyle={styles.listContent}
-            />
+                onMomentumScrollEnd={(e) => {
+                    const index = Math.round(e.nativeEvent.contentOffset.x / width);
+                    const newTab = tabs[index];
+                    activeTabRef.current = newTab;
+                    setActiveTab(newTab);
+                    // Restore the header position for this tab
+                    scrollY.setValue(Math.max(0, tabScrollOffsets.current[newTab]));
+                }}
+                scrollEventThrottle={16}
+                style={StyleSheet.absoluteFillObject}
+            >
+                {tabs.map((tab) => {
+                    const tabPosts = getTabPosts(tab);
+                    const isEmpty = tabPosts.length === 0;
+                    return (
+                        <FlatList
+                            key={tab}
+                            style={{ width }}
+                            data={tabPosts}
+                            keyExtractor={(item) => item.id}
+                            renderItem={({ item }) => (
+                                <View style={{ marginBottom: 16, paddingHorizontal: 16 }}>
+                                    <FeedItem
+                                        post={item}
+                                        onPressOptions={() => handleOptions(item)}
+                                        onPressComment={() => handleCommentPress(item)}
+                                        onPressLike={() => toggleLike(item)}
+                                        onPressVerified={() => setVerifiedModalVisible(true)}
+                                        onPressHammer={() => setHammerModalVisible(true)}
+                                    />
+                                </View>
+                            )}
+                            ListEmptyComponent={getEmptyStateForTab(tab)}
+                            scrollEnabled={!isEmpty}
+                            bounces={!isEmpty}
+                            showsVerticalScrollIndicator={false}
+                            // paddingTop reserves space under the floating header
+                            contentContainerStyle={{ paddingTop: headerHeight, paddingBottom: 32 }}
+                            onScroll={handleScroll(tab)}
+                            scrollEventThrottle={16}
+                            refreshControl={
+                                !isEmpty ? (
+                                    <RefreshControl
+                                        refreshing={refreshing}
+                                        onRefresh={loadData}
+                                        tintColor={Colors.primary}
+                                    />
+                                ) : undefined
+                            }
+                        />
+                    );
+                })}
+            </Animated.ScrollView>
+
+            {/* Floating header — sits on top, translates up as user scrolls */}
+            <Animated.View
+                style={[
+                    styles.headerContainer,
+                    {
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        paddingTop: insets.top,
+                        transform: [{ translateY: headerTranslateY }],
+                        zIndex: 10,
+                    }
+                ]}
+                onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
+            >
+                {renderHeaderContent()}
+            </Animated.View>
         </View>
     );
 }
@@ -574,9 +641,15 @@ const styles = StyleSheet.create({
     socialIcon: {
         color: Colors.primary,
     },
+    socialIconBtn: {
+        padding: 4,
+    },
+    socialIconInactive: {
+        opacity: 0.4,
+    },
     middleSection: {
         paddingHorizontal: 20,
-        marginTop: 20,
+        marginTop: 10,
     },
     buttonsRow: {
         flexDirection: 'row',

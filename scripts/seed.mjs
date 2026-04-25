@@ -62,6 +62,7 @@ const USERS = [
         body_fat_pct: '10%',
         macro_targets: { p: 280, c: 450, f: 100, calories: 3820 },
         training_target: 'Size over everything.',
+        is_private: true,
     },
     {
         email: 'casey.jones@tumiapp.dev',
@@ -77,6 +78,7 @@ const USERS = [
         body_fat_pct: '9%',
         macro_targets: { p: 195, c: 310, f: 70, calories: 2690 },
         training_target: 'Strong AND fast.',
+        is_private: true,
     },
     {
         email: 'riley.cooper@tumiapp.dev',
@@ -137,6 +139,7 @@ const USERS = [
         body_fat_pct: '13%',
         macro_targets: { p: 300, c: 500, f: 110, calories: 4270 },
         training_target: '300 lbs lean.',
+        is_private: true,
     },
     {
         email: 'peyton.reed@tumiapp.dev',
@@ -475,6 +478,7 @@ async function main() {
             height: u.height,
             weight_lbs: u.weight_lbs,
             body_fat_pct: u.body_fat_pct,
+            is_private: u.is_private || false,
             macro_targets: u.macro_targets,
             training_target: u.training_target,
         });

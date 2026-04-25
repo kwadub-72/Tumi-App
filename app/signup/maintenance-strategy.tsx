@@ -18,14 +18,6 @@ const LIGHT_SAGE = '#C4D6C4'; // Unselected state? Or just transparent/outlined?
 export default function SignupMaintenanceStrategy() {
     const router = useRouter();
     const [strategy, setStrategy] = useState<'tribe' | 'manual' | null>(null);
-    const [expandedTribe, setExpandedTribe] = useState(true);
-    const [expandedManual, setExpandedManual] = useState(true);
-
-    const toggleExpand = (type: 'tribe' | 'manual') => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        if (type === 'tribe') setExpandedTribe(!expandedTribe);
-        else setExpandedManual(!expandedManual);
-    };
 
     const handleNext = () => {
         if (!strategy) return;
@@ -37,26 +29,17 @@ export default function SignupMaintenanceStrategy() {
         }
     };
 
-    const OptionCard = ({ type, title, subtitle, desc, expanded, setExpanded, isSelected, onPress }: any) => (
+    const OptionCard = ({ type, title, subtitle, desc, isSelected, onPress }: any) => (
         <TouchableOpacity
             style={[styles.card, isSelected && styles.selectedCard]}
             onPress={onPress}
             activeOpacity={0.9}
         >
-            <View style={styles.cardHeader}>
-                <Text style={styles.cardSubtitle}>{subtitle}</Text>
-                {/* 3 dots to expand/collapse */}
-                <TouchableOpacity onPress={() => toggleExpand(type)} hitSlop={10}>
-                    <MaterialCommunityIcons name="dots-horizontal" size={24} color={isSelected ? 'white' : DARK_GREEN} />
-                </TouchableOpacity>
-            </View>
-            <Text style={[styles.cardTitle, isSelected && { color: 'white' }]}>{title}</Text>
-
-            {expanded && (
-                <Text style={[styles.cardDesc, isSelected && { color: 'rgba(255,255,255,0.9)' }]}>
-                    {desc}
-                </Text>
-            )}
+            <Text style={[styles.cardSubtitle, isSelected ? { color: '#C4D6C4' } : { color: DARK_GREEN }]}>{subtitle}</Text>
+            <Text style={styles.cardTitle}>{title}</Text>
+            <Text style={styles.cardDesc}>
+                {desc}
+            </Text>
         </TouchableOpacity>
     );
 
@@ -72,7 +55,7 @@ export default function SignupMaintenanceStrategy() {
             </View>
 
             <View style={styles.content}>
-                <Text style={styles.title}>Set your{'\n'}maintenance</Text>
+                <Text style={styles.title}>Set your{'\n'}maintenance*</Text>
 
                 <View style={styles.cardsContainer}>
                     <OptionCard
@@ -80,8 +63,6 @@ export default function SignupMaintenanceStrategy() {
                         title="Tribe-generated"
                         subtitle="Recommended"
                         desc="Let Tribe generate your macros based on height, weight, bodyfat estimate, lifestyle, and training focus"
-                        expanded={expandedTribe}
-                        setExpanded={setExpandedTribe}
                         isSelected={strategy === 'tribe'}
                         onPress={() => setStrategy('tribe')}
                     />
@@ -91,8 +72,6 @@ export default function SignupMaintenanceStrategy() {
                         title="Manual"
                         subtitle="Best for users who know their targets"
                         desc="Manually set maintenance macro targets"
-                        expanded={expandedManual}
-                        setExpanded={setExpandedManual}
                         isSelected={strategy === 'manual'}
                         onPress={() => setStrategy('manual')}
                     />
@@ -135,7 +114,7 @@ const styles = StyleSheet.create({
         fontSize: 32,
         color: DARK_GREEN,
         textAlign: 'center',
-        fontWeight: '400',
+        fontWeight: 'bold',
         marginBottom: 30,
         marginTop: 10,
     },
@@ -144,36 +123,42 @@ const styles = StyleSheet.create({
         gap: 20,
     },
     card: {
-        backgroundColor: '#C4D6C4', // Muted/Light Sage when unselected
-        borderRadius: 20,
+        backgroundColor: SAGE_GREEN,
+        borderRadius: 30,
         padding: 20,
         borderWidth: 1,
-        borderColor: 'transparent',
+        borderColor: DARK_GREEN,
+        alignItems: 'center',
     },
     selectedCard: {
-        backgroundColor: '#4F6352', // Darker Green from Image 4 (selected state)
+        backgroundColor: '#4F6352', 
         borderColor: DARK_GREEN,
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 5,
     },
     cardSubtitle: {
         fontSize: 12,
-        color: 'rgba(47, 58, 39, 0.6)',
-        textTransform: 'uppercase',
+        fontStyle: 'italic',
         fontWeight: 'bold',
+        marginBottom: 5,
+        textAlign: 'center',
     },
     cardTitle: {
-        fontSize: 24,
+        fontSize: 32,
         fontWeight: 'bold',
-        color: DARK_GREEN,
-        marginBottom: 10,
+        color: 'white',
+        textAlign: 'center',
+    },
+    cardDots: {
+        fontSize: 24,
+        color: 'white',
+        textAlign: 'center',
+        marginTop: -10,
+        marginBottom: 5,
+        fontWeight: 'bold',
     },
     cardDesc: {
         fontSize: 14,
-        color: DARK_GREEN,
+        color: 'white',
+        textAlign: 'center',
         lineHeight: 20,
     },
     note: {

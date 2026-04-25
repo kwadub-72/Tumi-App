@@ -126,8 +126,6 @@ export default function CommentSheet({
     };
 
     const SwipeableItem = ({ children, onRemove, isMine }: { children: React.ReactNode, onRemove: () => void, isMine: boolean }) => {
-        if (!isMine) return <View>{children}</View>;
-
         const translateX = useSharedValue(0);
         const iconScale = useSharedValue(0.5);
 
@@ -153,6 +151,8 @@ export default function CommentSheet({
             opacity: translateX.value < -20 ? 1 : 0,
             transform: [{ scale: iconScale.value }],
         }));
+
+        if (!isMine) return <View>{children}</View>;
 
         return (
             <View style={styles.swipeContainer}>

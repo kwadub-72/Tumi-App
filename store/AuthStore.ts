@@ -25,6 +25,8 @@ export interface DbProfile {
     show_macros_to_public: boolean;
     show_measurements_to_public: boolean;
     show_likes_to_public: boolean;
+    instagram_link: string | null;
+    tiktok_link: string | null;
 }
 
 interface AuthState {

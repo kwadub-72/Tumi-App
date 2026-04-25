@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image, Modal, Alert, ScrollView, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image, Modal, Alert, ScrollView, Platform, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
+import DateRolodex from '@/src/shared/components/DateRolodex';
 
 // Colors
 const CREAM_COLOR = '#EAE8D9';
@@ -20,6 +21,7 @@ export default function SignupBasicInfo() {
     const [avatar, setAvatar] = useState<string | null>(null);
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
+    const [bio, setBio] = useState('');
     const [dob, setDob] = useState<Date | null>(null);
     const [sex, setSex] = useState<'Male' | 'Female' | null>(null);
     const [email, setEmail] = useState('');
@@ -31,9 +33,6 @@ export default function SignupBasicInfo() {
     const [showSexPicker, setShowSexPicker] = useState(false);
 
     // Date Picker State
-    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-    const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-
     const pickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
@@ -54,71 +53,51 @@ export default function SignupBasicInfo() {
         return age >= 13;
     };
 
-    const handleDateSelect = (day: number) => {
-        const date = new Date(selectedYear, selectedMonth, day);
-        if (!validateAge(date)) {
-            Alert.alert("Age Restriction", "You must be at least 13 years old.");
+    const handleNext = async () => {
+        if (!firstName.trim() || !lastName.trim()) {
+            Alert.alert("Missing Info", "Please enter your full name.");
             return;
         }
-        setDob(date);
-        setShowDatePicker(false);
-    };
-
-    const handleNext = async () => {
         if (!dob) {
             Alert.alert("Missing Info", "Please enter your date of birth.");
             return;
         }
-        if (sex) {
-            await AsyncStorage.setItem('signup_sex', sex);
+        if (!sex) {
+            Alert.alert("Missing Info", "Please select your sex.");
+            return;
         }
+        if (!email.trim() || !email.includes('@')) {
+            Alert.alert("Missing Info", "Please enter a valid email address.");
+            return;
+        }
+        if (!username.trim()) {
+            Alert.alert("Missing Info", "Please enter a username.");
+            return;
+        }
+        if (!password.trim() || password.length < 6) {
+            Alert.alert("Missing Info", "Please enter a password (min 6 characters).");
+            return;
+        }
+
+        await AsyncStorage.setItem('signup_firstName', firstName);
+        await AsyncStorage.setItem('signup_lastName', lastName);
+        await AsyncStorage.setItem('signup_bio', bio);
+        await AsyncStorage.setItem('signup_sex', sex);
         await AsyncStorage.setItem('signup_dob', dob.toISOString());
+        await AsyncStorage.setItem('signup_email', email);
+        await AsyncStorage.setItem('signup_username', username);
+        await AsyncStorage.setItem('signup_password', password);
+        if (avatar) {
+            await AsyncStorage.setItem('signup_avatar', avatar);
+        } else {
+            await AsyncStorage.removeItem('signup_avatar');
+        }
+        
         router.push('/signup/focus');
     };
 
-    // Calendar Renderer
-    const renderCalendar = () => {
-        const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
-        const firstDayOfMonth = new Date(selectedYear, selectedMonth, 1).getDay(); // 0 = Sun
-        const days = [];
-
-        // Empty slots for start of month
-        for (let i = 0; i < firstDayOfMonth; i++) {
-            days.push(null);
-        }
-
-        for (let i = 1; i <= daysInMonth; i++) {
-            days.push(i);
-        }
-
-        return (
-            <View style={styles.calendarContainer}>
-                <View style={styles.calendarHeader}>
-                    <TouchableOpacity onPress={() => setSelectedYear(selectedYear - 1)}><Text>{'<<'}</Text></TouchableOpacity>
-                    <Text style={styles.calendarTitle}>{selectedYear}</Text>
-                    <TouchableOpacity onPress={() => setSelectedYear(selectedYear + 1)}><Text>{'>>'}</Text></TouchableOpacity>
-                </View>
-                <View style={styles.calendarHeader}>
-                    <TouchableOpacity onPress={() => setSelectedMonth((selectedMonth + 11) % 12)}><Text>{'<'}</Text></TouchableOpacity>
-                    <Text style={styles.calendarTitle}>{new Date(selectedYear, selectedMonth).toLocaleString('default', { month: 'long' })}</Text>
-                    <TouchableOpacity onPress={() => setSelectedMonth((selectedMonth + 1) % 12)}><Text>{'>'}</Text></TouchableOpacity>
-                </View>
-                {/* Weekday Labels */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 5 }}>
-                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <Text key={i} style={{ fontWeight: 'bold', width: '14%', textAlign: 'center', color: DARK_GREEN }}>{d}</Text>)}
-                </View>
-                <View style={styles.daysGrid}>
-                    {days.map((d, index) => (
-                        <TouchableOpacity key={index} style={styles.dayCell} onPress={() => d && handleDateSelect(d)} disabled={!d}>
-                            <Text style={{ color: d ? DARK_GREEN : 'transparent' }}>{d || ''}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-            </View>
-        );
-    };
-
     return (
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <SafeAreaView style={styles.container}>
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
@@ -156,24 +135,74 @@ export default function SignupBasicInfo() {
 
                     {/* Form */}
                     <View style={styles.form}>
-                        <TextInput style={styles.input} placeholder="First name" placeholderTextColor="rgba(47, 58, 39, 0.5)" value={firstName} onChangeText={setFirstName} />
-                        <TextInput style={styles.input} placeholder="Last name" placeholderTextColor="rgba(47, 58, 39, 0.5)" value={lastName} onChangeText={setLastName} />
+                        <TextInput 
+                            style={styles.input} 
+                            placeholder="First name" 
+                            placeholderTextColor="rgba(47, 58, 39, 0.5)" 
+                            value={firstName} 
+                            onChangeText={setFirstName} 
+                            autoCorrect={false}
+                        />
+                        <TextInput 
+                            style={styles.input} 
+                            placeholder="Last name" 
+                            placeholderTextColor="rgba(47, 58, 39, 0.5)" 
+                            value={lastName} 
+                            onChangeText={setLastName} 
+                            autoCorrect={false}
+                        />
+
+                        <TextInput
+                            style={styles.bioInput}
+                            placeholder="Bio (Optional)"
+                            placeholderTextColor="rgba(47, 58, 39, 0.5)"
+                            value={bio}
+                            onChangeText={setBio}
+                            multiline
+                            maxLength={160}
+                            autoCorrect={true}
+                        />
 
                         <TouchableOpacity style={[styles.input, { justifyContent: 'center' }]} onPress={() => setShowDatePicker(true)}>
-                            <Text style={{ color: dob ? DARK_GREEN : 'rgba(47, 58, 39, 0.5)' }}>
+                            <Text style={{ 
+                                color: dob ? DARK_GREEN : 'rgba(47, 58, 39, 0.5)',
+                                fontSize: 18,
+                                fontWeight: dob ? 'bold' : '600'
+                            }}>
                                 {dob ? dob.toLocaleDateString() : "Date of birth (XX/YY/ZZZZ)"}
                             </Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity style={[styles.input, { justifyContent: 'center' }]} onPress={() => setShowSexPicker(true)}>
-                            <Text style={{ color: sex ? DARK_GREEN : 'rgba(47, 58, 39, 0.5)' }}>
+                            <Text style={{ 
+                                color: sex ? DARK_GREEN : 'rgba(47, 58, 39, 0.5)',
+                                fontSize: 18,
+                                fontWeight: sex ? 'bold' : '600'
+                            }}>
                                 {sex || "Sex"}
                             </Text>
                         </TouchableOpacity>
 
-                        <TextInput style={styles.input} placeholder="Email" placeholderTextColor="rgba(47, 58, 39, 0.5)" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+                        <TextInput 
+                            style={styles.input} 
+                            placeholder="Email" 
+                            placeholderTextColor="rgba(47, 58, 39, 0.5)" 
+                            value={email} 
+                            onChangeText={setEmail} 
+                            keyboardType="email-address" 
+                            autoCapitalize="none" 
+                            autoCorrect={false}
+                        />
                         <TextInput style={styles.input} placeholder="Username" placeholderTextColor="rgba(47, 58, 39, 0.5)" value={username} onChangeText={setUsername} autoCapitalize="none" />
-                        <TextInput style={styles.input} placeholder="Password" placeholderTextColor="rgba(47, 58, 39, 0.5)" value={password} onChangeText={setPassword} secureTextEntry />
+                        <TextInput 
+                            style={styles.input} 
+                            placeholder="Password" 
+                            placeholderTextColor="rgba(47, 58, 39, 0.5)" 
+                            value={password} 
+                            onChangeText={setPassword} 
+                            secureTextEntry 
+                            autoCorrect={false}
+                        />
                     </View>
 
                     {/* Footer Navigation */}
@@ -189,8 +218,24 @@ export default function SignupBasicInfo() {
             {/* Date Picker Modal */}
             <Modal visible={showDatePicker} transparent animationType="slide">
                 <TouchableOpacity style={styles.modalOverlay} onPress={() => setShowDatePicker(false)}>
-                    <View style={styles.modalContent}>
-                        {renderCalendar()}
+                    <View style={[styles.modalContent, { width: '90%', padding: 0, backgroundColor: 'transparent' }]} onStartShouldSetResponder={() => true}>
+                        <DateRolodex 
+                            selectedDate={dob || new Date(new Date().getFullYear() - 13, 0, 1)} 
+                            onSelect={(date) => {
+                                setDob(date);
+                            }} 
+                        />
+                        <TouchableOpacity style={styles.doneButton} onPress={() => {
+                            const dateToCheck = dob || new Date(new Date().getFullYear() - 13, 0, 1);
+                            if (!validateAge(dateToCheck)) {
+                                Alert.alert("Age Restriction", "You must be at least 13 years old.");
+                                return;
+                            }
+                            if (!dob) setDob(dateToCheck);
+                            setShowDatePicker(false);
+                        }}>
+                            <Text style={styles.doneButtonText}>Done</Text>
+                        </TouchableOpacity>
                     </View>
                 </TouchableOpacity>
             </Modal>
@@ -209,6 +254,7 @@ export default function SignupBasicInfo() {
             </Modal>
 
         </SafeAreaView>
+        </TouchableWithoutFeedback>
     );
 }
 
@@ -232,7 +278,7 @@ const styles = StyleSheet.create({
         padding: 5,
     },
     title: {
-        fontSize: 24,
+        fontSize: 32,
         color: DARK_GREEN,
         textAlign: 'center',
         marginVertical: 10,
@@ -284,8 +330,20 @@ const styles = StyleSheet.create({
         height: 55,
         paddingHorizontal: 20,
         color: DARK_GREEN,
-        fontSize: 16,
-        fontWeight: '600',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    bioInput: {
+        backgroundColor: SAGE_GREEN,
+        borderRadius: 20,
+        paddingHorizontal: 20,
+        paddingVertical: 15,
+        color: DARK_GREEN,
+        fontSize: 18,
+        fontWeight: 'bold',
+        minHeight: 100,
+        textAlignVertical: 'top',
+        textAlign: 'left',
     },
     footer: {
         flexDirection: 'row',
@@ -330,6 +388,19 @@ const styles = StyleSheet.create({
     modalText: {
         fontSize: 18,
         color: DARK_GREEN,
+        fontWeight: 'bold',
+    },
+    doneButton: {
+        backgroundColor: DARK_GREEN,
+        paddingVertical: 15,
+        borderRadius: 20,
+        marginTop: 15,
+        alignItems: 'center',
+        width: '100%',
+    },
+    doneButtonText: {
+        color: CREAM_COLOR,
+        fontSize: 18,
         fontWeight: 'bold',
     },
     calendarContainer: {
