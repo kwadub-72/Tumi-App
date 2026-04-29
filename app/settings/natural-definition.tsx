@@ -49,13 +49,13 @@ export default function NaturalDefinitionScreen() {
                         Users may be reported at any time by other community members. Reported users may be required to submit additional documentation, undergo a polygraph examination, reapply for natural status, or respond to inquiries from Tribe, at Tribe’s sole discretion.
                     </Text>
                     <Text style={styles.introText}>
-                        Tribe reserves the right to revoke natural status at any time and for any reason, at its discretion.
+                        Tribe reserves the right to investigate or revoke natural status at any time and for any reason, at its discretion.
                     </Text>
                     <Text style={styles.introText}>
-                        Submission of a polygraph examination dated within seven (7) days of the application may increase the likelihood of approval but does not guarantee acceptance.
+                        Submission of a polygraph examination dated within seven (7) days of the application may increase the likelihood of approval, but does not guarantee acceptance.
                     </Text>
                     <Text style={styles.introText}>
-                        Tribe also reserves the right to restrict or ban users with significant followings on Tribe (defined as 100 or more followers) who claim natural status on Tribe or other social platforms (including, but not limited to, Tribe meal captions or Instagram posts) without having submitted a natural status application or after having been denied natural status.
+                        Tribe also reserves the right to restrict or ban users with significant followings on Tribe (defined as 100 or more followers) who claim natural status on Tribe or other social platforms (e.g., Instagram, TikTok) without having submitted a natural status application or after having been denied natural status.
                     </Text>
                 </View>
 

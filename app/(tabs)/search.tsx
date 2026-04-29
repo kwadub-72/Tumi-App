@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/src/shared/theme/Colors';
 import { User } from '@/src/shared/models/types';
 import { generateFakeUsers, generateFakeTribes } from '@/src/shared/utils/FakeDataGenerator';
+import { ExploreService } from '@/src/features/explore/services/exploreService';
 import ExploreProfileCard from '@/src/features/explore/components/ExploreProfileCard';
 import TribeCard from '@/src/features/tribes/components/TribeCard';
 import FilterModal from '@/src/features/explore/components/FilterModal';
@@ -15,13 +16,33 @@ import { useRouter } from 'expo-router';
 import { Tribe } from '@/src/shared/models/types';
 import MemberCard from '@/src/features/tribes/components/MemberCard';
 import { useUserTribeStore } from '@/src/store/UserTribeStore';
+import { useExploreRankings } from '@/src/features/explore/hooks/useExploreRankings';
+import { RefreshControl } from 'react-native';
+import { useAuthStore } from '@/store/AuthStore';
+import { useNetworkStore } from '@/src/store/NetworkStore';
 
 export default function ExploreScreen() {
     const router = useRouter();
+    const session = useAuthStore(state => state.session);
+    const networkStore = useNetworkStore();
     const userStore = useUserStore();
+
+    // Normalise the authenticated user's handle for self-detection comparisons.
+    // Stored handle may or may not include the '@' prefix, so strip it for comparison.
+    const currentUserHandle = userStore.handle?.replace('@', '').toLowerCase() ?? '';
+    const currentUserId = session?.user?.id ?? '';
+
     const { joinTribe, myTribes, pendingTribes } = useUserTribeStore(); // Store hooks
+    const { 
+        similarUsers, 
+        popularUsers, 
+        isLoadingSimilar, 
+        isLoadingPopular, 
+        refresh: refreshRankings 
+    } = useExploreRankings();
+
     const [searchQuery, setSearchQuery] = useState('');
-    const [activeTab, setActiveTab] = useState('Profiles');
+    const [activeTab, setActiveTab] = useState('Users');
 
     // Users State
     const [users, setUsers] = useState<User[]>([]);
@@ -41,15 +62,27 @@ export default function ExploreScreen() {
     const [activeFilters, setActiveFilters] = useState<any>(null);
 
     useEffect(() => {
-        // Initial Data
-        const initialUsers = generateFakeUsers(20);
-        setUsers(initialUsers);
-        setFilteredUsers(initialUsers);
+        const loadInitial = async () => {
+            const initialUsers = await ExploreService.searchUsers('');
+            setUsers(initialUsers);
+            setFilteredUsers(initialUsers);
 
-        // Fetch all potential tribes to explore
-        const initialTribes = generateFakeTribes();
-        setTribes(initialTribes);
-        setFilteredTribes(initialTribes);
+            const initialTribes = await ExploreService.searchTribes('');
+            // Map DB tribes to Tribe model
+            const mappedTribes = initialTribes.map(t => ({
+                id: t.id,
+                name: t.name,
+                image: t.avatar_url,
+                privacy: t.visibility || 'public',
+                type: t.tribe_type || 'hybrid',
+                memberCount: t.member_count || 1,
+                tags: t.tags || [],
+                description: t.description || '',
+            } as unknown as Tribe));
+            setTribes(mappedTribes);
+            setFilteredTribes(mappedTribes);
+        };
+        loadInitial();
     }, []);
 
     useEffect(() => {
@@ -76,111 +109,114 @@ export default function ExploreScreen() {
     }, [myTribes, pendingTribes]);
 
     useEffect(() => {
-        // Filter Users
-        let uResult = users;
-        const q = searchQuery.toLowerCase();
+        // Debounced Backend Search
+        const delayDebounceFn = setTimeout(async () => {
+            if (activeTab === 'Users') {
+                const results = await ExploreService.searchUsers(searchQuery);
+                let uResult = results;
+                
+                // 2. Local Filters
+                if (activeFilters) {
+                    if (activeFilters.status !== 'All') {
+                        if (activeFilters.status === 'none') {
+                            uResult = uResult.filter(u => !u.status || u.status === 'none');
+                        } else {
+                            uResult = uResult.filter(u => u.status === activeFilters.status.toLowerCase());
+                        }
+                    }
 
-        // 1. Similar Tab Filtering (Base population)
-        if (activeTab === 'Similar') {
-            // Mock similar logic: 
-            // Assume current user is "me" (mock stats: 5'7, 170lbs, 15% BF, Natural, Active)
-            // Find users within 15% of stats.
-            const myStats = { h: "5'7", w: 170, bf: 15, natural: true };
-            uResult = uResult.filter(u => {
-                // Mock checks
-                // For now, randomly filter 50% to show effect or check fields if available
-                // We don't have parsed stats on user objects reliably in this mock. 
-                // I'll assume generateFakeUsers produces mostly compatible data.
-                // Let's just shuffle or slice to pretend.
-                return true;
-            });
-            // Sort by 'similarity' (mock: random sort)
-            uResult = [...uResult].sort(() => 0.5 - Math.random());
-        }
+                    if (activeFilters.activity !== 'All') {
+                        uResult = uResult.filter(u => u.activity === activeFilters.activity);
+                    }
 
-        // 2. Search Query
-        if (searchQuery) {
-            uResult = uResult.filter(u =>
-                u.name.toLowerCase().includes(q) ||
-                u.handle.toLowerCase().includes(q)
-            );
-        }
+                    if (activeFilters.weight && activeFilters.weight.val) {
+                        const targetW = parseInt(activeFilters.weight.val);
+                        if (!isNaN(targetW)) {
+                            const range = activeFilters.weight.mode === 'Range15' ? 15 : 5;
+                            uResult = uResult.filter(u => Math.abs((u.weight || 0) - targetW) <= range);
+                        }
+                    }
 
-        // 3. Filters
-        if (activeFilters) {
-            if (activeFilters.status !== 'All') {
-                if (activeFilters.status === 'none') {
-                    uResult = uResult.filter(u => !u.status || u.status === 'none');
-                } else {
-                    uResult = uResult.filter(u => u.status === activeFilters.status.toLowerCase());
+                    if (activeFilters.minMeals) {
+                        uResult = uResult.filter(u => (u.stats?.meals || 0) >= parseInt(activeFilters.minMeals));
+                    }
+                    if (activeFilters.minWorkouts) {
+                        uResult = uResult.filter(u => (u.stats?.workouts || 0) >= parseInt(activeFilters.minWorkouts));
+                    }
+                    if (activeFilters.minUpdates) {
+                        uResult = uResult.filter(u => (u.stats?.updates || 0) >= parseInt(activeFilters.minUpdates));
+                    }
                 }
-            }
-
-            // Apply other filters ONLY if not Similar, OR if allowed in Similar
-            const isSimilar = activeTab === 'Similar';
-
-            if (!isSimilar && activeFilters.activity !== 'All') {
-                uResult = uResult.filter(u => u.activity === activeFilters.activity);
-            }
-
-            // Weight/Height/BF - Only if not similar (Similar handled by base logic)
-            if (!isSimilar && activeFilters.weight && activeFilters.weight.val) {
-                const targetW = parseInt(activeFilters.weight.val);
-                if (!isNaN(targetW)) {
-                    const range = activeFilters.weight.mode === 'Range15' ? 15 : 5;
-                    uResult = uResult.filter(u => Math.abs((u.weight || 0) - targetW) <= range);
+                setFilteredUsers(uResult);
+            } else {
+                const results = await ExploreService.searchTribes(searchQuery);
+                let tResult = results.map(t => ({
+                    id: t.id,
+                    name: t.name,
+                    image: t.avatar_url,
+                    privacy: t.visibility || 'public',
+                    type: t.tribe_type || 'hybrid',
+                    memberCount: t.member_count || 1,
+                    tags: t.tags || [],
+                    description: t.description || '',
+                } as unknown as Tribe));
+                
+                if (activeFilters) {
+                    if (activeFilters.tribeFocus && activeFilters.tribeFocus !== 'All') {
+                        tResult = tResult.filter(t => t.type.toLowerCase() === activeFilters.tribeFocus.toLowerCase().replace(' ', '-'));
+                    }
+                    if (activeFilters.visibility && activeFilters.visibility !== 'All') {
+                        tResult = tResult.filter(t => t.privacy.toLowerCase() === activeFilters.visibility.toLowerCase());
+                    }
+                    if (activeFilters.status === 'natural') {
+                        tResult = tResult.filter(t => t.tags?.includes('natural'));
+                    }
                 }
+                
+                // Merge join statuses
+                const withStatus = tResult.map(t => {
+                    const isJoined = myTribes.some(mt => mt.id === t.id);
+                    const isPending = pendingTribes.includes(t.id);
+                    return {
+                        ...t,
+                        joinStatus: isJoined ? 'joined' : (isPending ? 'requested' : 'none')
+                    } as Tribe;
+                });
+                
+                setFilteredTribes(withStatus);
             }
+        }, 300);
 
-            // Stats (Frequency) - Allowed in Similar
-            if (activeFilters.minMeals) {
-                uResult = uResult.filter(u => (u.stats?.meals || 0) >= parseInt(activeFilters.minMeals));
-            }
-            if (activeFilters.minWorkouts) {
-                uResult = uResult.filter(u => (u.stats?.workouts || 0) >= parseInt(activeFilters.minWorkouts));
-            }
-            if (activeFilters.minUpdates) {
-                uResult = uResult.filter(u => (u.stats?.updates || 0) >= parseInt(activeFilters.minUpdates));
-            }
+        return () => clearTimeout(delayDebounceFn);
+
+    }, [searchQuery, activeFilters, activeTab, myTribes, pendingTribes]);
+
+
+
+
+    const handleToggleFollow = async (user: User) => {
+        if (!session?.user?.id) return;
+        const currentIsFollowing = networkStore.isFollowing(user.id);
+        
+        const { success, newState } = await networkStore.toggleFollow(
+            session.user.id,
+            user.id,
+            user.isPrivate || false
+        );
+
+        if (success) {
+            // Optimistic UI updates
+            setFilteredUsers(prev => prev.map(u => {
+                if (u.id === user.id) {
+                    return { ...u, isFollowing: newState === 'following', isRequested: newState === 'requested' };
+                }
+                return u;
+            }));
+            
+            // Note: the similarUsers and popularUsers arrays inside `useExploreRankings` might not automatically update unless we refetch, 
+            // but the `networkStore` state is updated, so if the card relies on the store it will update.
+            // For now, let's also trigger a refresh of rankings if needed, or just let them be out of sync until a pull-to-refresh.
         }
-        setFilteredUsers(uResult);
-
-        // Filter Tribes
-        let tResult = tribes;
-        if (searchQuery) {
-            tResult = tResult.filter(t => t.name.toLowerCase().includes(q));
-        }
-        if (activeFilters && activeTab === 'Tribes') {
-            if (activeFilters.tribeFocus && activeFilters.tribeFocus !== 'All') {
-                tResult = tResult.filter(t => t.type.toLowerCase() === activeFilters.tribeFocus.toLowerCase().replace(' ', '-'));
-            }
-            if (activeFilters.visibility && activeFilters.visibility !== 'All') {
-                tResult = tResult.filter(t => t.privacy.toLowerCase() === activeFilters.visibility.toLowerCase());
-            }
-            // Helper filters (natural etc)
-            if (activeFilters.status === 'natural') {
-                tResult = tResult.filter(t => t.tags?.includes('natural'));
-            }
-        }
-        setFilteredTribes(tResult);
-
-    }, [searchQuery, activeFilters, users, tribes, activeTab]);
-
-
-    const handleToggleFollow = (userId: string) => {
-        let isNowFollowing = false;
-        setUsers(prev => prev.map(u => {
-            if (u.id === userId) {
-                isNowFollowing = !u.isFollowing;
-                return { ...u, isFollowing: isNowFollowing };
-            }
-            return u;
-        }));
-        // ... UserStore update ...
-        const currentCount = userStore.following || 0;
-        userStore.setProfile({
-            following: isNowFollowing ? currentCount + 1 : Math.max(0, currentCount - 1)
-        });
     };
 
     const handleJoinTribe = (tribeId: string) => {
@@ -190,78 +226,40 @@ export default function ExploreScreen() {
         }
     };
 
-    const handleFilterPress = () => {
-        if (activeTab === 'Trending') {
-            // Maybe disabled for trending? User didn't specify filters for trending.
-            // But layout mirrors similar/profile. I'll just open it as profile mode or similar?
-            // "On this page [Similar], the only search filters..."
-            // For Trending, let's assume no filters for now or standard. 
-            // "The layout of profiles on this page [Similar] should mirror the profile tab's... excluding the 'tune' filter".
-            // Wait, user said for Similar: "The layout ... mirrors ... EXCEPT for the tune/filter". 
-            // Does that mean NO filter button? Or Filter button with reduced options?
-            // "Create a 'Tune' (Filter) modal for the Tribe tab...".
-            // "On this page [Similar]... enable only 'natural/enhanced' and 'post frequency' filters." - This implies Filter IS available.
-            // Maybe "excluding the 'tune' filter" meant "excluding the SEARCH filter UI element" inside the list? No, usually "tune" is the button.
-            // "The layout of profiles on this page... mirrors the Explore page's profile tab, excluding the 'Tune' filter." this line contradicts "Enable only... filters".
-            // Maybe they mean the "Tune" row that appears in some inputs?
-            // But in Profile tab there isn't a "Tune" filter IN the list. It's the button in header.
-            // Let's assume the button IS there, but constrained.
+    /**
+     * Determines whether a profile card tap navigates to the public profile view
+     * or to the current user's own Profile tab.
+     *
+     * Rule: if the tapped user's id matches the authenticated user's id we route
+     * to the Profile tab.  Handle is used as the secondary fallback for cases
+     * where id may not yet be hydrated (e.g. fake/seed data without a real UUID).
+     */
+    const handleCardPress = (user: User & { id?: string }) => {
+        const isOwnProfile =
+            (currentUserId && user.id === currentUserId) ||
+            (user.handle?.replace('@', '').toLowerCase() === currentUserHandle);
 
-            // For Trending, it's just lists. I'll disable filter.
-            return;
+        if (isOwnProfile) {
+            // Navigate to the authenticated user's own profile tab
+            router.push('/(tabs)/profile' as any);
+        } else {
+            router.push({ pathname: '/user/[handle]', params: { handle: user.handle } } as any);
         }
+    };
+
+    /** Returns true when the given user card represents the current authenticated user. */
+    const isSelfUser = (user: User & { id?: string }): boolean => {
+        if (currentUserId && user.id === currentUserId) return true;
+        if (user.handle?.replace('@', '').toLowerCase() === currentUserHandle) return true;
+        return false;
+    };
+
+    const handleFilterPress = () => {
         setFilterVisible(true);
     };
 
     const renderContent = () => {
-        if (activeTab === 'Trending') {
-            // Mock top lists
-            const topProfiles = users.slice(0, 10);
-            const topTribes = tribes.slice(0, 5);
-            return (
-                <View style={{ flex: 1 }}>
-                    <FlatList
-                        data={[]}
-                        renderItem={null}
-                        ListHeaderComponent={
-                            <View style={{ paddingBottom: 20 }}>
-                                <Text style={styles.sectionTitle}>Trending Profiles</Text>
-                                <View style={styles.listContent}>
-                                    {topProfiles.map(u => (
-                                        <View key={u.id} style={{ marginBottom: 10 }}>
-                                            <MemberCard
-                                                item={u}
-                                                cardColor="#A8C0A8" // Matching Explore theme
-                                                themeColor="#4F6352"
-                                                onToggleFollow={() => handleToggleFollow(u.id)}
-                                                onPressCard={() => router.push({ pathname: '/user/[handle]', params: { handle: u.handle } } as any)}
-                                            />
-                                        </View>
-                                    ))}
-                                </View>
-
-                                <Text style={styles.sectionTitle}>Trending Tribes</Text>
-                                <View style={styles.listContent}>
-                                    {topTribes.map(t => (
-                                        <TribeCard
-                                            key={t.id}
-                                            tribe={t}
-                                            onPress={() => router.push(`/tribe/${t.id}`)}
-                                            onPressJoin={() => handleJoinTribe(t.id)}
-                                        />
-                                    ))}
-                                </View>
-                            </View>
-                        }
-                        contentContainerStyle={{ paddingBottom: 40 }}
-                        showsVerticalScrollIndicator={false}
-                    />
-                </View>
-            );
-        }
-
         if (activeTab === 'Tribes') {
-            // Ensure we render the filtered tribes which are synced with store status
             return (
                 <FlatList
                     data={filteredTribes}
@@ -280,29 +278,124 @@ export default function ExploreScreen() {
             );
         }
 
-        // Profiles or Similar
-        const dataToRender = activeTab === 'Similar' ? filteredUsers : filteredUsers; // Logic handled in useEffect
+        // Users Tab
+        const isSearching = searchQuery.length > 0;
+        
+        // When searching, we show filtered search results. 
+        // When NOT searching, we show the two curated sections.
+        if (isSearching) {
+            return (
+                <FlatList
+                    data={filteredUsers}
+                    keyExtractor={item => item.id}
+                    renderItem={({ item }) => {
+                        const isFollowing = networkStore.isFollowing(item.id);
+                        const isRequested = networkStore.isRequested(item.id);
+                        const userWithStatus = { ...item, isFollowing, isRequested };
+                        const self = isSelfUser(item);
+                        return (
+                            <ExploreProfileCard
+                                user={userWithStatus}
+                                isSelf={self}
+                                onToggleFollow={() => handleToggleFollow(item)}
+                                onPressHammer={() => {
+                                    setSelectedUserForModal(item);
+                                    setHammerVisible(true);
+                                }}
+                                onPressStatus={() => {
+                                    setSelectedUserForModal(item);
+                                    setVerifiedVisible(true);
+                                }}
+                                onPressCard={() => handleCardPress(item)}
+                            />
+                        );
+                    }}
+                    contentContainerStyle={styles.listContent}
+                    showsVerticalScrollIndicator={false}
+                    onScrollBeginDrag={Keyboard.dismiss}
+                />
+            );
+        }
 
         return (
             <FlatList
-                data={dataToRender}
-                keyExtractor={item => item.id}
-                renderItem={({ item }) => (
-                    <ExploreProfileCard
-                        user={item}
-                        onToggleFollow={() => handleToggleFollow(item.id)}
-                        onPressHammer={() => {
-                            setSelectedUserForModal(item);
-                            setHammerVisible(true);
-                        }}
-                        onPressStatus={() => {
-                            setSelectedUserForModal(item);
-                            setVerifiedVisible(true);
-                        }}
-                        onPressCard={() => router.push({ pathname: '/user/[handle]', params: { handle: item.handle } } as any)}
+                data={[]}
+                renderItem={null}
+                refreshControl={
+                    <RefreshControl 
+                        refreshing={isLoadingSimilar || isLoadingPopular} 
+                        onRefresh={refreshRankings}
+                        tintColor="#4F6352"
                     />
-                )}
-                contentContainerStyle={styles.listContent}
+                }
+                ListHeaderComponent={
+                    <View style={{ paddingBottom: 20 }}>
+                        <Text style={styles.exploreSectionTitle}>Best matches</Text>
+                        <View style={styles.listContent}>
+                            {similarUsers.slice(0, 5).map((u, i) => {
+                                const isFollowing = networkStore.isFollowing(u.id);
+                                const isRequested = networkStore.isRequested(u.id);
+                                const userWithStatus = { ...u, isFollowing, isRequested };
+                                const self = isSelfUser(u as any);
+                                return (
+                                    <ExploreProfileCard
+                                        key={u.id}
+                                        user={userWithStatus}
+                                        rank={i + 1}
+                                        isSelf={self}
+                                        matchPercent={self ? undefined : ('similarityScore' in u ? parseFloat((u as any).similarityScore) : 68)}
+                                        onToggleFollow={() => handleToggleFollow(u as any)}
+                                        onPressHammer={() => {
+                                            setSelectedUserForModal(u);
+                                            setHammerVisible(true);
+                                        }}
+                                        onPressStatus={() => {
+                                            setSelectedUserForModal(u);
+                                            setVerifiedVisible(true);
+                                        }}
+                                        onPressCard={() => handleCardPress(u as any)}
+                                    />
+                                );
+                            })}
+                        </View>
+
+                        <Text style={styles.exploreSectionTitle}>Most popular</Text>
+                        <View style={styles.listContent}>
+                            {popularUsers.map((u, i) => {
+                                const isFollowing = networkStore.isFollowing(u.id);
+                                const isRequested = networkStore.isRequested(u.id);
+                                const userWithStatus = { ...u, isFollowing, isRequested };
+                                const self = isSelfUser(u as any);
+                                return (
+                                    <ExploreProfileCard
+                                        key={u.id}
+                                        user={userWithStatus}
+                                        rank={i + 1}
+                                        isSelf={self}
+                                        matchPercent={self ? undefined : ('engagementScore' in u && (u as any).engagementScore > 0 ? "Trending" : 40)}
+                                        onToggleFollow={() => handleToggleFollow(u as any)}
+                                        onPressHammer={() => {
+                                            setSelectedUserForModal(u);
+                                            setHammerVisible(true);
+                                        }}
+                                        onPressStatus={() => {
+                                            setSelectedUserForModal(u);
+                                            setVerifiedVisible(true);
+                                        }}
+                                        onPressCard={() => handleCardPress(u as any)}
+                                    />
+                                );
+                            })}
+                        </View>
+
+                        {!isLoadingSimilar && !isLoadingPopular && filteredUsers.length === 0 && (
+                            <View style={styles.emptyState}>
+                                <Text style={styles.emptyStateText}>No profiles found.</Text>
+                            </View>
+                        )}
+                    </View>
+                }
+                contentContainerStyle={{ paddingBottom: 40 }}
                 showsVerticalScrollIndicator={false}
                 onScrollBeginDrag={Keyboard.dismiss}
             />
@@ -328,7 +421,7 @@ export default function ExploreScreen() {
                         placeholderTextColor="rgba(79, 99, 82, 0.5)"
                         value={searchQuery}
                         onChangeText={setSearchQuery}
-                        onSubmitEditing={Keyboard.dismiss} // Close on search submit
+                        onSubmitEditing={Keyboard.dismiss}
                     />
                     <TouchableOpacity onPress={() => { Keyboard.dismiss(); }}>
                         <Ionicons name="arrow-forward" size={20} color="#4F6352" />
@@ -340,16 +433,21 @@ export default function ExploreScreen() {
             </View>
 
             {/* Tabs */}
-            <View style={styles.tabsRow}>
-                {['Similar', 'Profiles', 'Tribes', 'Trending'].map(tab => (
-                    <TouchableOpacity
-                        key={tab}
-                        style={[styles.tab, activeTab === tab && styles.activeTab]}
-                        onPress={() => setActiveTab(tab)}
+            <View style={styles.tabContainer}>
+                <View style={styles.tabBackground}>
+                    <TouchableOpacity 
+                        style={[styles.tabButton, activeTab === 'Users' && styles.activeTabButton]}
+                        onPress={() => setActiveTab('Users')}
                     >
-                        <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</Text>
+                        <Text style={[styles.tabText, activeTab === 'Users' && styles.activeTabText]}>Users</Text>
                     </TouchableOpacity>
-                ))}
+                    <TouchableOpacity 
+                        style={[styles.tabButton, activeTab === 'Tribes' && styles.activeTabButton]}
+                        onPress={() => setActiveTab('Tribes')}
+                    >
+                        <Text style={[styles.tabText, activeTab === 'Tribes' && styles.activeTabText]}>Tribes</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
 
             <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss} accessible={false}>
@@ -415,39 +513,46 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    tabsRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
+    tabContainer: {
+        alignItems: 'center',
+        paddingVertical: 10,
         marginBottom: 10,
     },
-    tab: {
-        paddingVertical: 8,
-        paddingHorizontal: 12,
+    tabBackground: {
+        flexDirection: 'row',
+        backgroundColor: 'rgba(79, 99, 82, 0.1)',
         borderRadius: 20,
+        padding: 2,
+        width: '60%',
     },
-    activeTab: {
+    tabButton: {
+        flex: 1,
+        paddingVertical: 6,
+        alignItems: 'center',
+        borderRadius: 18,
+    },
+    activeTabButton: {
         backgroundColor: '#4F6352',
     },
     tabText: {
-        color: '#6A8E6A',
-        fontWeight: 'bold',
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#4F6352',
     },
     activeTabText: {
-        color: '#F5F5DC',
+        color: 'white',
     },
     listContent: {
         paddingHorizontal: 20,
         paddingBottom: 20,
     },
-    comingSoon: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    comingSoonText: {
+    exploreSectionTitle: {
+        color: '#4F6352',
         fontSize: 18,
-        color: '#6A8E6A',
-        fontWeight: 'bold',
+        fontWeight: '700',
+        marginLeft: 20,
+        marginTop: 10,
+        marginBottom: 10,
     },
     createTribeBtn: {
         width: 50,
@@ -459,12 +564,14 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#4F6352',
     },
-    sectionTitle: {
-        color: '#F5F5DC',
-        fontSize: 20,
-        fontWeight: 'bold',
-        marginLeft: 20,
-        marginTop: 20,
-        marginBottom: 10,
+    emptyState: {
+        alignItems: 'center',
+        marginTop: 40,
+    },
+    emptyStateText: {
+        color: '#4F6352',
+        fontSize: 16,
+        fontWeight: '500',
     }
 });
+

@@ -124,6 +124,14 @@ export default function OtherUserProfileScreen() {
                 if (!silent) setLoading(false);
                 return;
             }
+
+            // Self-guard: if this profile belongs to the authenticated user, redirect
+            // to their own Profile tab. This is the authoritative check — done after
+            // the DB fetch so it can't be bypassed by stale store state or timing.
+            if (profileData.id === session.user.id) {
+                router.replace('/(tabs)/profile' as any);
+                return;
+            }
             
             setTargetProfile(profileData);
             
@@ -437,7 +445,18 @@ export default function OtherUserProfileScreen() {
                         </Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={[styles.actionButton, { flex: 0.5 }]}>
+                    <TouchableOpacity
+                        style={[styles.actionButton, { flex: 0.5 }]}
+                        onPress={() =>
+                            router.push({
+                                pathname: '/user/similar/[targetId]',
+                                params: {
+                                    targetId: targetProfile.id,
+                                    targetName: targetProfile.name ?? '',
+                                },
+                            } as any)
+                        }
+                    >
                         <Text style={styles.actionButtonText}>Similar</Text>
                     </TouchableOpacity>
                 </View>
