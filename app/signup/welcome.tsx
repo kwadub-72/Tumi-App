@@ -53,7 +53,7 @@ export default function SignupWelcome() {
             const rpcPromise = supabase.rpc('check_account_availability', {
                 new_email: email,
                 new_username: username
-            });
+            }) as any;
 
             const { data: availability, error: rpcError } = await withTimeout(
                 rpcPromise, 

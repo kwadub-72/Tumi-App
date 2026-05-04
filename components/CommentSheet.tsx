@@ -1,6 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
     Dimensions,
     FlatList,
     Image,
@@ -25,6 +26,9 @@ import Animated, {
 import { Colors } from '../src/shared/theme/Colors';
 import { formatTimeAgo } from '../utils/time';
 import { Comment } from '../src/shared/models/types';
+import { useAuthStore } from '../store/AuthStore';
+import { SupabasePostService } from '../src/shared/services/SupabasePostService';
+import { useProfileNavigation } from '../src/shared/hooks/useProfileNavigation';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -32,6 +36,7 @@ interface CommentSheetProps {
     visible: boolean;
     onClose: () => void;
     comments?: Comment[];
+    loading?: boolean;
     onCommentPosted?: (text: string) => void;
     onCommentDeleted?: (id: string) => void;
 }
@@ -40,10 +45,14 @@ export default function CommentSheet({
     visible,
     onClose,
     comments: initialComments = [],
+    loading = false,
     onCommentPosted,
     onCommentDeleted
 }: CommentSheetProps) {
-    const translateY = useSharedValue(0);
+    const { session } = useAuthStore();
+    const { navigateToProfile } = useProfileNavigation();
+    const translateY = useSharedValue(SCREEN_HEIGHT);
+    const backdropOpacity = useSharedValue(0);
     const context = useSharedValue({ y: 0 });
 
     const [comments, setComments] = useState<Comment[]>(initialComments);
@@ -55,26 +64,36 @@ export default function CommentSheet({
 
     useEffect(() => {
         if (visible) {
-            translateY.value = 0;
+            translateY.value = withSpring(0, { damping: 20, stiffness: 150, mass: 0.5 });
+            backdropOpacity.value = withTiming(1, { duration: 250 });
+        } else {
+            translateY.value = SCREEN_HEIGHT;
+            backdropOpacity.value = 0;
         }
     }, [visible]);
+
+    const handleClose = () => {
+        backdropOpacity.value = withTiming(0, { duration: 200 });
+        translateY.value = withTiming(SCREEN_HEIGHT, { duration: 200 }, () => {
+            runOnJS(onClose)();
+        });
+    };
 
     const panGesture = Gesture.Pan()
         .onStart(() => {
             context.value = { y: translateY.value };
         })
         .onUpdate((event) => {
-            if (event.translationY > 0) {
-                translateY.value = event.translationY + context.value.y;
-            }
+            translateY.value = Math.max(0, event.translationY + context.value.y);
+            // Progressively undim as we pull down
+            backdropOpacity.value = 1 - (translateY.value / (SCREEN_HEIGHT * 0.75));
         })
         .onEnd((event) => {
             if (translateY.value > 150 || event.velocityY > 500) {
-                translateY.value = withTiming(SCREEN_HEIGHT, { duration: 200 }, () => {
-                    runOnJS(onClose)();
-                });
+                runOnJS(handleClose)();
             } else {
                 translateY.value = withSpring(0, { damping: 20, stiffness: 90 });
+                backdropOpacity.value = withTiming(1, { duration: 200 });
             }
         });
 
@@ -82,47 +101,46 @@ export default function CommentSheet({
         transform: [{ translateY: translateY.value }],
     }));
 
-    const toggleLike = (commentId: string) => {
-        setComments(current => current.map(comment => {
-            if (comment.id === commentId) {
-                const isLiked = !comment.isLiked;
+    const backdropStyle = useAnimatedStyle(() => ({
+        opacity: backdropOpacity.value,
+    }));
+
+    const toggleLike = async (commentId: string) => {
+        if (!session?.user?.id) return;
+        const comment = comments.find(c => c.id === commentId);
+        if (!comment) return;
+
+        const wasLiked = comment.isLiked;
+        
+        // Optimistic update
+        setComments(current => current.map(c => {
+            if (c.id === commentId) {
                 return {
-                    ...comment,
-                    isLiked,
-                    likes: isLiked ? comment.likes + 1 : comment.likes - 1
+                    ...c,
+                    isLiked: !wasLiked,
+                    likes: wasLiked ? c.likes - 1 : c.likes + 1
                 };
             }
-            return comment;
+            return c;
         }));
+
+        await SupabasePostService.toggleCommentLike(commentId, session.user.id, !!wasLiked);
     };
 
-    const deleteComment = (commentId: string) => {
+    const deleteComment = async (commentId: string) => {
         setComments(current => current.filter(c => c.id !== commentId));
         if (onCommentDeleted) onCommentDeleted(commentId);
     };
 
     const handleSubmit = () => {
         if (inputText.trim().length === 0) return;
-
-        const fakeNewComment: Comment = {
-            id: Date.now().toString(),
-            user: {
-                id: 'me',
-                name: 'You',
-                handle: '@me',
-                avatar: require('../assets/images/kwadub.jpg'), // Default avatar
-                status: 'natural',
-                verified: true
-            },
-            text: inputText,
-            timestamp: Date.now(),
-            likes: 0,
-            isLiked: false,
-        };
-
-        setComments([fakeNewComment, ...comments]);
         if (onCommentPosted) onCommentPosted(inputText);
         setInputText('');
+    };
+
+    const handleProfilePress = (user: any) => {
+        handleClose();
+        navigateToProfile(user);
     };
 
     const SwipeableItem = ({ children, onRemove, isMine }: { children: React.ReactNode, onRemove: () => void, isMine: boolean }) => {
@@ -178,15 +196,19 @@ export default function CommentSheet({
     };
 
     const renderComment = ({ item }: { item: Comment }) => (
-        <SwipeableItem isMine={item.user.handle === '@kwadub' || item.user.id === 'me'} onRemove={() => deleteComment(item.id)}>
+        <SwipeableItem isMine={item.user.id === session?.user?.id || item.user.handle === '@kwadub'} onRemove={() => deleteComment(item.id)}>
             <View style={styles.commentRow}>
-                <Image
-                    source={typeof item.user.avatar === 'string' ? { uri: item.user.avatar } : item.user.avatar}
-                    style={styles.commentAvatar}
-                />
+                <TouchableOpacity onPress={() => handleProfilePress(item.user)}>
+                    <Image
+                        source={typeof item.user.avatar === 'string' ? { uri: item.user.avatar } : item.user.avatar}
+                        style={styles.commentAvatar}
+                    />
+                </TouchableOpacity>
                 <View style={styles.commentContent}>
                     <View style={styles.commentHeader}>
-                        <Text style={styles.handle}>{item.user.handle}</Text>
+                        <TouchableOpacity onPress={() => handleProfilePress(item.user)}>
+                            <Text style={styles.handle}>{item.user.handle}</Text>
+                        </TouchableOpacity>
                         {item.user.status && (item.user.status === 'natural' || item.user.status === 'enhanced') && (
                             item.user.status === 'enhanced' ? (
                                 <MaterialCommunityIcons name="lightning-bolt" size={12} color="#FFD700" style={styles.badge} />
@@ -219,10 +241,12 @@ export default function CommentSheet({
             visible={visible}
             transparent
             animationType="none"
-            onRequestClose={onClose}
+            onRequestClose={handleClose}
         >
             <View style={styles.modalContainer}>
-                <Pressable style={styles.overlay} onPress={onClose} />
+                <Pressable style={StyleSheet.absoluteFill} onPress={handleClose}>
+                    <Animated.View style={[styles.overlay, backdropStyle]} />
+                </Pressable>
                 <KeyboardAvoidingView
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                     style={styles.sheetContainer}
@@ -236,13 +260,26 @@ export default function CommentSheet({
                                 </View>
                             </View>
                         </GestureDetector>
-                        <FlatList
-                            data={comments}
-                            renderItem={renderComment}
-                            keyExtractor={item => item.id}
-                            contentContainerStyle={styles.listContent}
-                            showsVerticalScrollIndicator={false}
-                        />
+                        {loading && comments.length === 0 ? (
+                            <View style={styles.loadingContainer}>
+                                <ActivityIndicator color={Colors.primary} size="small" />
+                            </View>
+                        ) : (
+                            <FlatList
+                                data={comments}
+                                renderItem={renderComment}
+                                keyExtractor={item => item.id}
+                                contentContainerStyle={styles.listContent}
+                                showsVerticalScrollIndicator={false}
+                                ListEmptyComponent={
+                                    !loading ? (
+                                        <View style={styles.emptyContainer}>
+                                            <Text style={styles.emptyText}>No comments yet</Text>
+                                        </View>
+                                    ) : null
+                                }
+                            />
+                        )}
                         <View style={styles.inputBar}>
                             <View style={styles.inputWrapper}>
                                 <TextInput
@@ -329,6 +366,8 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         marginRight: 12,
         backgroundColor: 'rgba(0,0,0,0.05)',
+        borderWidth: 1.5,
+        borderColor: '#4F6352',
     },
     commentContent: {
         flex: 1,
@@ -412,5 +451,20 @@ const styles = StyleSheet.create({
     },
     swipeOuter: {
         backgroundColor: Colors.background,
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingTop: 40,
+    },
+    emptyContainer: {
+        paddingTop: 60,
+        alignItems: 'center',
+    },
+    emptyText: {
+        color: Colors.primary,
+        opacity: 0.4,
+        fontSize: 14,
     }
 });

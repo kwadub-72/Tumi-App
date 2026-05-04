@@ -152,7 +152,7 @@ export const SupabasePostService = {
         const postIds = posts.map(p => p.id);
         if (postIds.length > 0) {
             const [likesRes, bookmarksRes] = await Promise.all([
-                supabase.from('post_likes').select('post_id').eq('user_id', userId).in('post_id', postIds),
+                supabase.from('likes').select('post_id').eq('user_id', userId).in('post_id', postIds),
                 supabase.from('post_bookmarks').select('post_id').eq('user_id', userId).in('post_id', postIds),
             ]);
             const likedSet = new Set((likesRes.data ?? []).map((l: any) => l.post_id));
@@ -164,6 +164,66 @@ export const SupabasePostService = {
         }
 
         return posts;
+    },
+
+    async getPostDetails(postId: string, userId: string, commentOffset: number = 0, commentLimit: number = 20): Promise<{ post: FeedPost | null, comments: Comment[] }> {
+        // Optimized parallel fetching to simulate a single complex query due to view limitations
+        const [postRes, commentsRes, likesRes, bookmarksRes] = await Promise.all([
+            supabase.from('posts_with_counts').select('*').eq('id', postId).single(),
+            supabase.from('comments')
+                .select(`
+                    id, body, created_at, author_id, like_count,
+                    profiles!comments_author_id_fkey (id, handle, name, avatar_url, status, activity_icon)
+                `)
+                .eq('post_id', postId)
+                .order('created_at', { ascending: false }) // newest comments first? Or true for oldest first. Let's use false to get newest.
+                .range(commentOffset, commentOffset + commentLimit - 1),
+            supabase.from('likes').select('post_id').eq('user_id', userId).eq('post_id', postId),
+            supabase.from('post_bookmarks').select('post_id').eq('user_id', userId).eq('post_id', postId),
+        ]);
+
+        if (postRes.error || !postRes.data) {
+            console.error('[SupabasePostService.getPostDetails] Post error', postRes.error?.message);
+            return { post: null, comments: [] };
+        }
+
+        const post = rowToFeedPost(postRes.data, userId);
+        post.isLiked = (likesRes.data ?? []).length > 0;
+        post.isSaved = (bookmarksRes.data ?? []).length > 0;
+
+        const commentsData = commentsRes.data ?? [];
+        const comments = commentsData.map((row: any) => ({
+            id: row.id,
+            text: row.body,
+            timestamp: new Date(row.created_at).getTime(),
+            likes: Number(row.like_count ?? 0),
+            isLiked: false,
+            user: {
+                id: row.profiles.id,
+                handle: row.profiles.handle,
+                name: row.profiles.name,
+                avatar: row.profiles.avatar_url ?? 'https://i.pravatar.cc/150?u=default',
+                status: row.profiles.status ?? 'none',
+                verified: true,
+                activityIcon: row.profiles.activity_icon,
+            },
+        }));
+
+        if (userId && comments.length > 0) {
+            const commentIds = comments.map(c => c.id);
+            const { data: commentLikes } = await supabase
+                .from('comment_likes')
+                .select('comment_id')
+                .eq('user_id', userId)
+                .in('comment_id', commentIds);
+            
+            const likedSet = new Set((commentLikes ?? []).map((l: any) => l.comment_id));
+            comments.forEach(c => {
+                c.isLiked = likedSet.has(c.id);
+            });
+        }
+
+        return { post, comments };
     },
 
     async addPost(post: {
@@ -204,9 +264,9 @@ export const SupabasePostService = {
 
     async toggleLike(postId: string, userId: string, currentlyLiked: boolean): Promise<void> {
         if (currentlyLiked) {
-            await supabase.from('post_likes').delete().eq('post_id', postId).eq('user_id', userId);
+            await supabase.from('likes').delete().eq('post_id', postId).eq('user_id', userId);
         } else {
-            await supabase.from('post_likes').upsert({ post_id: postId, user_id: userId });
+            await supabase.from('likes').upsert({ post_id: postId, user_id: userId });
         }
     },
 
@@ -228,7 +288,7 @@ export const SupabasePostService = {
 
     // ── Comments ────────────────────────────────────────────────────────────
 
-    async getComments(postId: string): Promise<Comment[]> {
+    async getComments(postId: string, userId?: string): Promise<Comment[]> {
         const { data, error } = await supabase
             .from('comments')
             .select(`
@@ -236,6 +296,7 @@ export const SupabasePostService = {
                 body,
                 created_at,
                 author_id,
+                like_count,
                 profiles!comments_author_id_fkey (
                     id, handle, name, avatar_url, status, activity_icon
                 )
@@ -248,11 +309,11 @@ export const SupabasePostService = {
             return [];
         }
 
-        return (data ?? []).map((row: any) => ({
+        const comments = (data ?? []).map((row: any) => ({
             id: row.id,
             text: row.body,
             timestamp: new Date(row.created_at).getTime(),
-            likes: 0,
+            likes: Number(row.like_count ?? 0),
             isLiked: false,
             user: {
                 id: row.profiles.id,
@@ -263,6 +324,22 @@ export const SupabasePostService = {
                 verified: true,
             },
         }));
+
+        if (userId && comments.length > 0) {
+            const commentIds = comments.map(c => c.id);
+            const { data: likes } = await supabase
+                .from('comment_likes')
+                .select('comment_id')
+                .eq('user_id', userId)
+                .in('comment_id', commentIds);
+            
+            const likedSet = new Set((likes ?? []).map((l: any) => l.comment_id));
+            comments.forEach(c => {
+                c.isLiked = likedSet.has(c.id);
+            });
+        }
+
+        return comments;
     },
 
     async addComment(postId: string, authorId: string, text: string): Promise<Comment | null> {
@@ -273,6 +350,7 @@ export const SupabasePostService = {
                 id,
                 body,
                 created_at,
+                like_count,
                 profiles!comments_author_id_fkey (
                     id, handle, name, avatar_url, status
                 )
@@ -290,7 +368,7 @@ export const SupabasePostService = {
             id: data.id,
             text: data.body,
             timestamp: new Date(data.created_at).getTime(),
-            likes: 0,
+            likes: Number(data.like_count ?? 0),
             isLiked: false,
             user: {
                 id: profile.id,
@@ -313,5 +391,60 @@ export const SupabasePostService = {
         } else {
             await supabase.from('comment_likes').upsert({ comment_id: commentId, user_id: userId });
         }
+    },
+
+    // ── Meal Log ────────────────────────────────────────────────────────────
+
+    async addToMealLog(userId: string, item: {
+        item_name: string;
+        calories: number;
+        protein: number;
+        carbs: number;
+        fats: number;
+        portion_size: string;
+        original_post_id: string;
+    }): Promise<void> {
+        const { error } = await supabase.from('meal_log').insert({
+            user_id: userId,
+            ...item
+        });
+
+        if (error) {
+            console.error('[SupabasePostService.addToMealLog]', error.message);
+            throw error;
+        }
+    },
+
+    // ── Lift book ───────────────────────────────────────────────────────────
+
+    /**
+     * Copy exercises from a workout post into the user's private Lift book.
+     * Supports both bulk copy (if exerciseIds is null) and selective copy.
+     */
+    async copyToLiftBook(userId: string, postId: string, exerciseIds?: string[]): Promise<void> {
+        const { error } = await supabase.rpc('copy_exercises_to_lift_book', {
+            p_user_id: userId,
+            p_post_id: postId,
+            p_exercise_ids: exerciseIds || null
+        });
+
+        if (error) {
+            console.error('[SupabasePostService.copyToLiftBook]', error.message);
+            throw error;
+        }
+    },
+
+    async getLiftBook(userId: string): Promise<any[]> {
+        const { data, error } = await supabase
+            .from('lift_book')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('[SupabasePostService.getLiftBook]', error.message);
+            return [];
+        }
+        return data;
     },
 };

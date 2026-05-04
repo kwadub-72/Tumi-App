@@ -1,5 +1,5 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { ACTIVITIES } from '@/src/shared/constants/Activities';
 import { Colors } from '@/src/shared/theme/Colors';
@@ -18,6 +18,12 @@ const VISIBILITY_OPTIONS = [
     { name: 'Private', icon: 'lock-outline' }
 ];
 
+const STATUS_OPTIONS = [
+    { name: 'Natural', icon: 'leaf', color: '#4ADE80' },
+    { name: 'Enhanced', icon: 'lightning-bolt', color: '#FFD700' },
+    { name: 'Undeclared', icon: 'help-circle-outline' }
+];
+
 interface FilterModalProps {
     visible: boolean;
     onClose: () => void;
@@ -30,7 +36,7 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
     const isTribes = mode === 'Tribes';
     const isSimilar = mode === 'Similar';
 
-    const [status, setStatus] = useState('All');
+    const [status, setStatus] = useState('Undeclared');
     const [activity, setActivity] = useState('All');
 
     // Tribe Specific
@@ -38,16 +44,17 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
     const [visibility, setVisibility] = useState('All');
     const [showTribeFocusRolodex, setShowTribeFocusRolodex] = useState(false);
     const [showVisibilityRolodex, setShowVisibilityRolodex] = useState(false);
+    const [showStatusRolodex, setShowStatusRolodex] = useState(false);
 
     // Height
-    const [heightMode, setHeightMode] = useState<'Range' | 'Exact'>('Range');
-    const [heightVal, setHeightVal] = useState("5'7");
+    const [heightMode, setHeightMode] = useState<'Range3' | 'Range1'>('Range3');
+    const [heightVal, setHeightVal] = useState("..");
 
     // Height Logic
     const [isMetric, setIsMetric] = useState(false);
-    const [ft, setFt] = useState(5);
-    const [inch, setInch] = useState(7);
-    const [cmVal, setCmVal] = useState('170');
+    const [ft, setFt] = useState<number | null>(null);
+    const [inch, setInch] = useState<number | null>(null);
+    const [cmVal, setCmVal] = useState('');
     const [showHeightRolodex, setShowHeightRolodex] = useState(false);
 
     // Weight
@@ -55,8 +62,8 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
     const [weightVal, setWeightVal] = useState('');
 
     // Body Fat
-    const [minBf, setMinBf] = useState(1);
-    const [maxBf, setMaxBf] = useState(99);
+    const [bfMode, setBfMode] = useState<'Range3' | 'Range1'>('Range3');
+    const [bfVal, setBfVal] = useState('');
 
     // Stats
     const [minMeals, setMinMeals] = useState('');
@@ -65,18 +72,28 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
 
     const [isApplied, setIsApplied] = useState(false);
     const [showActivityRolodex, setShowActivityRolodex] = useState(false);
+    const [scrollEnabled, setScrollEnabled] = useState(true);
+
+    // Refs for input focus
+    const weightRef = useRef<TextInput>(null);
+    const bfRef = useRef<TextInput>(null);
+    const mealsRef = useRef<TextInput>(null);
+    const workoutsRef = useRef<TextInput>(null);
+    const updatesRef = useRef<TextInput>(null);
 
     useEffect(() => {
         // Reset applied state on change
         setIsApplied(false);
-    }, [status, activity, tribeFocus, visibility, heightMode, heightVal, weightMode, weightVal, minBf, maxBf, minMeals, minWorkouts, minUpdates]);
+    }, [status, activity, tribeFocus, visibility, heightMode, heightVal, weightMode, weightVal, bfMode, bfVal, minMeals, minWorkouts, minUpdates]);
 
     useEffect(() => {
         // Sync string representation on change
         if (isMetric) {
-            setHeightVal(cmVal);
+            setHeightVal(cmVal || '...');
         } else {
-            setHeightVal(`${ft}'${inch}`);
+            const ftStr = ft === null ? '..' : ft.toString();
+            const inStr = inch === null ? '..' : inch.toString();
+            setHeightVal(`${ftStr}'${inStr}"`);
         }
     }, [ft, inch, cmVal, isMetric]);
 
@@ -88,7 +105,7 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
             visibility: isTribes ? visibility : undefined,
             height: isTribes ? undefined : { mode: heightMode, val: heightVal },
             weight: isTribes ? undefined : { mode: weightMode, val: weightVal },
-            bodyFat: isTribes ? undefined : { min: minBf, max: maxBf },
+            bodyFat: isTribes ? undefined : { mode: bfMode, val: bfVal },
             minMeals,
             minWorkouts,
             minUpdates
@@ -97,20 +114,20 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
     };
 
     const handleReset = () => {
-        setStatus('All');
+        setStatus('Undeclared');
         setActivity('All');
         setTribeFocus('All');
         setVisibility('All');
-        setHeightMode('Range');
-        setHeightVal("5'7"); // Default
-        setFt(5);
-        setInch(7);
-        setCmVal('170');
+        setHeightMode('Range3');
+        setHeightVal("..'..\""); // Default
+        setFt(null);
+        setInch(null);
+        setCmVal('');
         setIsMetric(false);
         setWeightMode('Range15');
         setWeightVal('');
-        setMinBf(1);
-        setMaxBf(99);
+        setBfMode('Range3');
+        setBfVal('');
         setMinMeals('');
         setMinWorkouts('');
         setMinUpdates('');
@@ -141,8 +158,9 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
             animationType="slide"
             onRequestClose={onClose}
         >
-            <Pressable style={styles.overlay} onPress={onClose}>
-                <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.overlay}>
+                <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+                <View style={styles.modalContent}>
                     <View style={styles.header}>
                         <View style={{ width: 60 }} />
                         <View style={styles.filterTitleRow}>
@@ -154,16 +172,26 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
                         </TouchableOpacity>
                     </View>
 
-                    <ScrollView style={styles.scrollContent}>
+                    <ScrollView style={styles.scrollContent} scrollEnabled={scrollEnabled}>
                         {/* Natural / Enhanced */}
-                        <View style={styles.row}>
-                            <Text style={styles.label}>Natural/Enhanced</Text>
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillScroll}>
-                                <StatusPill label="All" value="All" />
-                                <StatusPill label="Natural" value="natural" icon="leaf" color="#4ADE80" />
-                                <StatusPill label="Enhanced" value="enhanced" icon="lightning-bolt" color="#FFD700" />
-                                <StatusPill label="Undeclared" value="none" />
-                            </ScrollView>
+                        <View style={[styles.inlineRow, isSectionDisabled('activity') && { opacity: 0.5 }]} pointerEvents={isSectionDisabled('activity') ? 'none' : 'auto'}>
+                            <Text style={[styles.label, { marginBottom: 0 }]}>Natural/Enhanced</Text>
+                            <TouchableOpacity
+                                style={styles.activityPill}
+                                onPress={() => setShowStatusRolodex(true)}
+                            >
+                                <Text style={styles.activityPillText}>{status}</Text>
+                                {status === 'Undeclared' || status === 'All' ? (
+                                    <MaterialCommunityIcons name="chevron-down" size={20} color="#2F3A27" style={{ marginLeft: 4 }} />
+                                ) : (
+                                    <MaterialCommunityIcons 
+                                        name={STATUS_OPTIONS.find(s => s.name === status)?.icon as any} 
+                                        size={18} 
+                                        color={STATUS_OPTIONS.find(s => s.name === status)?.color || "#2F3A27"} 
+                                        style={{ marginLeft: 6 }} 
+                                    />
+                                )}
+                            </TouchableOpacity>
                         </View>
 
                         <View style={styles.divider} />
@@ -171,14 +199,23 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
                         {/* Activity - Hide for Tribes */}
                         {!isTribes && (
                             <>
-                                <View style={[styles.row, isSectionDisabled('activity') && { opacity: 0.5 }]} pointerEvents={isSectionDisabled('activity') ? 'none' : 'auto'}>
-                                    <Text style={styles.label}>Activity</Text>
+                                <View style={[styles.inlineRow, isSectionDisabled('activity') && { opacity: 0.5 }]} pointerEvents={isSectionDisabled('activity') ? 'none' : 'auto'}>
+                                    <Text style={[styles.label, { marginBottom: 0 }]}>Activity</Text>
                                     <TouchableOpacity
-                                        style={[styles.pill, styles.activePill, { alignSelf: 'flex-start' }]}
+                                        style={styles.activityPill}
                                         onPress={() => setShowActivityRolodex(true)}
                                     >
-                                        <Text style={styles.activePillText}>{activity}</Text>
-                                        <MaterialCommunityIcons name="chevron-down" size={20} color="#F5F5DC" style={{ marginLeft: 4 }} />
+                                        <Text style={styles.activityPillText}>{activity}</Text>
+                                        {activity === 'All' ? (
+                                            <MaterialCommunityIcons name="chevron-down" size={20} color="#2F3A27" style={{ marginLeft: 4 }} />
+                                        ) : (
+                                            <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginLeft: 6 }}>
+                                                <MaterialCommunityIcons name={ACTIVITIES.find(a => a.name === activity || a.displayName === activity)?.icon as any || "hammer"} size={16} color="#2F3A27" />
+                                                {ACTIVITIES.find(a => a.name === activity || a.displayName === activity)?.modifier && (
+                                                    <Text style={{ fontSize: 10, color: '#2F3A27', fontWeight: 'bold', lineHeight: 12 }}>{ACTIVITIES.find(a => a.name === activity || a.displayName === activity)?.modifier}</Text>
+                                                )}
+                                            </View>
+                                        )}
                                     </TouchableOpacity>
                                 </View>
                                 <View style={styles.divider} />
@@ -216,8 +253,6 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
                             </>
                         )}
 
-                        <View style={styles.divider} />
-
                         {/* Physical Stats - Hide for Tribes */}
                         {!isTribes && (
                             <View style={{ opacity: isSectionDisabled('body') ? 0.5 : 1 }} pointerEvents={isSectionDisabled('body') ? 'none' : 'auto'}>
@@ -234,16 +269,16 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
 
                                     <View style={styles.controlsRow}>
                                         <TouchableOpacity
-                                            style={[styles.toggleBtn, heightMode === 'Range' && styles.activeToggle]}
-                                            onPress={() => setHeightMode('Range')}
+                                            style={[styles.toggleBtn, heightMode === 'Range3' && styles.activeToggle]}
+                                            onPress={() => setHeightMode('Range3')}
                                         >
-                                            <Text style={[styles.toggleText, heightMode === 'Range' && styles.activeToggleText]}>± 3 {isMetric ? 'cm' : 'in.'}</Text>
+                                            <Text style={[styles.toggleText, heightMode === 'Range3' && styles.activeToggleText]}>± 3 {isMetric ? 'cm' : 'in.'}</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
-                                            style={[styles.toggleBtn, heightMode === 'Exact' && styles.activeToggle]}
-                                            onPress={() => setHeightMode('Exact')}
+                                            style={[styles.toggleBtn, heightMode === 'Range1' && styles.activeToggle]}
+                                            onPress={() => setHeightMode('Range1')}
                                         >
-                                            <Text style={[styles.toggleText, heightMode === 'Exact' && styles.activeToggleText]}>Exact</Text>
+                                            <Text style={[styles.toggleText, heightMode === 'Range1' && styles.activeToggleText]}>± 1 {isMetric ? 'cm' : 'in.'}</Text>
                                         </TouchableOpacity>
 
                                         {isMetric ? (
@@ -263,7 +298,7 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
                                                 style={styles.inputContainer}
                                                 onPress={() => setShowHeightRolodex(true)}
                                             >
-                                                <Text style={styles.inputValue}>{ft}&apos;{inch}</Text>
+                                                <Text style={styles.inputValue}>{heightVal}</Text>
                                             </TouchableOpacity>
                                         )}
                                     </View>
@@ -287,95 +322,133 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
                                         >
                                             <Text style={[styles.toggleText, weightMode === 'Range5' && styles.activeToggleText]}>± 5 lbs</Text>
                                         </TouchableOpacity>
-                                        <View style={styles.inputContainer}>
+                                        <Pressable 
+                                            style={styles.inputContainer} 
+                                            onPress={() => weightRef.current?.focus()}
+                                        >
                                             <TextInput
+                                                ref={weightRef}
                                                 style={styles.textInput}
-                                                placeholder=".."
+                                                placeholder="..."
                                                 placeholderTextColor="rgba(47, 58, 39, 0.5)"
                                                 keyboardType="numeric"
                                                 value={weightVal}
                                                 onChangeText={setWeightVal}
                                             />
                                             <Text style={styles.suffix}>lbs</Text>
-                                        </View>
+                                        </Pressable>
                                     </View>
                                 </View>
 
                                 <View style={styles.divider} />
 
                                 {/* Body Fat */}
-                                <RangeSlider
-                                    min={1}
-                                    max={99}
-                                    initialMin={minBf}
-                                    initialMax={maxBf}
-                                    onValuesChange={(min, max) => {
-                                        setMinBf(min);
-                                        setMaxBf(max);
-                                    }}
-                                />
-
+                                <View style={styles.row}>
+                                    <Text style={styles.label}>Body fat</Text>
+                                    <View style={styles.controlsRow}>
+                                        <TouchableOpacity
+                                            style={[styles.toggleBtn, bfMode === 'Range3' && styles.activeToggle]}
+                                            onPress={() => setBfMode('Range3')}
+                                        >
+                                            <Text style={[styles.toggleText, bfMode === 'Range3' && styles.activeToggleText]}>± 3%</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[styles.toggleBtn, bfMode === 'Range1' && styles.activeToggle]}
+                                            onPress={() => setBfMode('Range1')}
+                                        >
+                                            <Text style={[styles.toggleText, bfMode === 'Range1' && styles.activeToggleText]}>± 1%</Text>
+                                        </TouchableOpacity>
+                                        <Pressable 
+                                            style={styles.inputContainer} 
+                                            onPress={() => bfRef.current?.focus()}
+                                        >
+                                            <TextInput
+                                                ref={bfRef}
+                                                style={styles.textInput}
+                                                placeholder="..."
+                                                placeholderTextColor="rgba(47, 58, 39, 0.5)"
+                                                keyboardType="numeric"
+                                                value={bfVal}
+                                                onChangeText={setBfVal}
+                                            />
+                                            <Text style={styles.suffix}>%</Text>
+                                        </Pressable>
+                                    </View>
+                                </View>
                                 <View style={styles.divider} />
                             </View>
                         )}
 
-                        <View style={styles.divider} />
-
                         {/* Meals */}
-                        <View style={styles.row}>
-                            <Text style={styles.label}>Meals</Text>
+                        <View style={styles.inlineRow}>
+                            <Text style={[styles.label, { marginBottom: 0 }]}>Meals</Text>
                             <View style={styles.rightAlign}>
-                                <View style={[styles.inputContainer, styles.wideInput]}>
+                                <Pressable 
+                                    style={[styles.inputContainer, styles.wideInput]}
+                                    onPress={() => mealsRef.current?.focus()}
+                                >
+                                    <Text style={styles.prefix}>≥</Text>
                                     <TextInput
-                                        style={styles.textInput}
+                                        ref={mealsRef}
+                                        style={styles.textInputInline}
                                         placeholder="..."
                                         placeholderTextColor="rgba(47, 58, 39, 0.5)"
                                         keyboardType="numeric"
                                         value={minMeals}
                                         onChangeText={setMinMeals}
                                     />
-                                    <Text style={styles.suffix}>posts ≥</Text>
-                                </View>
+                                    <Text style={styles.suffix}>posts</Text>
+                                </Pressable>
                             </View>
                         </View>
 
                         <View style={styles.divider} />
 
                         {/* Workouts */}
-                        <View style={styles.row}>
-                            <Text style={styles.label}>Workouts</Text>
+                        <View style={styles.inlineRow}>
+                            <Text style={[styles.label, { marginBottom: 0 }]}>Workouts</Text>
                             <View style={styles.rightAlign}>
-                                <View style={[styles.inputContainer, styles.wideInput]}>
+                                <Pressable 
+                                    style={[styles.inputContainer, styles.wideInput]}
+                                    onPress={() => workoutsRef.current?.focus()}
+                                >
+                                    <Text style={styles.prefix}>≥</Text>
                                     <TextInput
-                                        style={styles.textInput}
+                                        ref={workoutsRef}
+                                        style={styles.textInputInline}
                                         placeholder="..."
                                         placeholderTextColor="rgba(47, 58, 39, 0.5)"
                                         keyboardType="numeric"
                                         value={minWorkouts}
                                         onChangeText={setMinWorkouts}
                                     />
-                                    <Text style={styles.suffix}>posts ≥</Text>
-                                </View>
+                                    <Text style={styles.suffix}>posts</Text>
+                                </Pressable>
                             </View>
                         </View>
 
                         <View style={styles.divider} />
 
                         {/* Macro Updates */}
-                        <View style={styles.row}>
-                            <Text style={styles.label}>Macro updates</Text>
+                        <View style={styles.inlineRow}>
+                            <Text style={[styles.label, { marginBottom: 0 }]}>Macro updates</Text>
                             <View style={styles.rightAlign}>
-                                <View style={[styles.inputContainer, styles.wideInput]}>
+                                <Pressable 
+                                    style={[styles.inputContainer, styles.wideInput]}
+                                    onPress={() => updatesRef.current?.focus()}
+                                >
+                                    <Text style={styles.prefix}>≥</Text>
                                     <TextInput
-                                        style={styles.textInput}
+                                        ref={updatesRef}
+                                        style={styles.textInputInline}
                                         placeholder="..."
                                         placeholderTextColor="rgba(47, 58, 39, 0.5)"
                                         keyboardType="numeric"
                                         value={minUpdates}
                                         onChangeText={setMinUpdates}
                                     />
-                                    <Text style={styles.suffix}>posts ≥</Text>
-                                </View>
+                                    <Text style={styles.suffix}>posts</Text>
+                                </Pressable>
                             </View>
                         </View>
 
@@ -391,8 +464,8 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
                             )}
                         </TouchableOpacity>
                     </View>
-                </Pressable>
-            </Pressable>
+                </View>
+            </View>
 
             {showVisibilityRolodex && (
                 <RolodexPicker
@@ -408,7 +481,7 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
                     onSelect={setTribeFocus}
                 />
             )}
-            {(showActivityRolodex || showHeightRolodex || showVisibilityRolodex || showTribeFocusRolodex) && (
+            {(showActivityRolodex || showHeightRolodex || showVisibilityRolodex || showTribeFocusRolodex || showStatusRolodex) && (
                 <View style={styles.rolodexContainer}>
                     <View style={styles.rolodexHeader}>
                         <TouchableOpacity onPress={() => {
@@ -416,6 +489,7 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
                             setShowHeightRolodex(false);
                             setShowVisibilityRolodex(false);
                             setShowTribeFocusRolodex(false);
+                            setShowStatusRolodex(false);
                         }}>
                             <Text style={styles.doneText}>Done</Text>
                         </TouchableOpacity>
@@ -427,10 +501,19 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
                             onSelect={setActivity}
                         />
                     )}
+                    {showStatusRolodex && (
+                        <RolodexPicker
+                            options={STATUS_OPTIONS}
+                            selected={status}
+                            onSelect={setStatus}
+                        />
+                    )}
                     {showHeightRolodex && (
                         <HeightRolodex
-                            selectedFt={ft}
-                            selectedIn={inch}
+                            minFt={1}
+                            maxFt={9}
+                            selectedFt={ft || 5}
+                            selectedIn={inch || 0}
                             onSelect={(f, i) => { setFt(f); setInch(i); }}
                         />
                     )}
@@ -499,6 +582,12 @@ const styles = StyleSheet.create({
     row: {
         marginBottom: 10,
     },
+    inlineRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
     label: {
         fontSize: 16,
         fontWeight: 'bold',
@@ -529,6 +618,21 @@ const styles = StyleSheet.create({
     activePillText: {
         color: '#F5F5DC',
     },
+    activityPill: {
+        flexDirection: 'row',
+        backgroundColor: '#F5F5DC',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#2F3A27',
+    },
+    activityPillText: {
+        color: '#2F3A27',
+        fontWeight: 'bold',
+        fontSize: 16,
+    },
     divider: {
         height: 1,
         backgroundColor: '#2F3A27',
@@ -549,15 +653,14 @@ const styles = StyleSheet.create({
         borderColor: '#2F3A27',
     },
     activeToggle: {
-        backgroundColor: '#E8F5E9',
-        borderWidth: 2,
+        backgroundColor: '#2F3A27',
     },
     toggleText: {
         color: '#2F3A27',
         fontWeight: 'bold',
     },
     activeToggleText: {
-        // color: 'white', 
+        color: '#F5F5DC',
     },
     inputContainer: {
         flex: 1,
@@ -578,10 +681,24 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         fontSize: 16,
     },
+    textInputInline: {
+        textAlign: 'center',
+        color: '#2F3A27',
+        fontWeight: 'bold',
+        fontSize: 16,
+        minWidth: 20,
+    },
+    prefix: {
+        color: '#2F3A27',
+        marginRight: 4,
+        fontWeight: '600',
+        fontStyle: 'italic',
+    },
     suffix: {
         color: '#2F3A27',
         marginLeft: 4,
         fontWeight: '600',
+        fontStyle: 'italic',
     },
     inputValue: {
         color: '#2F3A27',

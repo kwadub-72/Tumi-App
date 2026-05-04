@@ -1,8 +1,9 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { AVPlaybackStatusSuccess, ResizeMode, Video } from 'expo-av';
 import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Image, LayoutAnimation, StyleSheet, Text, TouchableOpacity, View, TouchableWithoutFeedback } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { FeedPost, Snapshot, Meal, Workout, MacroUpdate } from '@/src/shared/models/types';
 import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
 import { Colors } from '@/src/shared/theme/Colors';
@@ -10,6 +11,7 @@ import VerifiedModal from '@/components/VerifiedModal';
 import { useMealLogStore } from '@/src/store/useMealLogStore';
 import { useWorkoutLogStore } from '@/src/store/useWorkoutLogStore';
 import { useUserStore } from '@/store/UserStore';
+import { useProfileNavigation } from '@/src/shared/hooks/useProfileNavigation';
 
 export interface FeedItemProps {
     post: FeedPost;
@@ -20,11 +22,13 @@ export interface FeedItemProps {
     onPressShare?: () => void;
     onPressSave?: () => void;
     onPressOptions?: () => void;
+    onDismissSelectMode?: () => void;
     isDetailView?: boolean;
     isSelectMode?: boolean;
     selectedItems?: string[];
     onToggleSelect?: (itemId: string, itemType: string) => void;
     cardColor?: string;
+    sharedTransitionTag?: string;
 }
 
 export default function FeedItem({
@@ -36,11 +40,13 @@ export default function FeedItem({
     onPressShare,
     onPressSave,
     onPressOptions,
+    onDismissSelectMode,
     isDetailView = false,
     isSelectMode = false,
     selectedItems = [],
     onToggleSelect,
-    cardColor
+    cardColor,
+    sharedTransitionTag
 }: FeedItemProps) {
     const router = useRouter();
     const [isExpanded, setIsExpanded] = useState(isDetailView);
@@ -54,6 +60,13 @@ export default function FeedItem({
     const mealStore = useMealLogStore();
     const workoutStore = useWorkoutLogStore();
     const { macroTargets: myTargets } = useUserStore();
+    const { navigateToProfile } = useProfileNavigation();
+
+    useEffect(() => {
+        if (isSelectMode) {
+            setIsExpanded(true);
+        }
+    }, [isSelectMode]);
 
     const handleStandardCopy = () => {
         if (post.meal) {
@@ -192,10 +205,23 @@ export default function FeedItem({
 
     const handlePressBody = () => {
         if (isSelectMode) {
-            onPressOptions && onPressOptions();
+            if (post.macroUpdate) {
+                // For macro updates, we handle it in the sub-rows
+                // but if they tap the very background of the card, we dismiss
+                onDismissSelectMode?.();
+            } else if (post.snapshot) {
+                onToggleSelect?.('snapshot', 'snapshot');
+            } else {
+                // For meals and workouts, we want individual rows to handle it.
+                // Tapping the card background should dismiss select mode.
+                onDismissSelectMode?.();
+            }
             return;
         }
         if (post.id && !isDetailView) router.push(`/post/${post.id}`);
+        else if (isDetailView) {
+            onPressOptions?.();
+        }
     };
 
     const formatVal = (val: number) => {
@@ -203,13 +229,21 @@ export default function FeedItem({
         return `${val}`;
     };
 
-    const renderMacroValue = (icon: any, val: number, unit: string, colorOverride?: string) => (
-        <View style={styles.macroValueItem}>
-            <MaterialCommunityIcons name={icon} size={16} color={colorOverride || "white"} />
-            <Text style={[styles.macroValueText, colorOverride && { color: colorOverride }]}>
+    const renderMacroColumn = (icon: any, val: number, unit: string, width?: number, colorOverride?: string, scale: 'normal' | 'small' = 'normal') => (
+        <View style={[styles.macroValueItem, width ? { width, justifyContent: 'flex-start' } : {}]}>
+            <MaterialCommunityIcons name={icon} size={scale === 'small' ? 14 : 18} color={colorOverride || "white"} />
+            <Text style={[
+                styles.macroValueText, 
+                colorOverride && { color: colorOverride },
+                scale === 'small' && { fontSize: 13, fontWeight: '500' }
+            ]}>
                 {formatVal(val)}{unit}
             </Text>
         </View>
+    );
+
+    const renderMacroValue = (icon: any, val: number, unit: string, colorOverride?: string) => (
+        renderMacroColumn(icon, val, unit, undefined, colorOverride, 'normal')
     );
 
     const renderSnapshot = (snapshot: Snapshot) => {
@@ -255,7 +289,11 @@ export default function FeedItem({
     const renderMacroUpdate = (mu: any) => (
         <View style={styles.macroUpdateContent}>
             {isExpanded && (
-                <View style={styles.macroOldRow}>
+                <TouchableOpacity 
+                    activeOpacity={isSelectMode ? 0.7 : 1}
+                    onPress={() => isSelectMode && onToggleSelect?.('old', 'macro')}
+                    style={styles.macroOldRow}
+                >
                     <Text style={styles.macroLabelLarge}>Old Target</Text>
                     <View style={styles.macroValues}>
                         {renderMacroValue('fire', mu.oldTargets.calories, ' cals')}
@@ -264,34 +302,42 @@ export default function FeedItem({
                         {renderMacroValue('water', mu.oldTargets.f, 'g')}
                     </View>
                     {isSelectMode && (
-                        <TouchableOpacity style={styles.selectBtn} onPress={() => onToggleSelect && onToggleSelect('old', 'macro')}>
+                        <View style={styles.selectBtn}>
                             <Ionicons name={selectedItems.includes('old') ? "checkmark-circle" : "ellipse-outline"} size={28} color={selectedItems.includes('old') ? "#2F3A27" : "rgba(255,255,255,0.7)"} />
-                        </TouchableOpacity>
+                        </View>
                     )}
-                </View>
+                </TouchableOpacity>
             )}
             <View style={[styles.divider, { opacity: 0.2, marginVertical: 8 }]} />
-            <View style={styles.macroNewRow}>
-                <View style={styles.newTargetsLabelBox}>
-                    <Text style={styles.macroLabel}>New</Text>
-                    <Text style={styles.macroLabel}>targets</Text>
-                </View>
-                <View style={styles.macroValuesMain}>
-                    {renderMacroValue('fire', mu.newTargets.calories, ' cals')}
-                    {renderMacroValue('food-drumstick', mu.newTargets.p, 'g')}
-                    {renderMacroValue('barley', mu.newTargets.c, 'g')}
-                    {renderMacroValue('water', mu.newTargets.f, 'g')}
-                </View>
-                {isSelectMode && (
-                    <TouchableOpacity style={styles.selectBtn} onPress={() => onToggleSelect && onToggleSelect('new', 'macro')}>
-                        <Ionicons name={selectedItems.includes('new') ? "checkmark-circle" : "ellipse-outline"} size={28} color={selectedItems.includes('new') ? "#2F3A27" : "rgba(255,255,255,0.7)"} />
-                    </TouchableOpacity>
-                )}
-            </View>
+                <TouchableOpacity 
+                    activeOpacity={isSelectMode ? 0.7 : 1}
+                    onPress={() => isSelectMode && onToggleSelect?.('new', 'macro')}
+                    style={styles.macroNewRow}
+                >
+                    <View style={styles.newTargetsLabelBox}>
+                        <Text style={styles.macroLabel}>New</Text>
+                        <Text style={styles.macroLabel}>targets</Text>
+                    </View>
+                    <View style={styles.macroValuesMain}>
+                        {renderMacroValue('fire', mu.newTargets.calories, ' cals')}
+                        {renderMacroValue('food-drumstick', mu.newTargets.p, 'g')}
+                        {renderMacroValue('barley', mu.newTargets.c, 'g')}
+                        {renderMacroValue('water', mu.newTargets.f, 'g')}
+                    </View>
+                    {isSelectMode && (
+                        <View style={styles.selectBtn}>
+                            <Ionicons name={selectedItems.includes('new') ? "checkmark-circle" : "ellipse-outline"} size={28} color={selectedItems.includes('new') ? "#2F3A27" : "rgba(255,255,255,0.7)"} />
+                        </View>
+                    )}
+                </TouchableOpacity>
 
             <View style={[styles.divider, { opacity: 0.2, marginVertical: 8 }]} />
 
-            <View style={styles.macroOldRow}>
+            <TouchableOpacity 
+                activeOpacity={isSelectMode ? 0.7 : 1}
+                onPress={() => isSelectMode && onToggleSelect?.('diff', 'macro')}
+                style={styles.macroOldRow}
+            >
                 <Text style={styles.macroLabelLarge}>Difference</Text>
                 <View style={styles.macroValues}>
                     {renderMacroValue('fire', Math.round((mu.newTargets.calories - mu.oldTargets.calories) / mu.oldTargets.calories * 100 || 0), '%')}
@@ -300,56 +346,80 @@ export default function FeedItem({
                     {renderMacroValue('water', Math.round((mu.newTargets.f - mu.oldTargets.f) / mu.oldTargets.f * 100 || 0), '%')}
                 </View>
                 {isSelectMode && (
-                    <TouchableOpacity style={styles.selectBtn} onPress={() => onToggleSelect && onToggleSelect('diff', 'macro')}>
+                    <View style={styles.selectBtn}>
                         <Ionicons name={selectedItems.includes('diff') ? "checkmark-circle" : "ellipse-outline"} size={28} color={selectedItems.includes('diff') ? "#2F3A27" : "rgba(255,255,255,0.7)"} />
-                    </TouchableOpacity>
+                    </View>
                 )}
-            </View>
+            </TouchableOpacity>
         </View>
     );
 
     const renderMeal = (meal: any) => {
-        if (!isDetailView) {
-            return (
-                <View style={styles.mealMainStats}>
-                    <Text style={styles.mealType}>{meal.type}</Text>
-                    <View style={styles.mealMacros}>
-                        {renderMacroValue('fire', meal.calories, ' cals')}
-                        {renderMacroValue('food-drumstick', meal.macros.p, 'g')}
-                        {renderMacroValue('barley', meal.macros.c, 'g')}
-                        {renderMacroValue('water', meal.macros.f, 'g')}
-                    </View>
-                </View>
-            );
-        }
-
         return (
-            <View style={styles.detailedMealContainer}>
-                {meal.ingredients?.map((ing: any, i: number) => {
-                    const isSelected = selectedItems.includes(ing.name);
-                    return (
-                        <View key={i} style={[styles.detailedMealRow, isSelectMode && styles.detailedMealRowShifted]}>
-                            <View style={styles.ingInfo}>
-                                <Text style={styles.ingName}>{ing.name}</Text>
-                                {ing.amount && <Text style={styles.ingAmount}>{ing.amount}</Text>}
-                            </View>
-                            <View style={styles.ingMacros}>
-                                {renderMacroValue('fire', ing.cals, ' cals', '#D4E2D4')}
-                                {renderMacroValue('food-drumstick', ing.macros.p, 'g')}
-                                {renderMacroValue('barley', ing.macros.c, 'g')}
-                                {renderMacroValue('water', ing.macros.f, 'g')}
-                            </View>
-                            {isSelectMode && (
-                                <TouchableOpacity style={styles.selectBtn} onPress={() => onToggleSelect && onToggleSelect(ing.name, 'ingredient')}>
-                                    <Ionicons name={isSelected ? "checkmark-circle" : "add-circle"} size={28} color={isSelected ? "#2F3A27" : "rgba(255,255,255,0.7)"} />
-                                </TouchableOpacity>
-                            )}
+            <View>
+                {!isDetailView && (
+                    <View style={styles.mealMainStats}>
+                        <Text style={styles.mealType}>{meal.type}</Text>
+                        <View style={styles.mealMacrosFixed}>
+                            {renderMacroColumn('fire', meal.calories, ' cals', 85, undefined, 'normal')}
+                            {renderMacroColumn('food-drumstick', meal.macros.p, 'g', 55, undefined, 'normal')}
+                            {renderMacroColumn('barley', meal.macros.c, 'g', 55, undefined, 'normal')}
+                            {renderMacroColumn('water', meal.macros.f, 'g', 55, undefined, 'normal')}
                         </View>
-                    );
-                })}
+                    </View>
+                )}
+
+                {!isDetailView && (
+                    <TouchableOpacity onPress={toggleExpand} style={styles.expandLineTrigger}>
+                        <View style={styles.dividerHalf} />
+                        <Ionicons name="ellipsis-horizontal" size={16} color="rgba(255,255,255,0.5)" />
+                        <View style={styles.dividerHalf} />
+                    </TouchableOpacity>
+                )}
+
+                {(isDetailView || isExpanded) && (
+                    <View style={styles.detailedMealContainer}>
+                        {meal.ingredients?.map((ing: any, i: number) => {
+                            const isSelected = selectedItems.includes(ing.name);
+                            return (
+                                <TouchableOpacity 
+                                    key={i} 
+                                    activeOpacity={isSelectMode ? 0.7 : 1}
+                                    onPress={() => isSelectMode && onToggleSelect && onToggleSelect(ing.name, 'ingredient')}
+                                    style={styles.detailedMealRow}
+                                >
+                                    <View style={[styles.ingInfo, isSelectMode && { width: 130 }]}>
+                                        {isSelectMode && (
+                                            <View style={styles.selectBtnLeft}>
+                                                {isSelected ? (
+                                                    <View style={styles.selectedCircle}>
+                                                        <Ionicons name="checkmark" size={16} color="white" />
+                                                    </View>
+                                                ) : (
+                                                    <View style={styles.unselectedCircle} />
+                                                )}
+                                            </View>
+                                        )}
+                                        <View style={[styles.ingTextContainer, isSelectMode && { paddingLeft: 28 }]}>
+                                            <Text style={styles.ingName} numberOfLines={2}>{ing.name}</Text>
+                                            {ing.amount && <Text style={styles.ingAmount}>{ing.amount}</Text>}
+                                        </View>
+                                    </View>
+                                    <View style={styles.ingMacrosFixed}>
+                                        {renderMacroColumn('fire', ing.cals, ' cals', isSelectMode ? 75 : 85, 'white', 'small')}
+                                        {renderMacroColumn('food-drumstick', ing.macros.p, 'g', isSelectMode ? 42 : 55, 'white', 'small')}
+                                        {renderMacroColumn('barley', ing.macros.c, 'g', isSelectMode ? 42 : 55, 'white', 'small')}
+                                        {renderMacroColumn('water', ing.macros.f, 'g', isSelectMode ? 42 : 55, 'white', 'small')}
+                                    </View>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                )}
             </View>
         );
     };
+
 
     const formatDuration = (mins: number) => {
         if (!mins) return '';
@@ -387,8 +457,24 @@ export default function FeedItem({
                                 const cardioStr = cardioParts.join(', ');
                                 
                                 return (
-                                    <View key={idx} style={styles.exerciseFeedRow}>
-                                        <View style={styles.exerciseFeedLeft}>
+                                    <TouchableOpacity 
+                                        key={idx} 
+                                        activeOpacity={isSelectMode ? 0.7 : 1}
+                                        onPress={() => isSelectMode && onToggleSelect && onToggleSelect(ex.title, 'exercise')}
+                                        style={styles.exerciseFeedRow}
+                                    >
+                                        {isSelectMode && (
+                                            <View style={styles.selectBtnLeft}>
+                                                {selectedItems.includes(ex.title) ? (
+                                                    <View style={styles.selectedCircle}>
+                                                        <Ionicons name="checkmark" size={16} color="white" />
+                                                    </View>
+                                                ) : (
+                                                    <View style={styles.unselectedCircle} />
+                                                )}
+                                            </View>
+                                        )}
+                                        <View style={[styles.exerciseFeedLeft, isSelectMode && { paddingLeft: 28 }]}>
                                             <Text style={styles.exerciseFeedRowTitle}>
                                                 {ex.displayId ? `${ex.displayId} ` : ''}{ex.title}
                                             </Text>
@@ -409,7 +495,7 @@ export default function FeedItem({
                                                 {ex.type === 'Cardio' ? cardioStr : setsStr}
                                             </Text>
                                         </View>
-                                    </View>
+                                    </TouchableOpacity>
                                 );
                             })}
                         </View>
@@ -423,16 +509,27 @@ export default function FeedItem({
                 {workout.exercises.map((ex: any, idx: number) => {
                     const isSelected = selectedItems.includes(ex.title);
                     return (
-                        <View key={idx} style={[styles.detailedMealRow, isSelectMode && styles.detailedMealRowShifted, { marginTop: 10 }]}>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.ingName}>{ex.title}</Text>
-                                <Text style={styles.ingAmount}>{ex.sets?.length || 0} sets</Text>
+                        <View key={idx} style={[styles.detailedMealRow, { marginTop: 10 }]}>
+                            <View style={[styles.ingInfo, { width: '100%' }]}>
+                                {isSelectMode && (
+                                    <TouchableOpacity 
+                                        style={styles.selectBtnLeft} 
+                                        onPress={() => onToggleSelect && onToggleSelect(ex.title, 'exercise')}
+                                    >
+                                        {isSelected ? (
+                                            <View style={styles.selectedCircle}>
+                                                <Ionicons name="checkmark" size={16} color="white" />
+                                            </View>
+                                        ) : (
+                                            <View style={styles.unselectedCircle} />
+                                        )}
+                                    </TouchableOpacity>
+                                )}
+                                <View style={[styles.ingTextContainer, isSelectMode && { paddingLeft: 28 }]}>
+                                    <Text style={styles.ingName}>{ex.title}</Text>
+                                    <Text style={styles.ingAmount}>{ex.sets?.length || 0} sets</Text>
+                                </View>
                             </View>
-                            {isSelectMode && (
-                                <TouchableOpacity style={styles.selectBtn} onPress={() => onToggleSelect && onToggleSelect(ex.title, 'exercise')}>
-                                    <Ionicons name={isSelected ? "checkmark-circle" : "add-circle"} size={28} color={isSelected ? "#2F3A27" : "rgba(255,255,255,0.7)"} />
-                                </TouchableOpacity>
-                            )}
                         </View>
                     );
                 })}
@@ -449,7 +546,11 @@ export default function FeedItem({
     };
 
     return (
-        <View style={[styles.card, cardColor ? { backgroundColor: cardColor } : {}]}>
+        <Animated.View 
+            style={[styles.card, cardColor ? { backgroundColor: cardColor } : {}]}
+            // @ts-ignore
+            sharedTransitionTag={sharedTransitionTag}
+        >
             {isTribeMenuOpen && (
                 <TouchableWithoutFeedback onPress={() => setIsTribeMenuOpen(false)}>
                     <View style={[StyleSheet.absoluteFill, styles.dimOverlay]} />
@@ -458,10 +559,14 @@ export default function FeedItem({
 
             <VerifiedModal visible={isVerifiedVisible} onClose={() => setIsVerifiedVisible(false)} status={post.user.status} />
             <View style={[styles.header, { zIndex: 1 }]}>
-                <Image source={typeof post.user.avatar === 'string' ? { uri: post.user.avatar } : post.user.avatar} style={styles.avatar} />
+                <TouchableOpacity onPress={() => navigateToProfile(post.user)}>
+                    <Image source={typeof post.user.avatar === 'string' ? { uri: post.user.avatar } : post.user.avatar} style={styles.avatar} />
+                </TouchableOpacity>
                 <View style={styles.headerText}>
                     <View style={styles.nameRow}>
-                        <Text style={styles.name}>{post.user.name}</Text>
+                        <TouchableOpacity onPress={() => navigateToProfile(post.user)}>
+                            <Text style={styles.name}>{post.user.name}</Text>
+                        </TouchableOpacity>
                         {post.user.status && (post.user.status !== 'none') && (
                             <TouchableOpacity onPress={() => setIsVerifiedVisible(true)}>
                                 <MaterialCommunityIcons
@@ -487,7 +592,9 @@ export default function FeedItem({
                             </TouchableOpacity>
                         )}
                     </View>
-                    <Text style={styles.handle}>{post.user.handle}</Text>
+                    <TouchableOpacity onPress={() => navigateToProfile(post.user)}>
+                        <Text style={styles.handle}>{post.user.handle}</Text>
+                    </TouchableOpacity>
                 </View>
                 <TouchableOpacity onPress={onPressOptions}><Ionicons name="ellipsis-horizontal" size={20} color="white" /></TouchableOpacity>
             </View>
@@ -499,7 +606,7 @@ export default function FeedItem({
 
                 {content()}
 
-                {!isDetailView && (
+                {(!isDetailView && !post.meal) && (
                     <TouchableOpacity onPress={toggleExpand} style={styles.expandLineTrigger}>
                         <View style={styles.dividerHalf} />
                         <Ionicons name="ellipsis-horizontal" size={16} color="rgba(255,255,255,0.5)" />
@@ -535,7 +642,7 @@ export default function FeedItem({
                         <View style={styles.tribeCircle}>
                             <TabonoLogo size={20} color={Colors.theme.sageLight} />
                         </View>
-                        <Text style={styles.actionCount}>{post.stats.shares}</Text>
+                        <Text style={styles.actionCount}>0</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actionItem} onPress={onPressLike}>
                         <Ionicons name={post.isLiked ? "heart" : "heart-outline"} size={28} color="white" />
@@ -545,14 +652,14 @@ export default function FeedItem({
                         <Ionicons name="chatbubble-ellipses" size={26} color="white" />
                         <Text style={styles.actionCount}>{post.stats.comments}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.actionItem} onPress={onPressSave}>
-                        <Ionicons name={post.isSaved ? "bookmark" : "bookmark-outline"} size={26} color="white" />
-                        <Text style={styles.actionCount}>{post.stats.saves}</Text>
+                    <TouchableOpacity style={styles.actionItem} onPress={onPressShare || onPressSave}>
+                        <Ionicons name="arrow-redo-outline" size={26} color="white" />
+                        <Text style={styles.actionCount}>{post.stats.shares}</Text>
                     </TouchableOpacity>
                 </View>
-                <Text style={styles.timeLabel}>Just now</Text>
+                <Text style={styles.timeLabel}>{post.timeAgo}</Text>
             </View>
-        </View>
+        </Animated.View>
     );
 }
 
@@ -573,6 +680,8 @@ const styles = StyleSheet.create({
         height: 48,
         borderRadius: 24,
         marginRight: 10,
+        borderWidth: 1,
+        borderColor: Colors.theme.beige,
     },
     headerText: {
         flex: 1,
@@ -663,11 +772,11 @@ const styles = StyleSheet.create({
     macroValueItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
+        gap: 2,
     },
     macroValueText: {
         color: 'white',
-        fontSize: 12,
+        fontSize: 14,
         fontWeight: '600',
     },
     mealMainStats: {
@@ -678,9 +787,19 @@ const styles = StyleSheet.create({
     },
     mealType: {
         color: 'white',
-        fontSize: 16,
+        fontSize: 20,
         fontWeight: 'bold',
-        width: 75,
+        width: 85,
+    },
+    mealMacrosFixed: {
+        flexDirection: 'row',
+        flex: 1,
+        justifyContent: 'flex-start',
+    },
+    ingMacrosFixed: {
+        flexDirection: 'row',
+        justifyContent: 'flex-start',
+        alignItems: 'center',
     },
     mealMacros: {
         flexDirection: 'row',
@@ -760,7 +879,6 @@ const styles = StyleSheet.create({
         marginVertical: 10,
         justifyContent: 'center',
         width: '100%',
-        paddingHorizontal: 20,
     },
     dividerHalf: {
         flex: 1,
@@ -773,6 +891,8 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         marginTop: 10,
         aspectRatio: 1,
+        borderWidth: 2,
+        borderColor: Colors.theme.beige,
     },
     media: {
         width: '100%',
@@ -853,19 +973,27 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        paddingLeft: 10,
         paddingRight: 10,
     },
     detailedMealRowShifted: {
         paddingRight: 40,
     },
     ingInfo: {
+        width: 85,
+        marginRight: 0,
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        position: 'relative',
+    },
+    ingTextContainer: {
         flex: 1,
-        marginRight: 10,
     },
     ingName: {
         color: 'white',
         fontSize: 15,
         fontWeight: 'bold',
+        flexWrap: 'wrap',
     },
     ingAmount: {
         color: 'rgba(255,255,255,0.6)',
@@ -881,6 +1009,28 @@ const styles = StyleSheet.create({
     selectBtn: {
         position: 'absolute',
         right: 0,
+    },
+    selectBtnLeft: {
+        position: 'absolute',
+        left: 0,
+        top: 2,
+        zIndex: 1,
+    },
+    selectedCircle: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        backgroundColor: '#2F3A27',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    unselectedCircle: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        borderWidth: 1.5,
+        borderColor: 'rgba(255,255,255,0.8)',
+        backgroundColor: 'transparent',
     },
     detailedWorkoutContainer: {
         marginTop: 10,

@@ -7,9 +7,11 @@ interface RangeSliderProps {
     initialMin: number;
     initialMax: number;
     onValuesChange: (min: number, max: number) => void;
+    onStartDragging?: () => void;
+    onEndDragging?: () => void;
 }
 
-export default function RangeSlider({ min, max, initialMin, initialMax, onValuesChange }: RangeSliderProps) {
+export default function RangeSlider({ min, max, initialMin, initialMax, onValuesChange, onStartDragging, onEndDragging }: RangeSliderProps) {
     const [containerWidth, setContainerWidth] = useState(0);
 
     // We keep local state for rapid UI updates, but sync with props if needed
@@ -39,10 +41,14 @@ export default function RangeSlider({ min, max, initialMin, initialMax, onValues
     const panResponderMin = useRef(
         PanResponder.create({
             onStartShouldSetPanResponder: () => true,
+            onStartShouldSetPanResponderCapture: () => true,
             onMoveShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponderCapture: () => true,
             onPanResponderTerminationRequest: () => false,
+            onShouldBlockNativeResponder: () => true,
             onPanResponderGrant: () => {
                 startMin.current = minValue;
+                onStartDragging?.();
             },
             onPanResponderMove: (_, gestureState) => {
                 if (containerWidth === 0) return;
@@ -55,19 +61,29 @@ export default function RangeSlider({ min, max, initialMin, initialMax, onValues
 
                 if (newVal !== minValue) {
                     setMinValue(newVal);
-                    onValuesChange(newVal, maxValue);
                 }
             },
+            onPanResponderRelease: () => {
+                onValuesChange(minValue, maxValue);
+                onEndDragging?.();
+            },
+            onPanResponderTerminate: () => {
+                onEndDragging?.();
+            }
         })
     ).current;
 
     const panResponderMax = useRef(
         PanResponder.create({
             onStartShouldSetPanResponder: () => true,
+            onStartShouldSetPanResponderCapture: () => true,
             onMoveShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponderCapture: () => true,
             onPanResponderTerminationRequest: () => false,
+            onShouldBlockNativeResponder: () => true,
             onPanResponderGrant: () => {
                 startMax.current = maxValue;
+                onStartDragging?.();
             },
             onPanResponderMove: (_, gestureState) => {
                 if (containerWidth === 0) return;
@@ -80,9 +96,15 @@ export default function RangeSlider({ min, max, initialMin, initialMax, onValues
 
                 if (newVal !== maxValue) {
                     setMaxValue(newVal);
-                    onValuesChange(minValue, newVal);
                 }
             },
+            onPanResponderRelease: () => {
+                onValuesChange(minValue, maxValue);
+                onEndDragging?.();
+            },
+            onPanResponderTerminate: () => {
+                onEndDragging?.();
+            }
         })
     ).current;
 
@@ -110,6 +132,7 @@ export default function RangeSlider({ min, max, initialMin, initialMax, onValues
                             width: `${((maxValue - minValue) / (max - min)) * 100}%`
                         }
                     ]}
+                    pointerEvents="none"
                 />
 
                 {/* Min Thumb */}
@@ -118,6 +141,7 @@ export default function RangeSlider({ min, max, initialMin, initialMax, onValues
                         styles.thumb,
                         { left: `${((minValue - min) / (max - min)) * 100}%`, marginLeft: -12 }
                     ]}
+                    hitSlop={{ top: 30, bottom: 30, left: 30, right: 30 }}
                     {...panResponderMin.panHandlers}
                 />
 
@@ -127,6 +151,7 @@ export default function RangeSlider({ min, max, initialMin, initialMax, onValues
                         styles.thumb,
                         { left: `${((maxValue - min) / (max - min)) * 100}%`, marginLeft: -12 }
                     ]}
+                    hitSlop={{ top: 30, bottom: 30, left: 30, right: 30 }}
                     {...panResponderMax.panHandlers}
                 />
             </View>
@@ -165,14 +190,15 @@ const styles = StyleSheet.create({
     trackContainer: {
         height: 30,
         justifyContent: 'center',
-        width: '100%',
+        marginHorizontal: 12,
     },
     trackBackground: {
         height: 4,
         backgroundColor: 'rgba(47, 58, 39, 0.2)', // Faded green
         borderRadius: 2,
         position: 'absolute',
-        width: '100%',
+        left: 0,
+        right: 0,
     },
     trackActive: {
         height: 4,
@@ -191,7 +217,5 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.2,
         shadowRadius: 2,
         elevation: 3,
-        borderWidth: 1,
-        borderColor: '#2F3A27'
     }
 });

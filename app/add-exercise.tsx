@@ -136,8 +136,8 @@ function ExerciseName({ name }: { name: string }) {
 
 // ─── Tabs ────────────────────────────────────────────────────────────────────
 
-type Tab = 'All' | 'Recents' | 'Following';
-const TABS: Tab[] = ['All', 'Recents', 'Following'];
+type Tab = 'All' | 'Recents' | 'Lift book';
+const TABS: Tab[] = ['All', 'Recents', 'Lift book'];
 
 // ─── Skeleton loader card ─────────────────────────────────────────────────────
 
@@ -185,6 +185,28 @@ export default function AddExerciseScreen() {
     const clearCart = useWorkoutLogStore((state) => state.clear);
     const historicalCounts = useWorkoutLogStore((state) => state.historicalCounts);
     const incrementHistoricalCount = useWorkoutLogStore((state) => state.incrementHistoricalCount);
+
+    const [liftBookLifts, setLiftBookLifts] = useState<any[]>([]);
+    const [isLoadingLiftBook, setIsLoadingLiftBook] = useState(false);
+
+    useEffect(() => {
+        if (activeTab === 'Lift book' && session?.user?.id) {
+            fetchLiftBook();
+        }
+    }, [activeTab, session?.user?.id]);
+
+    const fetchLiftBook = async () => {
+        if (!session?.user?.id) return;
+        setIsLoadingLiftBook(true);
+        try {
+            const data = await SupabasePostService.getLiftBook(session.user.id);
+            setLiftBookLifts(data);
+        } catch (e) {
+            console.error('Error fetching lift book', e);
+        } finally {
+            setIsLoadingLiftBook(false);
+        }
+    };
 
     const [isSheetVisible, setIsSheetVisible] = useState(false);
 
@@ -357,15 +379,78 @@ export default function AddExerciseScreen() {
                     </View>
                 );
 
-            case 'Following':
-                return (
+            case 'Lift book':
+                return isLoadingLiftBook ? (
+                    <View style={styles.listContent}>
+                        {Array.from({ length: 6 }).map((_, i) => (
+                            <SkeletonCard key={i} />
+                        ))}
+                    </View>
+                ) : liftBookLifts.length === 0 ? (
                     <View style={styles.centered}>
-                        <Ionicons name="people-outline" size={56} color={Colors.primary + '44'} />
-                        <Text style={styles.emptyText}>Nobody followed yet</Text>
+                        <Ionicons name="book-outline" size={56} color={Colors.primary + '44'} />
+                        <Text style={styles.emptyText}>Lift book is empty</Text>
                         <Text style={styles.emptySubText}>
-                            Follow people to see their exercises here
+                            Add exercises from posts to see them here
                         </Text>
                     </View>
+                ) : (
+                    <FlatList
+                        data={liftBookLifts}
+                        renderItem={({ item }) => {
+                            // Map lift_book row back to ExerciseSearchResult shape for ExerciseSearchCard
+                            const searchResult: ExerciseSearchResult = {
+                                id: item.id,
+                                name: item.exercise_name,
+                                category: item.type === 'Cardio' ? 'Cardio' : 'Strength',
+                                muscle: item.muscle_group || '',
+                                equipment: '',
+                                difficulty: '',
+                                instructions: ''
+                            };
+                            return (
+                                <ExerciseSearchCard
+                                    item={searchResult}
+                                    countInCart={historicalCounts[item.exercise_name] || 0}
+                                    onAdd={() => {
+                                        // Custom logic to add with saved sets/stats
+                                        const exercise: Exercise = {
+                                            id: `${item.id}-${Date.now()}`,
+                                            title: item.exercise_name,
+                                            type: item.type,
+                                            muscleGroup: item.muscle_group,
+                                            sets: item.sets || [],
+                                            speed: item.speed,
+                                            incline: item.incline,
+                                            duration: item.duration,
+                                            logCount: 0,
+                                            createdBy: TRIBE_CREATOR,
+                                        };
+                                        addExercise(exercise);
+                                    }}
+                                    onQuickAdd={() => {
+                                        const exercise: Exercise = {
+                                            id: `${item.id}-${Date.now()}`,
+                                            title: item.exercise_name,
+                                            type: item.type,
+                                            muscleGroup: item.muscle_group,
+                                            sets: item.sets || [],
+                                            speed: item.speed,
+                                            incline: item.incline,
+                                            duration: item.duration,
+                                            logCount: 0,
+                                            createdBy: TRIBE_CREATOR,
+                                        };
+                                        addExercise(exercise);
+                                    }}
+                                />
+                            );
+                        }}
+                        keyExtractor={(item) => item.id}
+                        contentContainerStyle={styles.listContent}
+                        showsVerticalScrollIndicator={false}
+                        keyboardShouldPersistTaps="handled"
+                    />
                 );
         }
     };

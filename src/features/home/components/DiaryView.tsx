@@ -9,8 +9,11 @@ import HammerModal from '@/components/HammerModal';
 import VerifiedModal from '@/components/VerifiedModal';
 import { useAuthStore } from '@/store/AuthStore';
 import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
+import { supabase } from '@/src/shared/services/supabase';
 import { useMealbookStore } from '@/src/store/useMealbookStore';
 import { USDAFoodItem } from '@/src/shared/services/USDAFoodService';
+import PostOptionsModal from '@/src/features/feed/components/PostOptionsModal';
+import * as Haptics from 'expo-haptics';
 
 interface DiaryViewProps {
     selectedDate: Date;
@@ -26,10 +29,13 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
     const [isVerifiedModalVisible, setVerifiedModalVisible] = useState(false);
     const [isHammerModalVisible, setHammerModalVisible] = useState(false);
     const [isCommentSheetVisible, setCommentSheetVisible] = useState(false);
+    const [isOptionsModalVisible, setOptionsModalVisible] = useState(false);
     const [activePost, setActivePost] = useState<FeedPost | null>(null);
+    const [showDeleteToast, setShowDeleteToast] = useState(false);
     const [activeStatus, setActiveStatus] = useState<'natural' | 'enhanced' | 'natural-pending' | 'none'>('none');
     const [hammerData, setHammerData] = useState({ name: '', icon: '' });
     const [commentsForPost, setCommentsForPost] = useState<FeedPost['comments']>([]);
+    const [commentsLoading, setCommentsLoading] = useState(false);
 
     const loadFeed = useCallback(async () => {
         if (!session?.user?.id) return;
@@ -46,6 +52,41 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
         setLoading(true);
         loadFeed().finally(() => setLoading(false));
     }, [loadFeed]);
+
+    useEffect(() => {
+        if (!session?.user?.id) return;
+
+        const channel = supabase
+            .channel('diary-feed-updates')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'posts',
+            }, (payload) => {
+                if (payload.eventType === 'UPDATE') {
+                    const updatedPost = payload.new;
+                    setPosts(prev => prev.map(p => p.id === updatedPost.id 
+                        ? { 
+                            ...p, 
+                            stats: { 
+                                ...p.stats, 
+                                likes: updatedPost.like_count, 
+                                comments: updatedPost.comment_count 
+                            } 
+                          } 
+                        : p
+                    ));
+                } else if (payload.eventType === 'DELETE') {
+                    const deletedId = payload.old.id;
+                    setPosts(prev => prev.filter(p => p.id !== deletedId));
+                }
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [session?.user?.id]);
 
     const handleRefresh = async () => {
         setRefreshing(true);
@@ -91,9 +132,13 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
 
     const handleCommentPress = async (post: FeedPost) => {
         setActivePost(post);
-        const comments = await SupabasePostService.getComments(post.id);
+        setCommentsForPost([]); // Clear previous to avoid flash
+        setCommentSheetVisible(true); // Show immediately
+        setCommentsLoading(true);
+
+        const comments = await SupabasePostService.getComments(post.id, session?.user?.id);
         setCommentsForPost(comments);
-        setCommentSheetVisible(true);
+        setCommentsLoading(false);
     };
 
     const handleCommentPosted = async (text: string) => {
@@ -108,6 +153,28 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
     const handleCommentDeleted = async (commentId: string) => {
         await SupabasePostService.deleteComment(commentId);
         setCommentsForPost(prev => (prev ?? []).filter(c => c.id !== commentId));
+    };
+
+    const handleDeletePost = async () => {
+        if (!activePost) return;
+        const postId = activePost.id;
+        
+        // Optimistic UI removal
+        setPosts(prev => prev.filter(p => p.id !== postId));
+        setOptionsModalVisible(false);
+        setActivePost(null);
+
+        try {
+            await SupabasePostService.deletePost(postId);
+            
+            // Show toast
+            setShowDeleteToast(true);
+            setTimeout(() => setShowDeleteToast(false), 2000);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch (error) {
+            console.error('Failed to delete post:', error);
+            // Re-fetch or handle error if needed
+        }
     };
 
     const renderHeader = () => (
@@ -138,9 +205,27 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
                 visible={isCommentSheetVisible}
                 onClose={() => { setCommentSheetVisible(false); setActivePost(null); }}
                 comments={commentsForPost || []}
+                loading={commentsLoading}
                 onCommentPosted={handleCommentPosted}
                 onCommentDeleted={handleCommentDeleted}
             />
+
+            <PostOptionsModal
+                visible={isOptionsModalVisible}
+                onClose={() => { setOptionsModalVisible(false); setActivePost(null); }}
+                isOwner={activePost?.user.id === session?.user.id}
+                onDelete={handleDeletePost}
+                onReport={() => setOptionsModalVisible(false)}
+            />
+
+            {showDeleteToast && (
+                <View style={styles.toastContainer}>
+                    <View style={styles.toast}>
+                        <Ionicons name="checkmark-circle" size={20} color="#F5F5DC" />
+                        <Text style={styles.toastText}>Post deleted successfully</Text>
+                    </View>
+                </View>
+            )}
 
             <FlatList
                 data={posts}
@@ -157,6 +242,11 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
                         onPressComment={() => handleCommentPress(item)}
                         onPressLike={() => toggleLike(item.id)}
                         onPressSave={() => toggleSave(item.id)}
+                        onPressOptions={() => {
+                            setActivePost(item);
+                            setOptionsModalVisible(true);
+                        }}
+                        sharedTransitionTag={`post-${item.id}`}
                     />
                 )}
                 contentContainerStyle={styles.list}
@@ -184,4 +274,31 @@ const styles = StyleSheet.create({
     emptyTitle: { color: Colors.textDark, fontSize: 18, fontWeight: '700', marginTop: 16 },
     emptySubtitle: { color: Colors.textDark + '88', fontSize: 13, marginTop: 6, textAlign: 'center' },
     list: { paddingHorizontal: 8, paddingVertical: 16, paddingBottom: 100 },
+    toastContainer: {
+        position: 'absolute',
+        bottom: 120,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        zIndex: 1000,
+    },
+    toast: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#4F6352',
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 100,
+        gap: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    toastText: {
+        color: '#F5F5DC',
+        fontSize: 16,
+        fontWeight: '600',
+    },
 });

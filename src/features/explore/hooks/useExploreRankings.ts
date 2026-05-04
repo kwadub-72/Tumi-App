@@ -4,7 +4,7 @@ import { supabase } from '@/src/shared/services/supabase';
 import { ExploreService } from '../services/exploreService';
 import { SimilarUser, PopularUser } from '../types';
 
-export function useExploreRankings() {
+export function useExploreRankings(filters?: any) {
   const [similarUsers, setSimilarUsers] = useState<SimilarUser[]>([]);
   const [popularUsers, setPopularUsers] = useState<PopularUser[]>([]);
   const [isLoadingSimilar, setIsLoadingSimilar] = useState(true);
@@ -28,14 +28,10 @@ export function useExploreRankings() {
         return;
       }
 
-      // Fetch in parallel
-      const [similar, popular] = await Promise.all([
-        ExploreService.getMostSimilar(currentUserId),
-        ExploreService.getMostPopular(5)
-      ]);
+      const { bestMatches, mostPopular } = await ExploreService.getExploreDiscovery(currentUserId, filters || {});
 
-      setSimilarUsers(similar);
-      setPopularUsers(popular);
+      setSimilarUsers(bestMatches);
+      setPopularUsers(mostPopular);
     } catch (err: any) {
       console.error('[useExploreRankings]', err);
       setErrorSimilar('Failed to load similar users');
@@ -44,7 +40,7 @@ export function useExploreRankings() {
       setIsLoadingSimilar(false);
       setIsLoadingPopular(false);
     }
-  }, []);
+  }, [filters]);
 
   useFocusEffect(
     useCallback(() => {

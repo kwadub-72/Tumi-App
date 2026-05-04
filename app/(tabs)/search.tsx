@@ -21,6 +21,18 @@ import { RefreshControl } from 'react-native';
 import { useAuthStore } from '@/store/AuthStore';
 import { useNetworkStore } from '@/src/store/NetworkStore';
 
+
+// Helper to convert ft'in" or cm string to number (cm)
+const parseHeightToCm = (h: string | number) => {
+    if (!h) return 0;
+    const hStr = h.toString();
+    if (hStr.includes("'")) {
+        const [ft, inch] = hStr.split("'").map(s => parseInt(s.replace('"', '')) || 0);
+        return (ft * 30.48) + (inch * 2.54);
+    }
+    return parseFloat(hStr) || 0;
+};
+
 export default function ExploreScreen() {
     const router = useRouter();
     const session = useAuthStore(state => state.session);
@@ -33,13 +45,55 @@ export default function ExploreScreen() {
     const currentUserId = session?.user?.id ?? '';
 
     const { joinTribe, myTribes, pendingTribes } = useUserTribeStore(); // Store hooks
+    
+    // Filters
+    const [activeFilters, setActiveFilters] = useState<any>(null);
+
+    // Format filters for the discovery hook
+    const formattedDiscoveryFilters = React.useMemo(() => {
+        if (!activeFilters) return {};
+        let f: any = {
+            status: activeFilters.status,
+            activity: activeFilters.activity,
+        };
+        if (activeFilters.minMeals) f.minMeals = activeFilters.minMeals;
+        if (activeFilters.minWorkouts) f.minWorkouts = activeFilters.minWorkouts;
+        if (activeFilters.minUpdates) f.minUpdates = activeFilters.minUpdates;
+
+        if (activeFilters.height && activeFilters.height.val && !activeFilters.height.val.includes('..')) {
+            const targetH = parseHeightToCm(activeFilters.height.val);
+            if (targetH > 0) {
+                const isMetric = !activeFilters.height.val.includes("'");
+                const modeRange = activeFilters.height.mode === 'Range3' ? 3 : 1;
+                const rangeInCm = isMetric ? modeRange : modeRange * 2.54;
+                f.heightTargetCm = targetH;
+                f.heightRangeCm = rangeInCm;
+            }
+        }
+        if (activeFilters.weight && activeFilters.weight.val) {
+            const targetW = parseInt(activeFilters.weight.val);
+            if (!isNaN(targetW)) {
+                f.weightTarget = targetW;
+                f.weightRange = activeFilters.weight.mode === 'Range15' ? 15 : 5;
+            }
+        }
+        if (activeFilters.bodyFat && activeFilters.bodyFat.val) {
+            const targetBF = parseFloat(activeFilters.bodyFat.val);
+            if (!isNaN(targetBF)) {
+                f.bfTarget = targetBF;
+                f.bfRange = activeFilters.bodyFat.mode === 'Range3' ? 3 : 1;
+            }
+        }
+        return f;
+    }, [activeFilters]);
+
     const { 
         similarUsers, 
         popularUsers, 
         isLoadingSimilar, 
         isLoadingPopular, 
         refresh: refreshRankings 
-    } = useExploreRankings();
+    } = useExploreRankings(formattedDiscoveryFilters);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState('Users');
@@ -57,9 +111,6 @@ export default function ExploreScreen() {
     const [hammerVisible, setHammerVisible] = useState(false);
     const [verifiedVisible, setVerifiedVisible] = useState(false);
     const [selectedUserForModal, setSelectedUserForModal] = useState<User | null>(null);
-
-    // Filters
-    const [activeFilters, setActiveFilters] = useState<any>(null);
 
     useEffect(() => {
         const loadInitial = async () => {
@@ -112,44 +163,55 @@ export default function ExploreScreen() {
         // Debounced Backend Search
         const delayDebounceFn = setTimeout(async () => {
             if (activeTab === 'Users') {
-                const results = await ExploreService.searchUsers(searchQuery);
-                let uResult = results;
+                let formattedFilters: any = {};
                 
-                // 2. Local Filters
                 if (activeFilters) {
-                    if (activeFilters.status !== 'All') {
-                        if (activeFilters.status === 'none') {
-                            uResult = uResult.filter(u => !u.status || u.status === 'none');
-                        } else {
-                            uResult = uResult.filter(u => u.status === activeFilters.status.toLowerCase());
-                        }
-                    }
+                    formattedFilters.status = activeFilters.status;
+                    formattedFilters.activity = activeFilters.activity;
+                    if (activeFilters.minMeals) formattedFilters.minMeals = activeFilters.minMeals;
+                    if (activeFilters.minWorkouts) formattedFilters.minWorkouts = activeFilters.minWorkouts;
+                    if (activeFilters.minUpdates) formattedFilters.minUpdates = activeFilters.minUpdates;
 
-                    if (activeFilters.activity !== 'All') {
-                        uResult = uResult.filter(u => u.activity === activeFilters.activity);
+                    if (activeFilters.height && activeFilters.height.val && !activeFilters.height.val.includes('..')) {
+                        const targetH = parseHeightToCm(activeFilters.height.val);
+                        if (targetH > 0) {
+                            const isMetric = !activeFilters.height.val.includes("'");
+                            const modeRange = activeFilters.height.mode === 'Range3' ? 3 : 1;
+                            const rangeInCm = isMetric ? modeRange : modeRange * 2.54;
+                            formattedFilters.heightTargetCm = targetH;
+                            formattedFilters.heightRangeCm = rangeInCm;
+                        }
                     }
 
                     if (activeFilters.weight && activeFilters.weight.val) {
                         const targetW = parseInt(activeFilters.weight.val);
                         if (!isNaN(targetW)) {
-                            const range = activeFilters.weight.mode === 'Range15' ? 15 : 5;
-                            uResult = uResult.filter(u => Math.abs((u.weight || 0) - targetW) <= range);
+                            formattedFilters.weightTarget = targetW;
+                            formattedFilters.weightRange = activeFilters.weight.mode === 'Range15' ? 15 : 5;
                         }
                     }
 
-                    if (activeFilters.minMeals) {
-                        uResult = uResult.filter(u => (u.stats?.meals || 0) >= parseInt(activeFilters.minMeals));
-                    }
-                    if (activeFilters.minWorkouts) {
-                        uResult = uResult.filter(u => (u.stats?.workouts || 0) >= parseInt(activeFilters.minWorkouts));
-                    }
-                    if (activeFilters.minUpdates) {
-                        uResult = uResult.filter(u => (u.stats?.updates || 0) >= parseInt(activeFilters.minUpdates));
+                    if (activeFilters.bodyFat && activeFilters.bodyFat.val) {
+                        const targetBF = parseFloat(activeFilters.bodyFat.val);
+                        if (!isNaN(targetBF)) {
+                            formattedFilters.bfTarget = targetBF;
+                            formattedFilters.bfRange = activeFilters.bodyFat.mode === 'Range3' ? 3 : 1;
+                        }
                     }
                 }
-                setFilteredUsers(uResult);
+
+                const results = await ExploreService.searchUsers(searchQuery, currentUserId, formattedFilters);
+                setFilteredUsers(results);
+                
             } else {
-                const results = await ExploreService.searchTribes(searchQuery);
+                let formattedFilters: any = {};
+                if (activeFilters) {
+                    formattedFilters.tribeFocus = activeFilters.tribeFocus;
+                    formattedFilters.visibility = activeFilters.visibility;
+                    formattedFilters.status = activeFilters.status;
+                }
+
+                const results = await ExploreService.searchTribes(searchQuery, formattedFilters);
                 let tResult = results.map(t => ({
                     id: t.id,
                     name: t.name,
@@ -160,18 +222,6 @@ export default function ExploreScreen() {
                     tags: t.tags || [],
                     description: t.description || '',
                 } as unknown as Tribe));
-                
-                if (activeFilters) {
-                    if (activeFilters.tribeFocus && activeFilters.tribeFocus !== 'All') {
-                        tResult = tResult.filter(t => t.type.toLowerCase() === activeFilters.tribeFocus.toLowerCase().replace(' ', '-'));
-                    }
-                    if (activeFilters.visibility && activeFilters.visibility !== 'All') {
-                        tResult = tResult.filter(t => t.privacy.toLowerCase() === activeFilters.visibility.toLowerCase());
-                    }
-                    if (activeFilters.status === 'natural') {
-                        tResult = tResult.filter(t => t.tags?.includes('natural'));
-                    }
-                }
                 
                 // Merge join statuses
                 const withStatus = tResult.map(t => {
@@ -191,13 +241,8 @@ export default function ExploreScreen() {
 
     }, [searchQuery, activeFilters, activeTab, myTribes, pendingTribes]);
 
-
-
-
     const handleToggleFollow = async (user: User) => {
         if (!session?.user?.id) return;
-        const currentIsFollowing = networkStore.isFollowing(user.id);
-        
         const { success, newState } = await networkStore.toggleFollow(
             session.user.id,
             user.id,
@@ -205,17 +250,16 @@ export default function ExploreScreen() {
         );
 
         if (success) {
-            // Optimistic UI updates
+            // Optimistic UI updates for the search list
             setFilteredUsers(prev => prev.map(u => {
                 if (u.id === user.id) {
                     return { ...u, isFollowing: newState === 'following', isRequested: newState === 'requested' };
                 }
                 return u;
             }));
-            
-            // Note: the similarUsers and popularUsers arrays inside `useExploreRankings` might not automatically update unless we refetch, 
-            // but the `networkStore` state is updated, so if the card relies on the store it will update.
-            // For now, let's also trigger a refresh of rankings if needed, or just let them be out of sync until a pull-to-refresh.
+            // useExploreRankings data updates reactively if needed, 
+            // but for instant feedback we can manually refresh or let the store handle it if the cards use the store.
+            // Since cards receive props, we rely on parent refresh or store subscription.
         }
     };
 
@@ -226,28 +270,18 @@ export default function ExploreScreen() {
         }
     };
 
-    /**
-     * Determines whether a profile card tap navigates to the public profile view
-     * or to the current user's own Profile tab.
-     *
-     * Rule: if the tapped user's id matches the authenticated user's id we route
-     * to the Profile tab.  Handle is used as the secondary fallback for cases
-     * where id may not yet be hydrated (e.g. fake/seed data without a real UUID).
-     */
     const handleCardPress = (user: User & { id?: string }) => {
         const isOwnProfile =
             (currentUserId && user.id === currentUserId) ||
             (user.handle?.replace('@', '').toLowerCase() === currentUserHandle);
 
         if (isOwnProfile) {
-            // Navigate to the authenticated user's own profile tab
             router.push('/(tabs)/profile' as any);
         } else {
             router.push({ pathname: '/user/[handle]', params: { handle: user.handle } } as any);
         }
     };
 
-    /** Returns true when the given user card represents the current authenticated user. */
     const isSelfUser = (user: User & { id?: string }): boolean => {
         if (currentUserId && user.id === currentUserId) return true;
         if (user.handle?.replace('@', '').toLowerCase() === currentUserHandle) return true;
@@ -281,8 +315,6 @@ export default function ExploreScreen() {
         // Users Tab
         const isSearching = searchQuery.length > 0;
         
-        // When searching, we show filtered search results. 
-        // When NOT searching, we show the two curated sections.
         if (isSearching) {
             return (
                 <FlatList
@@ -310,12 +342,29 @@ export default function ExploreScreen() {
                             />
                         );
                     }}
+                    ListEmptyComponent={
+                        <View style={styles.emptyState}>
+                            <Text style={styles.emptyStateText}>No results found.</Text>
+                            <TouchableOpacity 
+                                style={styles.resetCTA}
+                                onPress={() => {
+                                    setSearchQuery('');
+                                    setActiveFilters(null);
+                                }}
+                            >
+                                <Text style={styles.resetCTAText}>Reset Filters</Text>
+                            </TouchableOpacity>
+                        </View>
+                    }
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
                     onScrollBeginDrag={Keyboard.dismiss}
                 />
             );
         }
+
+        const showBestMatches = similarUsers.length > 0;
+        const showPopular = popularUsers.length > 0;
 
         return (
             <FlatList
@@ -330,67 +379,81 @@ export default function ExploreScreen() {
                 }
                 ListHeaderComponent={
                     <View style={{ paddingBottom: 20 }}>
-                        <Text style={styles.exploreSectionTitle}>Best matches</Text>
-                        <View style={styles.listContent}>
-                            {similarUsers.slice(0, 5).map((u, i) => {
-                                const isFollowing = networkStore.isFollowing(u.id);
-                                const isRequested = networkStore.isRequested(u.id);
-                                const userWithStatus = { ...u, isFollowing, isRequested };
-                                const self = isSelfUser(u as any);
-                                return (
-                                    <ExploreProfileCard
-                                        key={u.id}
-                                        user={userWithStatus}
-                                        rank={i + 1}
-                                        isSelf={self}
-                                        matchPercent={self ? undefined : ('similarityScore' in u ? parseFloat((u as any).similarityScore) : 68)}
-                                        onToggleFollow={() => handleToggleFollow(u as any)}
-                                        onPressHammer={() => {
-                                            setSelectedUserForModal(u);
-                                            setHammerVisible(true);
-                                        }}
-                                        onPressStatus={() => {
-                                            setSelectedUserForModal(u);
-                                            setVerifiedVisible(true);
-                                        }}
-                                        onPressCard={() => handleCardPress(u as any)}
-                                    />
-                                );
-                            })}
-                        </View>
+                        {showBestMatches && (
+                            <>
+                                <Text style={styles.exploreSectionTitle}>Best matches</Text>
+                                <View style={styles.listContent}>
+                                    {similarUsers.map((u, i) => {
+                                        const isFollowing = networkStore.isFollowing(u.id);
+                                        const isRequested = networkStore.isRequested(u.id);
+                                        const userWithStatus = { ...u, isFollowing, isRequested };
+                                        const self = isSelfUser(u as any);
+                                        return (
+                                            <ExploreProfileCard
+                                                key={u.id}
+                                                user={userWithStatus}
+                                                rank={(u as any).globalRank || i + 1}
+                                                isSelf={self}
+                                                matchPercent={self ? undefined : ('similarityScore' in u ? parseFloat((u as any).similarityScore) : 68)}
+                                                onToggleFollow={() => handleToggleFollow(u as any)}
+                                                onPressHammer={() => {
+                                                    setSelectedUserForModal(u);
+                                                    setHammerVisible(true);
+                                                }}
+                                                onPressStatus={() => {
+                                                    setSelectedUserForModal(u);
+                                                    setVerifiedVisible(true);
+                                                }}
+                                                onPressCard={() => handleCardPress(u as any)}
+                                            />
+                                        );
+                                    })}
+                                </View>
+                            </>
+                        )}
 
-                        <Text style={styles.exploreSectionTitle}>Most popular</Text>
-                        <View style={styles.listContent}>
-                            {popularUsers.map((u, i) => {
-                                const isFollowing = networkStore.isFollowing(u.id);
-                                const isRequested = networkStore.isRequested(u.id);
-                                const userWithStatus = { ...u, isFollowing, isRequested };
-                                const self = isSelfUser(u as any);
-                                return (
-                                    <ExploreProfileCard
-                                        key={u.id}
-                                        user={userWithStatus}
-                                        rank={i + 1}
-                                        isSelf={self}
-                                        matchPercent={self ? undefined : ('engagementScore' in u && (u as any).engagementScore > 0 ? "Trending" : 40)}
-                                        onToggleFollow={() => handleToggleFollow(u as any)}
-                                        onPressHammer={() => {
-                                            setSelectedUserForModal(u);
-                                            setHammerVisible(true);
-                                        }}
-                                        onPressStatus={() => {
-                                            setSelectedUserForModal(u);
-                                            setVerifiedVisible(true);
-                                        }}
-                                        onPressCard={() => handleCardPress(u as any)}
-                                    />
-                                );
-                            })}
-                        </View>
+                        {showPopular && (
+                            <>
+                                <Text style={styles.exploreSectionTitle}>Most popular</Text>
+                                <View style={styles.listContent}>
+                                    {popularUsers.map((u, i) => {
+                                        const isFollowing = networkStore.isFollowing(u.id);
+                                        const isRequested = networkStore.isRequested(u.id);
+                                        const userWithStatus = { ...u, isFollowing, isRequested };
+                                        const self = isSelfUser(u as any);
+                                        return (
+                                            <ExploreProfileCard
+                                                key={u.id}
+                                                user={userWithStatus}
+                                                rank={(u as any).globalRank || i + 1}
+                                                isSelf={self}
+                                                matchPercent={self ? undefined : ('engagementScore' in u && (u as any).engagementScore > 0 ? "Trending" : 40)}
+                                                onToggleFollow={() => handleToggleFollow(u as any)}
+                                                onPressHammer={() => {
+                                                    setSelectedUserForModal(u);
+                                                    setHammerVisible(true);
+                                                }}
+                                                onPressStatus={() => {
+                                                    setSelectedUserForModal(u);
+                                                    setVerifiedVisible(true);
+                                                }}
+                                                onPressCard={() => handleCardPress(u as any)}
+                                            />
+                                        );
+                                    })}
+                                </View>
+                            </>
+                        )}
 
-                        {!isLoadingSimilar && !isLoadingPopular && filteredUsers.length === 0 && (
+                        {!isLoadingSimilar && !isLoadingPopular && !showBestMatches && !showPopular && (
                             <View style={styles.emptyState}>
-                                <Text style={styles.emptyStateText}>No profiles found.</Text>
+                                <Text style={styles.emptyStateText}>No results found.</Text>
+                                <TouchableOpacity 
+                                    style={styles.resetCTA}
+                                    onPress={() => setActiveFilters(null)}
+                                >
+                                    <Text style={styles.resetCTAText}>Reset Filters</Text>
+                                </TouchableOpacity>
                             </View>
                         )}
                     </View>
@@ -427,8 +490,18 @@ export default function ExploreScreen() {
                         <Ionicons name="arrow-forward" size={20} color="#4F6352" />
                     </TouchableOpacity>
                 </View>
-                <TouchableOpacity style={styles.filterBtn} onPress={handleFilterPress}>
-                    <Ionicons name="options" size={24} color="white" />
+                <TouchableOpacity 
+                    style={[
+                        styles.filterBtn,
+                        !activeFilters && styles.filterBtnInactive
+                    ]} 
+                    onPress={handleFilterPress}
+                >
+                    <MaterialCommunityIcons 
+                        name="tune" 
+                        size={24} 
+                        color={activeFilters ? "white" : "#4F6352"} 
+                    />
                 </TouchableOpacity>
             </View>
 
@@ -509,9 +582,14 @@ const styles = StyleSheet.create({
         width: 50,
         height: 50,
         borderRadius: 25,
-        backgroundColor: '#6A8E6A', // Sage
+        backgroundColor: '#4F6352', // Active green
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    filterBtnInactive: {
+        backgroundColor: '#F5F5DC', // Beige
+        borderWidth: 2,
+        borderColor: '#4F6352',
     },
     tabContainer: {
         alignItems: 'center',
@@ -572,6 +650,18 @@ const styles = StyleSheet.create({
         color: '#4F6352',
         fontSize: 16,
         fontWeight: '500',
+        marginBottom: 15,
+    },
+    resetCTA: {
+        backgroundColor: '#4F6352',
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 20,
+    },
+    resetCTAText: {
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: 14,
     }
 });
 

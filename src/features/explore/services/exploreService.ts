@@ -59,11 +59,40 @@ export const ExploreService = {
     }));
   },
 
-  async searchUsers(query: string): Promise<User[]> {
+  async getExploreDiscovery(currentUserId: string, filters: any = {}): Promise<{ bestMatches: SimilarUser[], mostPopular: PopularUser[] }> {
+    const { data, error } = await supabase.rpc('get_explore_discovery', {
+      p_user_id: currentUserId,
+      p_filters: filters,
+      p_limit: 5
+    });
+
+    if (error) {
+      console.error('[ExploreService.getExploreDiscovery]', error.message);
+      return { bestMatches: [], mostPopular: [] };
+    }
+
+    const bestMatches = (data.best_matches || []).map((row: any) => ({
+      ...this.mapDbProfileToUser(row),
+      similarityScore: parseFloat(row.similarity_score || 0),
+      globalRank: row.global_rank
+    }));
+
+    const mostPopular = (data.most_popular || []).map((row: any) => ({
+      ...this.mapDbProfileToUser(row),
+      engagementScore: parseFloat(row.popularity_score || 0),
+      globalRank: row.global_rank
+    }));
+
+    return { bestMatches, mostPopular };
+  },
+
+  async searchUsers(query: string, currentUserId?: string, filters?: any): Promise<User[]> {
     const { data, error } = await supabase.rpc('search_explore', {
       search_query: query,
       search_type: 'users',
-      result_limit: 25
+      result_limit: 25,
+      p_user_id: currentUserId || null,
+      p_filters: filters || {}
     });
 
     if (error) {
@@ -71,14 +100,19 @@ export const ExploreService = {
       return [];
     }
 
-    return (data || []).map((row: any) => this.mapDbProfileToUser(row));
+    return (data || []).map((row: any) => ({
+        ...this.mapDbProfileToUser(row),
+        similarityScore: row.similarity_score != null ? parseFloat(row.similarity_score) : undefined
+    }));
   },
 
-  async searchTribes(query: string): Promise<any[]> {
+  async searchTribes(query: string, filters?: any): Promise<any[]> {
     const { data, error } = await supabase.rpc('search_explore', {
       search_query: query,
       search_type: 'tribes',
-      result_limit: 25
+      result_limit: 25,
+      p_user_id: null,
+      p_filters: filters || {}
     });
 
     if (error) {

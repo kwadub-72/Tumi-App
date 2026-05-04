@@ -621,6 +621,7 @@ export default function OtherUserProfileScreen() {
                                         onPressLike={() => toggleLike(item)}
                                         onPressVerified={() => setVerifiedModalVisible(true)}
                                         onPressHammer={() => setHammerModalVisible(true)}
+                                        sharedTransitionTag={`post-${item.id}`}
                                     />
                                 </View>
                             )}

@@ -160,12 +160,20 @@ export default function MealLoggerSheet({
 
     useEffect(() => {
         if (visible) {
+            // Always pop up to BASE_Y when it becomes visible or items change
             translateY.value = withTiming(BASE_Y, { duration: 300 });
+            isTucked.value = false;
         } else {
             translateY.value = withTiming(HIDDEN_Y, { duration: 300 });
-            hasConsumedParams.current = false; // Reset when sheet closes
+            hasConsumedParams.current = false;
         }
-    }, [visible, translateY]);
+    }, [visible, items.length]); // Re-run when items added to "pop up"
+
+    useEffect(() => {
+        if (!visible) {
+            translateY.value = withTiming(HIDDEN_Y, { duration: 300 });
+        }
+    }, [visible]);
 
     useEffect(() => {
         const showSubscription = Keyboard.addListener('keyboardDidShow', () => {
@@ -246,45 +254,48 @@ export default function MealLoggerSheet({
             <View style={styles.container}>
                 <Animated.View style={[styles.sheet, animatedStyle]}>
                     <GestureDetector gesture={panGesture}>
-                        <View
-                            style={styles.handleContainer}
-                            hitSlop={{ top: 20, bottom: 20, left: 40, right: 40 }}
-                        >
-                            <View style={styles.handle} />
+                        <View style={styles.headerGestureArea}>
+                            <View
+                                style={styles.handleContainer}
+                                hitSlop={{ top: 20, bottom: 20, left: 40, right: 40 }}
+                            >
+                                <View style={styles.handle} />
+                            </View>
+
+                            <View style={styles.captionContainer}>
+                                <TouchableOpacity
+                                    style={styles.cameraIconBtn}
+                                    onPress={() => router.push('/camera-capture?source=meal')}
+                                >
+                                    <Ionicons name="camera" size={28} color="white" />
+                                </TouchableOpacity>
+                                <View style={styles.inputWrapper}>
+                                    <TextInput
+                                        style={[
+                                            styles.captionInput,
+                                            { fontSize: caption.length > 35 ? 13 : 15 },
+                                        ]}
+                                        placeholder="This is the best meal I've ever had!"
+                                        placeholderTextColor={Colors.textDark + '99'}
+                                        value={caption}
+                                        onChangeText={setCaption}
+                                        multiline
+                                        maxLength={140}
+                                    />
+                                </View>
+                                <TouchableOpacity style={styles.publishBtn} onPress={handlePublish}>
+                                    <MaterialCommunityIcons
+                                        name="post-outline"
+                                        size={30}
+                                        color="white"
+                                    />
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </GestureDetector>
 
                     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
                         <View style={styles.content}>
-                        <View style={styles.captionContainer}>
-                            <TouchableOpacity
-                                style={styles.cameraIconBtn}
-                                onPress={() => router.push('/camera-capture?source=meal')}
-                            >
-                                <Ionicons name="camera" size={28} color="white" />
-                            </TouchableOpacity>
-                            <View style={styles.inputWrapper}>
-                                <TextInput
-                                    style={[
-                                        styles.captionInput,
-                                        { fontSize: caption.length > 35 ? 13 : 15 },
-                                    ]}
-                                    placeholder="This is the best meal I've ever had!"
-                                    placeholderTextColor={Colors.textDark + '99'}
-                                    value={caption}
-                                    onChangeText={setCaption}
-                                    multiline
-                                    maxLength={140}
-                                />
-                            </View>
-                            <TouchableOpacity style={styles.publishBtn} onPress={handlePublish}>
-                                <MaterialCommunityIcons
-                                    name="post-outline"
-                                    size={30}
-                                    color="white"
-                                />
-                            </TouchableOpacity>
-                        </View>
 
                         {localImage ? (
                             <View style={[styles.capturedImageWrapper, { marginTop: 0, marginBottom: 20 }]}>
@@ -444,7 +455,9 @@ const styles = StyleSheet.create({
         borderTopRightRadius: 30,
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.2)',
-        paddingHorizontal: 20,
+    },
+    headerGestureArea: {
+        width: '100%',
     },
     handleContainer: {
         paddingVertical: 15, // Increased padding
@@ -459,12 +472,14 @@ const styles = StyleSheet.create({
     },
     content: {
         flex: 1,
+        paddingHorizontal: 20,
     },
     captionContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
         marginBottom: 20,
+        paddingHorizontal: 20, // Add padding here since it's now in headerGestureArea
     },
     inputWrapper: {
         flex: 1,
@@ -493,6 +508,7 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#222',
         paddingBottom: 16,
+        paddingHorizontal: 20,
     },
     typeSelector: {
         flex: 1,

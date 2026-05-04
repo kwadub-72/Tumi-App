@@ -1,5 +1,5 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -25,10 +25,12 @@ import { useAuthStore } from '../../store/AuthStore';
 import { SupabasePostService } from '../../src/shared/services/SupabasePostService';
 import { PostStore } from '../../store/PostStore';
 
+import { supabase } from '../../src/shared/services/supabase';
+
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-type Tab = 'All' | 'Recents' | 'Following' | 'Mealbook';
-const TABS: Tab[] = ['All', 'Recents', 'Following', 'Mealbook'];
+type Tab = 'All' | 'Recents' | 'Following' | 'Meal book';
+const TABS: Tab[] = ['All', 'Recents', 'Following', 'Meal book'];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -111,6 +113,7 @@ export default function AddMealScreen() {
     const [fullResults, setFullResults] = useState<USDAFoodItem[]>([]);
     const [showFullResults, setShowFullResults] = useState(false);
     const [followingPosts, setFollowingPosts] = useState<FeedPost[]>([]);
+    const [mealLogItems, setMealLogItems] = useState<any[]>([]);
 
     const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -128,18 +131,33 @@ export default function AddMealScreen() {
     const { session, profile } = useAuthStore();
     const userInfo = { handle: profile?.handle, name: profile?.name, avatar: profile?.avatar_url, status: profile?.status }; // Stub if needed, though profile might be better
 
-    // ── Load following feed for the Following tab ──
-    useEffect(() => {
-        if (!session?.user?.id) return;
-        SupabasePostService.getFeed({
-            userId: session.user.id,
-            feedType: 'following',
-            date: new Date(),
-            limit: 50
-        }).then((posts) => {
-            setFollowingPosts(posts);
-        });
-    }, [session?.user?.id]);
+    // ── Load following feed for the Following tab & Meal Log ──
+    useFocusEffect(
+        useCallback(() => {
+            if (!session?.user?.id) return;
+            SupabasePostService.getFeed({
+                userId: session.user.id,
+                feedType: 'following',
+                date: new Date(),
+                limit: 50
+            }).then((posts) => {
+                setFollowingPosts(posts);
+            });
+            
+            const fetchMealLog = async () => {
+                const { data, error } = await supabase
+                    .from('meal_log')
+                    .select('*')
+                    .eq('user_id', session.user.id)
+                    .order('created_at', { ascending: false });
+                
+                if (!error && data) {
+                    setMealLogItems(data);
+                }
+            };
+            fetchMealLog();
+        }, [session?.user?.id])
+    );
 
     // ── Sheet visibility ──
     useEffect(() => {
@@ -370,12 +388,52 @@ export default function AddMealScreen() {
         </View>
     );
 
-    const renderMealbookCard = ({ item }: { item: typeof bookmarks[0] }) => (
-        <USDAResultCard
-            item={item}
-            onAdd={() => goToEntry(item)}
-            onQuickAdd={() => addUSDAToCart(item)}
-        />
+    const renderMealLogCard = ({ item }: { item: any }) => (
+        <View style={styles.followingCard}>
+            <View style={styles.followingLeft}>
+                <View style={styles.followingUserRow}>
+                    <Image
+                        source={typeof userInfo.avatar === 'string' ? { uri: userInfo.avatar } : userInfo.avatar}
+                        style={styles.followingAvatar}
+                    />
+                    <Text style={styles.followingUser}>{userInfo.name}</Text>
+                </View>
+                <Text style={styles.followingName}>{item.item_name}</Text>
+                <View style={styles.usdaMacros}>
+                    <View style={styles.usdaMacroItem}>
+                        <MaterialCommunityIcons name="fire" size={13} color={Colors.primary} />
+                        <Text style={styles.usdaMacroText}>{item.calories}</Text>
+                    </View>
+                    <View style={styles.usdaMacroItem}>
+                        <MaterialCommunityIcons name="food-drumstick" size={12} color="white" />
+                        <Text style={styles.usdaMacroText}>{item.protein}g</Text>
+                    </View>
+                    <View style={styles.usdaMacroItem}>
+                        <MaterialCommunityIcons name="barley" size={12} color="white" />
+                        <Text style={styles.usdaMacroText}>{item.carbs}g</Text>
+                    </View>
+                    <View style={styles.usdaMacroItem}>
+                        <Ionicons name="water" size={12} color="white" />
+                        <Text style={styles.usdaMacroText}>{item.fats}g</Text>
+                    </View>
+                </View>
+            </View>
+            <TouchableOpacity
+                style={styles.usdaAddBtn}
+                onPress={() => {
+                    const ing: Ingredient = {
+                        id: `meal_log-${item.id}-${Math.random()}`,
+                        name: item.item_name,
+                        amount: item.portion_size,
+                        cals: item.calories,
+                        macros: { p: item.protein, c: item.carbs, f: item.fats },
+                    };
+                    addItem(ing);
+                }}
+            >
+                <Ionicons name="add" size={22} color={Colors.primary} />
+            </TouchableOpacity>
+        </View>
     );
 
     const renderRecentCard = ({ item }: { item: typeof recents[0] }) => (
@@ -394,9 +452,9 @@ export default function AddMealScreen() {
         ? recents.filter((r) => r.name.toLowerCase().includes(searchQuery.toLowerCase()))
         : recents;
 
-    const filteredBookmarks = searchQuery
-        ? bookmarks.filter((b) => b.name.toLowerCase().includes(searchQuery.toLowerCase()))
-        : bookmarks;
+    const filteredMealLog = searchQuery
+        ? mealLogItems.filter((m) => m.item_name.toLowerCase().includes(searchQuery.toLowerCase()))
+        : mealLogItems;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Body content per tab
@@ -498,23 +556,23 @@ export default function AddMealScreen() {
         );
     };
 
-    const renderMealbookTab = () => {
-        if (filteredBookmarks.length === 0) {
+    const renderMealLogTab = () => {
+        if (filteredMealLog.length === 0) {
             return (
                 <View style={styles.centered}>
-                    <Ionicons name="bookmark-outline" size={56} color={Colors.primary + '44'} />
-                    <Text style={styles.emptyText}>Your Mealbook is empty</Text>
+                    <Ionicons name="book-outline" size={56} color={Colors.primary + '44'} />
+                    <Text style={styles.emptyText}>Your Meal book is empty</Text>
                     <Text style={styles.emptySubText}>
-                        Bookmark a meal post to save its foods here
+                        Save items from posts to see them here
                     </Text>
                 </View>
             );
         }
         return (
             <FlatList
-                data={filteredBookmarks}
-                keyExtractor={(i) => String(i.fdcId)}
-                renderItem={renderMealbookCard}
+                data={filteredMealLog}
+                keyExtractor={(i) => String(i.id)}
+                renderItem={renderMealLogCard}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
             />
@@ -526,7 +584,7 @@ export default function AddMealScreen() {
             case 'All': return renderAllTab();
             case 'Recents': return renderRecentsTab();
             case 'Following': return renderFollowingTab();
-            case 'Mealbook': return renderMealbookTab();
+            case 'Meal book': return renderMealLogTab();
         }
     };
 

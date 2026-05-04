@@ -598,7 +598,7 @@ async function main() {
             }
         }
         for (let i = 0; i < likeRows.length; i += 100) {
-            await supabase.from('post_likes').upsert(likeRows.slice(i, i + 100));
+            await supabase.from('likes').upsert(likeRows.slice(i, i + 100));
         }
         console.log(`  ✓ ${likeRows.length} likes seeded`);
 
