@@ -14,6 +14,7 @@ import {
     SafeAreaView,
     Image,
     Dimensions,
+    ScrollView,
 } from 'react-native';
 import Animated, {
     useAnimatedStyle,
@@ -24,28 +25,34 @@ import Animated, {
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Colors } from '@/src/shared/theme/Colors';
 import { useUserStore } from '@/store/UserStore';
-import { PostStore } from '@/store/PostStore';
+import { useAuthStore } from '@/store/AuthStore';
 import { FeedPost } from '@/src/shared/models/types';
 import { NutritionService } from '@/src/shared/services/NutritionService';
+import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
+import { useMacrobookStore } from '@/src/store/useMacrobookStore';
+import { Video, ResizeMode } from 'expo-av';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const SHEET_MIN_Y = SCREEN_HEIGHT - 180;
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
+const SHEET_MIN_Y = SCREEN_HEIGHT - 160;
 const SHEET_MAX_Y = SCREEN_HEIGHT * 0.45;
 
-type ScreenMode = 'macro-update' | 'snapshot';
+type ScreenMode = 'macro-update' | 'snapshot' | 'macro-book';
 
 export default function MacroUpdateScreen() {
     const router = useRouter();
     const params = useLocalSearchParams();
+    const { profile } = useAuthStore();
     const userInfo = useUserStore();
+    const macrobook = useMacrobookStore();
 
-    const [mode, setMode] = useState<ScreenMode>('macro-update');
+    const [mode, setMode] = useState<ScreenMode>('snapshot');
 
     // Macro Update State
-    const oldP = userInfo.macroTargets.p;
-    const oldC = userInfo.macroTargets.c;
-    const oldF = userInfo.macroTargets.f;
-    const oldCal = userInfo.macroTargets.calories;
+    const targets = profile?.macro_targets || userInfo.macroTargets;
+    const oldP = targets.p;
+    const oldC = targets.c;
+    const oldF = targets.f;
+    const oldCal = targets.calories;
 
     const [pText, setPText] = useState(oldP.toString());
     const [cText, setCText] = useState(oldC.toString());
@@ -58,9 +65,15 @@ export default function MacroUpdateScreen() {
 
     useEffect(() => {
         const load = async () => {
-            const posts = await PostStore.loadPosts();
-            const myPosts = posts.filter(p => p.user.handle === userInfo.handle);
-            const meals = myPosts.map(p => p.meal).filter(m => m !== undefined);
+            if (!profile?.id) return;
+            const start = new Date();
+            start.setHours(0,0,0,0);
+            const posts = await SupabasePostService.getFeed({ 
+                userId: profile.id, 
+                feedType: 'diary',
+                date: start 
+            });
+            const meals = posts.map(p => p.meal).filter(m => m !== undefined);
             const totals = NutritionService.sumMacros(meals as any);
             setDailyConsumed({
                 calories: totals.cals,
@@ -70,7 +83,7 @@ export default function MacroUpdateScreen() {
             });
         };
         load();
-    }, []);
+    }, [profile?.id]);
 
     // Reanimated values for sheet
     const translateY = useSharedValue(SHEET_MIN_Y);
@@ -98,63 +111,58 @@ export default function MacroUpdateScreen() {
     const diffCal = newCal - oldCal;
 
     const handlePost = async () => {
+        if (!profile?.id) return;
+
+        let payload = {};
+        let postType: 'macro_update' | 'snapshot' = 'macro_update';
+
         if (mode === 'macro-update') {
-            const newPost: FeedPost = {
-                id: Date.now().toString(),
-                user: {
-                    id: 'u1',
-                    name: userInfo.name,
-                    handle: userInfo.handle,
-                    avatar: userInfo.avatar,
-                    status: userInfo.status,
-                    verified: true,
-                },
-                timeAgo: 'Just now',
+            postType = 'macro_update';
+            payload = {
                 macroUpdate: {
                     id: 'mu_' + Date.now(),
                     caption: caption || 'Macro Update',
                     timestamp: Date.now(),
-                    oldDate: userInfo.lastMacroUpdate,
+                    oldDate: profile.last_macro_update,
                     oldTargets: { calories: oldCal, p: oldP, c: oldC, f: oldF },
                     newTargets: { calories: newCal, p: newP, c: newC, f: newF },
-                    trainingTarget: userInfo.trainingTarget
-                },
-                mediaUrl: media?.uri,
-                mediaType: media?.type,
-                stats: { likes: 0, shares: 0, comments: 0, saves: 0 },
+                    trainingTarget: profile.training_target
+                }
             };
-            await PostStore.addPost(newPost);
+            // Update local and remote profile
             userInfo.setProfile({
                 macroTargets: { p: newP, c: newC, f: newF, calories: newCal },
                 lastMacroUpdate: new Date().toLocaleDateString()
             });
+            await useAuthStore.getState().updateProfile({
+                macro_targets: { p: newP, c: newC, f: newF, calories: newCal },
+                last_macro_update: new Date().toISOString()
+            });
         } else {
-            // Snapshot Post
-            const newSnapshot: FeedPost = {
-                id: Date.now().toString(),
-                user: {
-                    id: 'u1',
-                    name: userInfo.name,
-                    handle: userInfo.handle,
-                    avatar: userInfo.avatar,
-                    status: userInfo.status,
-                    verified: true,
-                },
-                timeAgo: 'Just now',
+            postType = 'snapshot';
+            payload = {
                 snapshot: {
                     id: 'sn_' + Date.now(),
                     timestamp: Date.now(),
                     caption: caption || "I'm so cooked for the day",
-                    targets: { ...userInfo.macroTargets },
+                    targets: { ...targets },
                     consumed: { ...dailyConsumed }
-                },
-                mediaUrl: media?.uri,
-                mediaType: media?.type,
-                stats: { likes: 0, shares: 0, comments: 0, saves: 0 },
+                }
             };
-            await PostStore.addPost(newSnapshot);
         }
-        router.back();
+
+        const success = await SupabasePostService.addPost({
+            authorId: profile.id,
+            postType: postType,
+            payload: payload,
+            caption: caption,
+            mediaUrl: media?.uri,
+            mediaType: media?.type,
+        });
+
+        if (success) {
+            router.replace('/(tabs)?tab=Following');
+        }
     };
 
     const panGesture = Gesture.Pan()
@@ -177,7 +185,7 @@ export default function MacroUpdateScreen() {
     const MacroUpdateRow = ({ icon, oldVal, value, onChange, diff }: any) => {
         const isNegative = diff < 0;
         const diffText = diff === 0 ? '0g' : `${diff > 0 ? '+' : '—'} ${Math.abs(diff)}g`;
-        const diffBg = diff === 0 ? 'rgba(164, 182, 157, 0.5)' : (isNegative ? '#E59A9A' : '#A4B69D');
+        const diffBg = diff === 0 ? 'rgba(164, 182, 157, 0.5)' : (isNegative ? '#825858' : '#A4B69D');
 
         return (
             <View style={styles.macroRow}>
@@ -203,25 +211,47 @@ export default function MacroUpdateScreen() {
         );
     };
 
-    const SnapshotBar = ({ icon, target, consumed, color }: any) => {
+    const MacroProgressBar = ({ icon, target, consumed }: any) => {
         const remaining = target - consumed;
         const isOver = remaining < 0;
         const total = Math.max(target, consumed);
-        const fillWidth = (consumed / total) * 100;
-        const remainingWidth = Math.max(0, (remaining / total) * 100);
+        const loggedWidth = (Math.min(consumed, target) / total) * 100;
+        const remainingWidth = Math.max(0, (target - consumed) / total) * 100;
+        const overWidth = Math.max(0, (consumed - target) / total) * 100;
 
         return (
-            <View style={styles.snapshotRow}>
-                <MaterialCommunityIcons name={icon} size={28} color={Colors.primary} style={styles.snapshotIcon} />
-                <View style={styles.snapshotTrack}>
-                    <View style={[styles.snapshotFill, { width: `${fillWidth}%`, backgroundColor: color || Colors.primary }]}>
-                        <Text style={styles.snapshotValue}>{consumed}{icon === 'fire' ? ' cals' : 'g'}</Text>
+            <View style={styles.progressRow}>
+                <MaterialCommunityIcons name={icon} size={32} color={Colors.theme.sageDark} style={styles.progressIcon} />
+                <View style={styles.progressTrackWrapper}>
+                    <View style={styles.progressTrack}>
+                        {/* Logged Portion */}
+                        <View style={[styles.segment, { width: `${loggedWidth}%`, backgroundColor: Colors.theme.sage }]}>
+                            {loggedWidth > 15 && (
+                                <Text style={styles.segmentText}>{consumed}{icon === 'fire' ? '' : 'g'}</Text>
+                            )}
+                        </View>
+                        {/* Remaining Portion */}
+                        {remainingWidth > 0 && (
+                            <View style={[styles.segment, { width: `${remainingWidth}%`, backgroundColor: '#8E8E8E' }]}>
+                                {remainingWidth > 15 && (
+                                    <Text style={styles.segmentText}>{remaining}{icon === 'fire' ? '' : 'g'}</Text>
+                                )}
+                            </View>
+                        )}
+                        {/* Over Portion */}
+                        {overWidth > 0 && (
+                            <View style={[styles.segment, { width: `${overWidth}%`, backgroundColor: '#825858' }]}>
+                                {overWidth > 15 && (
+                                    <Text style={styles.segmentText}>{consumed - target}{icon === 'fire' ? '' : 'g'}</Text>
+                                )}
+                            </View>
+                        )}
                     </View>
-                    <View style={styles.snapshotRemaining}>
-                        <Text style={[styles.remainingValue, isOver && { color: '#E59A9A', fontWeight: 'bold' }]}>
+                    {isOver && (
+                        <Text style={styles.deltaLabel}>
                             {remaining}{icon === 'fire' ? ' cals' : 'g'}
                         </Text>
-                    </View>
+                    )}
                 </View>
             </View>
         );
@@ -232,9 +262,6 @@ export default function MacroUpdateScreen() {
             <Stack.Screen options={{ headerShown: false }} />
             <SafeAreaView style={styles.container}>
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                        <Ionicons name="arrow-back" size={28} color={Colors.primary} />
-                    </TouchableOpacity>
                     <View style={styles.modeToggle}>
                         <TouchableOpacity
                             style={[styles.modeBtn, mode === 'macro-update' && styles.modeBtnActive]}
@@ -248,19 +275,28 @@ export default function MacroUpdateScreen() {
                         >
                             <Text style={[styles.modeText, mode === 'snapshot' && styles.modeTextActive]}>Snapshot</Text>
                         </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.modeBtn, mode === 'macro-book' && styles.modeBtnActive]}
+                            onPress={() => setMode('macro-book')}
+                        >
+                            <Text style={[styles.modeText, mode === 'macro-book' && styles.modeTextActive]}>Macro book</Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
 
-                {mode === 'macro-update' ? (
-                    <View style={styles.scrollContent}>
-                        <Text style={styles.title}>Macro update</Text>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backBtnHeader}>
+                    <Ionicons name="arrow-back" size={28} color={Colors.theme.sageDark} />
+                </TouchableOpacity>
 
+                {mode === 'macro-update' && (
+                    <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                        <Text style={styles.title}>Macro update</Text>
                         <View style={styles.calSection}>
                             <MaterialCommunityIcons name="fire" size={36} color={Colors.primary} style={styles.mainFireIcon} />
                             <View style={styles.calBubbleMain}>
                                 <Text style={styles.calValueMain}>{newCal} cals</Text>
                             </View>
-                            <View style={[styles.calDiffBubble, { backgroundColor: diffCal < 0 ? '#E59A9A' : '#A4B69D' }]}>
+                            <View style={[styles.calDiffBubble, { backgroundColor: diffCal < 0 ? '#825858' : '#A4B69D' }]}>
                                 <Text style={styles.calDiffText}>
                                     {diffCal === 0 ? '0 cals' : `${diffCal > 0 ? '+' : '—'} ${Math.abs(diffCal)} cals`}
                                 </Text>
@@ -301,18 +337,66 @@ export default function MacroUpdateScreen() {
                                 </View>
                             </View>
                         </View>
-                    </View>
-                ) : (
+                    </ScrollView>
+                )}
+
+                {mode === 'snapshot' && (
                     <View style={styles.scrollContent}>
-                        <Text style={styles.title}>Snapshot</Text>
-                        <View style={styles.snapshotPreview}>
-                            <SnapshotBar icon="fire" target={userInfo.macroTargets.calories} consumed={dailyConsumed.calories} color={Colors.primary} />
-                            <SnapshotBar icon="food-drumstick" target={userInfo.macroTargets.p} consumed={dailyConsumed.p} />
-                            <SnapshotBar icon="barley" target={userInfo.macroTargets.c} consumed={dailyConsumed.c} />
-                            <SnapshotBar icon="water" target={userInfo.macroTargets.f} consumed={dailyConsumed.f} />
+                        <View style={styles.titleDivider} />
+                        <Text style={styles.titleSmall}>Snapshot</Text>
+                        <View style={styles.titleDivider} />
+                        
+                        <View style={styles.snapshotContainer}>
+                            <MacroProgressBar icon="fire" target={targets.calories} consumed={dailyConsumed.calories} />
+                            <MacroProgressBar icon="food-drumstick" target={targets.p} consumed={dailyConsumed.p} />
+                            <MacroProgressBar icon="barley" target={targets.c} consumed={dailyConsumed.c} />
+                            <MacroProgressBar icon="water" target={targets.f} consumed={dailyConsumed.f} />
+                            
+                            <View style={styles.legendRow}>
+                                <View style={styles.legendItem}>
+                                    <View style={[styles.legendDot, { backgroundColor: Colors.theme.sage }]} />
+                                    <Text style={styles.legendText}>Logged</Text>
+                                </View>
+                                <View style={styles.legendItem}>
+                                    <View style={[styles.legendDot, { backgroundColor: '#8E8E8E' }]} />
+                                    <Text style={styles.legendText}>Remaining</Text>
+                                </View>
+                            </View>
                         </View>
-                        <Text style={styles.snapshotHint}>This will share your current progress for today.</Text>
                     </View>
+                )}
+
+                {mode === 'macro-book' && (
+                    <ScrollView style={styles.scrollContent}>
+                        <Text style={styles.title}>Macro book</Text>
+                        {macrobook.entries.length === 0 ? (
+                            <View style={styles.emptyState}>
+                                <MaterialCommunityIcons name="book-open-variant" size={60} color={Colors.theme.sageDark + '44'} />
+                                <Text style={styles.emptyText}>No saved macros yet.</Text>
+                            </View>
+                        ) : (
+                            macrobook.entries.map((entry) => (
+                                <TouchableOpacity 
+                                    key={entry.id} 
+                                    style={styles.macroBookEntry}
+                                    onPress={() => {
+                                        setPText(entry.p.toString());
+                                        setCText(entry.c.toString());
+                                        setFText(entry.f.toString());
+                                        setMode('macro-update');
+                                    }}
+                                >
+                                    <Text style={styles.entryLabel}>{entry.label}</Text>
+                                    <View style={styles.entryValues}>
+                                        <Text style={styles.entryValue}>{entry.calories} cal</Text>
+                                        <Text style={styles.entryValue}>{entry.p}P</Text>
+                                        <Text style={styles.entryValue}>{entry.c}C</Text>
+                                        <Text style={styles.entryValue}>{entry.f}F</Text>
+                                    </View>
+                                </TouchableOpacity>
+                            ))
+                        )}
+                    </ScrollView>
                 )}
 
                 <Animated.View style={[styles.loggerSheet, animatedStyle]}>
@@ -323,23 +407,33 @@ export default function MacroUpdateScreen() {
                     </GestureDetector>
                     <View style={styles.loggerTopRow}>
                         <TouchableOpacity style={styles.cameraBtn} onPress={() => router.push('/camera-capture')}>
-                            <Ionicons name="camera" size={28} color={Colors.primary} />
+                            <Ionicons name="camera" size={28} color={Colors.theme.sageDark} />
                         </TouchableOpacity>
                         <TextInput
                             style={styles.loggerInput}
                             placeholder="Caption..."
-                            placeholderTextColor={Colors.primary + '88'}
+                            placeholderTextColor={Colors.theme.sageDark + '88'}
                             value={caption}
                             onChangeText={setCaption}
                             multiline
                         />
                         <TouchableOpacity style={styles.postSubmitBtn} onPress={handlePost}>
-                            <MaterialCommunityIcons name="file-document-edit-outline" size={32} color={Colors.primary} />
+                            <MaterialCommunityIcons name="file-document-edit-outline" size={32} color={Colors.theme.sageDark} />
                         </TouchableOpacity>
                     </View>
                     {media && (
                         <View style={styles.mediaPreview}>
-                            <Image source={{ uri: media.uri }} style={styles.mediaImg} />
+                            {media.type === 'video' ? (
+                                <Video 
+                                    source={{ uri: media.uri }} 
+                                    style={styles.mediaImg} 
+                                    resizeMode={ResizeMode.COVER}
+                                    isLooping
+                                    shouldPlay
+                                />
+                            ) : (
+                                <Image source={{ uri: media.uri }} style={styles.mediaImg} />
+                            )}
                             <TouchableOpacity style={styles.removeMedia} onPress={() => setMedia(null)}>
                                 <Ionicons name="close-circle" size={24} color="white" />
                             </TouchableOpacity>
@@ -354,62 +448,81 @@ export default function MacroUpdateScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#E6E6D4',
+        backgroundColor: Colors.background,
     },
     header: {
-        flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        height: 60,
-    },
-    backBtn: {
-        marginRight: 20,
+        paddingTop: 10,
+        zIndex: 10,
     },
     modeToggle: {
         flexDirection: 'row',
-        backgroundColor: 'rgba(79, 99, 82, 0.1)',
-        borderRadius: 20,
-        padding: 4,
+        backgroundColor: Colors.theme.beigeLight,
+        borderRadius: 25,
+        padding: 5,
+        width: '90%',
+        justifyContent: 'space-between',
     },
     modeBtn: {
-        paddingHorizontal: 16,
-        paddingVertical: 6,
-        borderRadius: 16,
+        flex: 1,
+        paddingVertical: 10,
+        alignItems: 'center',
+        borderRadius: 20,
     },
     modeBtnActive: {
-        backgroundColor: '#4F6352',
+        backgroundColor: Colors.theme.sageDark,
     },
     modeText: {
         fontSize: 14,
-        color: '#4F6352',
-        fontWeight: '600',
+        color: Colors.theme.sageDark,
+        fontWeight: 'bold',
     },
     modeTextActive: {
         color: 'white',
     },
+    backBtnHeader: {
+        position: 'absolute',
+        top: 70,
+        left: 20,
+        zIndex: 20,
+    },
     scrollContent: {
         flex: 1,
         paddingHorizontal: 20,
+        marginTop: 40,
     },
     title: {
         fontSize: 42,
         fontWeight: 'bold',
-        color: '#4F6352',
+        color: Colors.theme.sageDark,
         textAlign: 'center',
-        marginVertical: 20,
+        marginVertical: 15,
+    },
+    titleSmall: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: Colors.theme.sageDark,
+        textAlign: 'center',
+        marginVertical: 10,
+    },
+    titleDivider: {
+        height: 1,
+        backgroundColor: Colors.theme.sageDark,
+        opacity: 0.2,
+        marginHorizontal: 40,
     },
     calSection: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 12,
-        marginBottom: 30,
+        marginBottom: 20,
     },
     mainFireIcon: {
         marginRight: -5,
     },
     calBubbleMain: {
-        backgroundColor: '#4F6352',
+        backgroundColor: Colors.theme.sageDark,
         paddingHorizontal: 30,
         paddingVertical: 12,
         borderRadius: 25,
@@ -435,8 +548,8 @@ const styles = StyleSheet.create({
         fontStyle: 'italic',
     },
     macrosList: {
-        gap: 15,
-        marginBottom: 30,
+        gap: 12,
+        marginBottom: 20,
     },
     macroRow: {
         flexDirection: 'row',
@@ -446,7 +559,7 @@ const styles = StyleSheet.create({
     },
     oldValContainer: {
         borderWidth: 1.5,
-        borderColor: '#4F6352',
+        borderColor: Colors.theme.sageDark,
         borderRadius: 15,
         paddingHorizontal: 10,
         paddingVertical: 6,
@@ -454,7 +567,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     oldValText: {
-        color: '#4F6352',
+        color: Colors.theme.sageDark,
         fontWeight: 'bold',
         fontSize: 14,
     },
@@ -479,7 +592,7 @@ const styles = StyleSheet.create({
     macroInput: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#4F6352',
+        color: Colors.theme.sageDark,
         textAlign: 'right',
         minWidth: 40,
         padding: 0,
@@ -487,7 +600,7 @@ const styles = StyleSheet.create({
     suffixText: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#4F6352',
+        color: Colors.theme.sageDark,
     },
     diffBubble: {
         paddingHorizontal: 14,
@@ -503,11 +616,12 @@ const styles = StyleSheet.create({
         fontStyle: 'italic',
     },
     newTargetsWrapper: {
-        marginTop: 30,
+        marginTop: 20,
         flexDirection: 'row',
         alignItems: 'flex-end',
         justifyContent: 'center',
         gap: 15,
+        paddingBottom: 200,
     },
     newTargetsLabelCol: {
         marginBottom: 5,
@@ -515,7 +629,7 @@ const styles = StyleSheet.create({
     newTargetsLabelPart: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#4F6352',
+        color: Colors.theme.sageDark,
         lineHeight: 20,
     },
     newTargetsData: {
@@ -530,86 +644,139 @@ const styles = StyleSheet.create({
     targetVal: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: '#4F6352',
+        color: Colors.theme.sageDark,
         marginTop: 2,
     },
     targetUnit: {
         fontSize: 10,
-        color: '#4F6352',
+        color: Colors.theme.sageDark,
         fontWeight: '600',
     },
-    snapshotPreview: {
-        gap: 15,
-        marginTop: 10,
+    snapshotContainer: {
+        marginTop: 20,
+        gap: 25,
+        paddingHorizontal: 10,
     },
-    snapshotRow: {
+    progressRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        gap: 15,
     },
-    snapshotIcon: {
-        width: 30,
+    progressIcon: {
+        width: 35,
         textAlign: 'center',
     },
-    snapshotTrack: {
+    progressTrackWrapper: {
         flex: 1,
-        height: 44,
-        backgroundColor: 'white',
-        borderRadius: 22,
+    },
+    progressTrack: {
+        height: 50,
+        backgroundColor: '#D9D9D9',
+        borderRadius: 25,
         flexDirection: 'row',
         overflow: 'hidden',
-        borderWidth: 1.5,
-        borderColor: Colors.primary,
     },
-    snapshotFill: {
+    segment: {
         height: '100%',
         justifyContent: 'center',
         alignItems: 'center',
     },
-    snapshotValue: {
+    segmentText: {
         color: 'white',
         fontSize: 14,
         fontWeight: 'bold',
     },
-    snapshotRemaining: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
+    deltaLabel: {
+        position: 'absolute',
+        top: -18,
+        right: 5,
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#825858',
     },
-    remainingValue: {
-        color: Colors.primary,
+    legendRow: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 30,
+        marginTop: 10,
+    },
+    legendItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    legendDot: {
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+    },
+    legendText: {
         fontSize: 14,
+        color: Colors.theme.sageDark,
         fontWeight: '600',
     },
-    snapshotHint: {
-        textAlign: 'center',
-        color: '#4F6352',
-        opacity: 0.6,
+    emptyState: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingTop: 100,
+    },
+    emptyText: {
         marginTop: 20,
-        fontStyle: 'italic',
+        fontSize: 16,
+        color: Colors.theme.sageDark,
+        opacity: 0.6,
+    },
+    macroBookEntry: {
+        backgroundColor: 'white',
+        padding: 15,
+        borderRadius: 15,
+        marginBottom: 10,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    entryLabel: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: Colors.theme.sageDark,
+        marginBottom: 5,
+    },
+    entryValues: {
+        flexDirection: 'row',
+        gap: 15,
+    },
+    entryValue: {
+        fontSize: 14,
+        color: Colors.theme.sageDark,
+        opacity: 0.7,
     },
     loggerSheet: {
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        height: SCREEN_HEIGHT, // Keep it full so it can reach top, but we will adjust its base position
-        backgroundColor: 'rgba(164, 182, 157, 0.98)',
+        height: SCREEN_HEIGHT,
+        backgroundColor: Colors.theme.sageLight,
         borderTopLeftRadius: 35,
         borderTopRightRadius: 35,
-        borderWidth: 1,
-        borderColor: 'rgba(79, 99, 82, 0.2)',
         paddingHorizontal: 20,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 10,
     },
     dragHandleContainer: {
-        paddingVertical: 15,
+        paddingVertical: 12,
         alignItems: 'center',
     },
     dragHandle: {
         width: 40,
-        height: 4,
-        backgroundColor: 'rgba(255,255,255,0.4)',
-        borderRadius: 2,
+        height: 5,
+        backgroundColor: 'rgba(255,255,255,0.5)',
+        borderRadius: 3,
     },
     loggerTopRow: {
         flexDirection: 'row',
@@ -617,45 +784,48 @@ const styles = StyleSheet.create({
         gap: 10,
     },
     cameraBtn: {
-        width: 44,
-        height: 44,
+        width: 48,
+        height: 48,
         backgroundColor: 'white',
-        borderRadius: 22,
+        borderRadius: 24,
         justifyContent: 'center',
         alignItems: 'center',
     },
     loggerInput: {
         flex: 1,
         backgroundColor: 'rgba(255,255,255,0.3)',
-        borderRadius: 22,
+        borderRadius: 24,
         paddingHorizontal: 16,
-        paddingVertical: 10,
-        color: '#4F6352',
+        paddingVertical: 12,
+        color: Colors.theme.sageDark,
         fontSize: 16,
+        maxHeight: 100,
     },
     postSubmitBtn: {
-        width: 44,
-        height: 44,
+        width: 48,
+        height: 48,
         backgroundColor: 'white',
-        borderRadius: 22,
+        borderRadius: 24,
         justifyContent: 'center',
         alignItems: 'center',
     },
     mediaPreview: {
         marginTop: 20,
-        height: 200,
+        height: 250,
         borderRadius: 20,
         overflow: 'hidden',
         position: 'relative',
+        backgroundColor: 'black',
     },
     mediaImg: {
         width: '100%',
         height: '100%',
-        resizeMode: 'cover',
     },
     removeMedia: {
         position: 'absolute',
         top: 10,
         right: 10,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        borderRadius: 12,
     }
 });

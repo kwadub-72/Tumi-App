@@ -13,6 +13,10 @@ import { useWorkoutLogStore } from '@/src/store/useWorkoutLogStore';
 import { useUserStore } from '@/store/UserStore';
 import { useProfileNavigation } from '@/src/shared/hooks/useProfileNavigation';
 
+const BURGUNDY = '#825858';
+const TRIBE_GREEN = '#405F4F';
+const WHITE = '#FFFFFF';
+
 export interface FeedItemProps {
     post: FeedPost;
     onPressVerified?: () => void;
@@ -128,6 +132,22 @@ export default function FeedItem({
                 });
             }
         }
+        if (post.snapshot) {
+            if (isSelectMode && selectedItems.length === 0) return;
+            const selectedLine = selectedItems[0];
+            if (selectedLine !== 'targets') return;
+
+            setIsTribeMenuOpen(false);
+            router.push({
+                pathname: '/signup/manual-macros',
+                params: { 
+                    p: post.snapshot.targets.p, 
+                    c: post.snapshot.targets.c, 
+                    f: post.snapshot.targets.f, 
+                    calories: post.snapshot.targets.calories 
+                }
+            });
+        }
     };
 
     const handleTribeCopy = () => {
@@ -186,6 +206,9 @@ export default function FeedItem({
         if (post.macroUpdate) {
             handleStandardCopy();
         }
+        if (post.snapshot) {
+            handleStandardCopy();
+        }
     };
 
     const toggleExpand = (e?: any) => {
@@ -225,7 +248,6 @@ export default function FeedItem({
     };
 
     const formatVal = (val: number) => {
-        if (val < 0) return `(${Math.abs(val)})`;
         return `${val}`;
     };
 
@@ -242,9 +264,10 @@ export default function FeedItem({
         </View>
     );
 
-    const renderMacroValue = (icon: any, val: number, unit: string, colorOverride?: string) => (
-        renderMacroColumn(icon, val, unit, undefined, colorOverride, 'normal')
-    );
+    const renderMacroValue = (icon: any, val: number, unit: string, colorOverride?: string, showPlus?: boolean) => {
+        const formatted = showPlus && val > 0 ? `+${val}` : `${val}`;
+        return renderMacroColumn(icon, formatted as any, unit, undefined, colorOverride, 'normal');
+    };
 
     const renderSnapshot = (snapshot: Snapshot) => {
         const remains = {
@@ -254,105 +277,152 @@ export default function FeedItem({
             f: snapshot.targets.f - snapshot.consumed.f,
         };
 
-        return (
-            <View style={styles.snapshotContent}>
-                {isExpanded && (
-                    <>
-                        <View style={styles.snapshotRow}>
-                            <Text style={styles.snapshotLabel}>Target</Text>
-                            {renderMacroValue('fire', snapshot.targets.calories, ' cals')}
-                            {renderMacroValue('food-drumstick', snapshot.targets.p, 'g')}
-                            {renderMacroValue('barley', snapshot.targets.c, 'g')}
-                            {renderMacroValue('water', snapshot.targets.f, 'g')}
-                        </View>
-                        <View style={styles.snapshotRow}>
-                            <Text style={styles.snapshotLabel}>Snapshot</Text>
-                            {renderMacroValue('fire', snapshot.consumed.calories, ' cals')}
-                            {renderMacroValue('food-drumstick', snapshot.consumed.p, 'g')}
-                            {renderMacroValue('barley', snapshot.consumed.c, 'g')}
-                            {renderMacroValue('water', snapshot.consumed.f, 'g')}
-                        </View>
-                        <View style={[styles.divider, { marginVertical: 8, opacity: 0.2 }]} />
-                    </>
+        const getColor = (val: number) => {
+            if (val > 0) return TRIBE_GREEN;
+            if (val < 0) return BURGUNDY;
+            return WHITE;
+        };
+
+        const renderRow = (label: string, vals: { calories: number, p: number, c: number, f: number }, colors: { calories: string, p: string, c: string, f: string }, selectionKey?: string, showPlus = false) => (
+            <TouchableOpacity
+                activeOpacity={isSelectMode && selectionKey ? 0.7 : 1}
+                onPress={() => isSelectMode && selectionKey && onToggleSelect?.(selectionKey, 'snapshot')}
+                style={styles.macroUpdateRow}
+            >
+                {isSelectMode && selectionKey && (
+                    <View style={styles.selectBtnLeft}>
+                        {selectedItems.includes(selectionKey) ? (
+                            <View style={styles.selectedCircle}>
+                                <Ionicons name="checkmark" size={16} color="white" />
+                            </View>
+                        ) : (
+                            <View style={styles.unselectedCircle} />
+                        )}
+                    </View>
                 )}
-                <View style={styles.snapshotRow}>
-                    <Text style={styles.snapshotLabel}>Remaining</Text>
-                    {renderMacroValue('fire', remains.calories, ' cals')}
-                    {renderMacroValue('food-drumstick', remains.p, 'g')}
-                    {renderMacroValue('barley', remains.c, 'g')}
-                    {renderMacroValue('water', remains.f, 'g')}
+                <View style={[styles.macroLabelBox, isSelectMode && { paddingLeft: 28 }]}>
+                    <Text style={styles.macroLabelText}>{label}</Text>
                 </View>
+                <View style={styles.macroValuesRow}>
+                    {renderMacroValue('fire', vals.calories, ' cals', colors.calories, showPlus)}
+                    {renderMacroValue('food-drumstick', vals.p, 'g', colors.p, showPlus)}
+                    {renderMacroValue('barley', vals.c, 'g', colors.c, showPlus)}
+                    {renderMacroValue('water', vals.f, 'g', colors.f, showPlus)}
+                </View>
+            </TouchableOpacity>
+        );
+
+        if (!isExpanded) {
+            return (
+                <View style={styles.macroUpdateContent}>
+                    {renderRow('Snapshot', remains, {
+                        calories: getColor(remains.calories),
+                        p: getColor(remains.p),
+                        c: getColor(remains.c),
+                        f: getColor(remains.f),
+                    }, undefined, true)}
+                </View>
+            );
+        }
+
+        return (
+            <View style={styles.macroUpdateContent}>
+                {renderRow('Targets', snapshot.targets, { calories: WHITE, p: WHITE, c: WHITE, f: WHITE }, 'targets')}
+                <View style={[styles.divider, { opacity: 0.1, marginVertical: 4 }]} />
+                {renderRow('Actual', snapshot.consumed, { calories: WHITE, p: WHITE, c: WHITE, f: WHITE }, undefined)}
+                <View style={[styles.divider, { opacity: 0.1, marginVertical: 4 }]} />
+                {renderRow('Snapshot', remains, {
+                    calories: getColor(remains.calories),
+                    p: getColor(remains.p),
+                    c: getColor(remains.c),
+                    f: getColor(remains.f),
+                }, undefined, true)}
             </View>
         );
     };
 
-    const renderMacroUpdate = (mu: any) => (
-        <View style={styles.macroUpdateContent}>
-            {isExpanded && (
-                <TouchableOpacity 
-                    activeOpacity={isSelectMode ? 0.7 : 1}
-                    onPress={() => isSelectMode && onToggleSelect?.('old', 'macro')}
-                    style={styles.macroOldRow}
-                >
-                    <Text style={styles.macroLabelLarge}>Old Target</Text>
-                    <View style={styles.macroValues}>
-                        {renderMacroValue('fire', mu.oldTargets.calories, ' cals')}
-                        {renderMacroValue('food-drumstick', mu.oldTargets.p, 'g')}
-                        {renderMacroValue('barley', mu.oldTargets.c, 'g')}
-                        {renderMacroValue('water', mu.oldTargets.f, 'g')}
-                    </View>
-                    {isSelectMode && (
-                        <View style={styles.selectBtn}>
-                            <Ionicons name={selectedItems.includes('old') ? "checkmark-circle" : "ellipse-outline"} size={28} color={selectedItems.includes('old') ? "#2F3A27" : "rgba(255,255,255,0.7)"} />
-                        </View>
-                    )}
-                </TouchableOpacity>
-            )}
-            <View style={[styles.divider, { opacity: 0.2, marginVertical: 8 }]} />
-                <TouchableOpacity 
-                    activeOpacity={isSelectMode ? 0.7 : 1}
-                    onPress={() => isSelectMode && onToggleSelect?.('new', 'macro')}
-                    style={styles.macroNewRow}
-                >
-                    <View style={styles.newTargetsLabelBox}>
-                        <Text style={styles.macroLabel}>New</Text>
-                        <Text style={styles.macroLabel}>targets</Text>
-                    </View>
-                    <View style={styles.macroValuesMain}>
-                        {renderMacroValue('fire', mu.newTargets.calories, ' cals')}
-                        {renderMacroValue('food-drumstick', mu.newTargets.p, 'g')}
-                        {renderMacroValue('barley', mu.newTargets.c, 'g')}
-                        {renderMacroValue('water', mu.newTargets.f, 'g')}
-                    </View>
-                    {isSelectMode && (
-                        <View style={styles.selectBtn}>
-                            <Ionicons name={selectedItems.includes('new') ? "checkmark-circle" : "ellipse-outline"} size={28} color={selectedItems.includes('new') ? "#2F3A27" : "rgba(255,255,255,0.7)"} />
-                        </View>
-                    )}
-                </TouchableOpacity>
+    const renderMacroUpdate = (mu: MacroUpdate) => {
+        const delta = {
+            calories: mu.newTargets.calories - mu.oldTargets.calories,
+            p: mu.newTargets.p - mu.oldTargets.p,
+            c: mu.newTargets.c - mu.oldTargets.c,
+            f: mu.newTargets.f - mu.oldTargets.f,
+        };
 
-            <View style={[styles.divider, { opacity: 0.2, marginVertical: 8 }]} />
+        const getDeltaColor = (val: number) => {
+            if (val > 0) return TRIBE_GREEN;
+            if (val < 0) return BURGUNDY;
+            return WHITE;
+        };
 
-            <TouchableOpacity 
+        const getNewColor = (newVal: number, oldVal: number) => {
+            if (newVal > oldVal) return TRIBE_GREEN;
+            if (newVal < oldVal) return BURGUNDY;
+            return WHITE;
+        };
+
+        const renderRow = (label: string, vals: { calories: number, p: number, c: number, f: number }, colors: { calories: string, p: string, c: string, f: string }, selectionKey?: string, isDelta = false) => (
+            <TouchableOpacity
                 activeOpacity={isSelectMode ? 0.7 : 1}
-                onPress={() => isSelectMode && onToggleSelect?.('diff', 'macro')}
-                style={styles.macroOldRow}
+                onPress={() => isSelectMode && selectionKey && onToggleSelect?.(selectionKey, 'macro')}
+                style={styles.macroUpdateRow}
             >
-                <Text style={styles.macroLabelLarge}>Difference</Text>
-                <View style={styles.macroValues}>
-                    {renderMacroValue('fire', Math.round((mu.newTargets.calories - mu.oldTargets.calories) / mu.oldTargets.calories * 100 || 0), '%')}
-                    {renderMacroValue('food-drumstick', Math.round((mu.newTargets.p - mu.oldTargets.p) / mu.oldTargets.p * 100 || 0), '%')}
-                    {renderMacroValue('barley', Math.round((mu.newTargets.c - mu.oldTargets.c) / mu.oldTargets.c * 100 || 0), '%')}
-                    {renderMacroValue('water', Math.round((mu.newTargets.f - mu.oldTargets.f) / mu.oldTargets.f * 100 || 0), '%')}
-                </View>
-                {isSelectMode && (
-                    <View style={styles.selectBtn}>
-                        <Ionicons name={selectedItems.includes('diff') ? "checkmark-circle" : "ellipse-outline"} size={28} color={selectedItems.includes('diff') ? "#2F3A27" : "rgba(255,255,255,0.7)"} />
+                {isSelectMode && selectionKey && (
+                    <View style={styles.selectBtnLeft}>
+                        {selectedItems.includes(selectionKey) ? (
+                            <View style={styles.selectedCircle}>
+                                <Ionicons name="checkmark" size={16} color="white" />
+                            </View>
+                        ) : (
+                            <View style={styles.unselectedCircle} />
+                        )}
                     </View>
                 )}
+                <View style={[styles.macroLabelBox, isSelectMode && { paddingLeft: 28 }]}>
+                    <Text style={styles.macroLabelText}>{label}</Text>
+                </View>
+                <View style={styles.macroValuesRow}>
+                    {renderMacroValue('fire', vals.calories, ' cals', colors.calories, isDelta)}
+                    {renderMacroValue('food-drumstick', vals.p, 'g', colors.p, isDelta)}
+                    {renderMacroValue('barley', vals.c, 'g', colors.c, isDelta)}
+                    {renderMacroValue('water', vals.f, 'g', colors.f, isDelta)}
+                </View>
             </TouchableOpacity>
-        </View>
-    );
+        );
+
+        if (!isExpanded) {
+            return (
+                <View style={styles.macroUpdateContent}>
+                    {renderRow('New targets', mu.newTargets, {
+                        calories: getNewColor(mu.newTargets.calories, mu.oldTargets.calories),
+                        p: getNewColor(mu.newTargets.p, mu.oldTargets.p),
+                        c: getNewColor(mu.newTargets.c, mu.oldTargets.c),
+                        f: getNewColor(mu.newTargets.f, mu.oldTargets.f),
+                    }, 'new')}
+                </View>
+            );
+        }
+
+        return (
+            <View style={styles.macroUpdateContent}>
+                {renderRow(mu.oldDate || '12/25/2025', mu.oldTargets, { calories: WHITE, p: WHITE, c: WHITE, f: WHITE }, 'old')}
+                <View style={[styles.divider, { opacity: 0.1, marginVertical: 4 }]} />
+                {renderRow('Updates', delta, {
+                    calories: getDeltaColor(delta.calories),
+                    p: getDeltaColor(delta.p),
+                    c: getDeltaColor(delta.c),
+                    f: getDeltaColor(delta.f),
+                }, 'diff', true)}
+                <View style={[styles.divider, { opacity: 0.1, marginVertical: 4 }]} />
+                {renderRow('New targets', mu.newTargets, {
+                    calories: getNewColor(mu.newTargets.calories, mu.oldTargets.calories),
+                    p: getNewColor(mu.newTargets.p, mu.oldTargets.p),
+                    c: getNewColor(mu.newTargets.c, mu.oldTargets.c),
+                    f: getNewColor(mu.newTargets.f, mu.oldTargets.f),
+                }, 'new')}
+            </View>
+        );
+    };
 
     const renderMeal = (meal: any) => {
         return (
@@ -367,14 +437,6 @@ export default function FeedItem({
                             {renderMacroColumn('water', meal.macros.f, 'g', 55, undefined, 'normal')}
                         </View>
                     </View>
-                )}
-
-                {!isDetailView && (
-                    <TouchableOpacity onPress={toggleExpand} style={styles.expandLineTrigger}>
-                        <View style={styles.dividerHalf} />
-                        <Ionicons name="ellipsis-horizontal" size={16} color="rgba(255,255,255,0.5)" />
-                        <View style={styles.dividerHalf} />
-                    </TouchableOpacity>
                 )}
 
                 {(isDetailView || isExpanded) && (
@@ -604,9 +666,17 @@ export default function FeedItem({
                     {post.caption || post.snapshot?.caption || post.macroUpdate?.caption || post.workout?.title || post.meal?.title}
                 </Text>
 
+                {!isDetailView && (
+                    <TouchableOpacity onPress={toggleExpand} style={styles.expandLineTrigger}>
+                        <View style={styles.dividerHalf} />
+                        <Ionicons name="ellipsis-horizontal" size={16} color="rgba(255,255,255,0.5)" />
+                        <View style={styles.dividerHalf} />
+                    </TouchableOpacity>
+                )}
+
                 {content()}
 
-                {(!isDetailView && !post.meal) && (
+                {(!isDetailView && !post.meal && !post.macroUpdate && !post.workout && !post.snapshot) && (
                     <TouchableOpacity onPress={toggleExpand} style={styles.expandLineTrigger}>
                         <View style={styles.dividerHalf} />
                         <Ionicons name="ellipsis-horizontal" size={16} color="rgba(255,255,255,0.5)" />
@@ -728,34 +798,28 @@ const styles = StyleSheet.create({
         width: 75,
     },
     macroUpdateContent: {
-        gap: 5,
-        paddingLeft: 10,
+        gap: 2,
+        paddingLeft: 0,
     },
-    macroOldRow: {
+    macroUpdateRow: {
         flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 10,
+    },
+    macroLabelBox: {
+        width: 105,
+    },
+    macroLabelText: {
+        color: 'white',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    macroValuesRow: {
+        flexDirection: 'row',
+        flex: 1,
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingRight: 40,
-    },
-    macroNewRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-end',
-        paddingRight: 40,
-    },
-    newTargetsLabelBox: {
-        width: 75,
-    },
-    macroLabel: {
-        color: 'white',
-        fontSize: 14,
-        fontWeight: 'bold',
-    },
-    macroLabelLarge: {
-        color: 'white',
-        fontSize: 14,
-        fontWeight: 'bold',
-        width: 75,
     },
     macroValues: {
         flexDirection: 'row',

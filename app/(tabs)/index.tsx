@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/src/shared/theme/Colors';
+import { useLocalSearchParams } from 'expo-router';
 
 // Views
 import DiaryView from '@/src/features/home/components/DiaryView';
@@ -18,6 +19,7 @@ import { useUserTribeStore } from '@/src/store/UserTribeStore';
 // ... 
 
 export default function HomeScreen() {
+    const params = useLocalSearchParams();
     const { init, selectedTribe } = useUserTribeStore();
     const [currentTab, setCurrentTab] = useState<NavTab>('Following');
     const [selectedDate, setSelectedDate] = useState(new Date());
@@ -28,6 +30,12 @@ export default function HomeScreen() {
     useEffect(() => {
         init();
     }, []);
+
+    useEffect(() => {
+        if (params.tab === 'Following') {
+            setCurrentTab('Following');
+        }
+    }, [params.tab]);
 
     // Format date for button (e.g., "Dec 29, 2025")
     const formattedDate = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });

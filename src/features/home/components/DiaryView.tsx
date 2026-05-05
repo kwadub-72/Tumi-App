@@ -10,9 +10,8 @@ import VerifiedModal from '@/components/VerifiedModal';
 import { useAuthStore } from '@/store/AuthStore';
 import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
 import { supabase } from '@/src/shared/services/supabase';
+import { useMacrobookStore } from '@/src/store/useMacrobookStore';
 import { useMealbookStore } from '@/src/store/useMealbookStore';
-import { USDAFoodItem } from '@/src/shared/services/USDAFoodService';
-import PostOptionsModal from '@/src/features/feed/components/PostOptionsModal';
 import * as Haptics from 'expo-haptics';
 
 interface DiaryViewProps {
@@ -22,6 +21,7 @@ interface DiaryViewProps {
 export default function DiaryView({ selectedDate }: DiaryViewProps) {
     const { session, profile } = useAuthStore();
     const { addBookmark } = useMealbookStore();
+    const macrobookStore = useMacrobookStore();
 
     const [posts, setPosts] = useState<FeedPost[]>([]);
     const [loading, setLoading] = useState(true);
@@ -36,6 +36,9 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
     const [hammerData, setHammerData] = useState({ name: '', icon: '' });
     const [commentsForPost, setCommentsForPost] = useState<FeedPost['comments']>([]);
     const [commentsLoading, setCommentsLoading] = useState(false);
+    const [isSelectMode, setIsSelectMode] = useState(false);
+    const [selectedItems, setSelectedItems] = useState<string[]>([]);
+    const [toastMessage, setToastMessage] = useState('Post deleted successfully');
 
     const loadFeed = useCallback(async () => {
         if (!session?.user?.id) return;
@@ -57,7 +60,7 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
         if (!session?.user?.id) return;
 
         const channel = supabase
-            .channel('diary-feed-updates')
+            .channel(`diary-feed-${Math.random().toString(36).slice(2)}`)
             .on('postgres_changes', {
                 event: '*',
                 schema: 'public',
@@ -168,6 +171,7 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
             await SupabasePostService.deletePost(postId);
             
             // Show toast
+            setToastMessage('Post deleted successfully');
             setShowDeleteToast(true);
             setTimeout(() => setShowDeleteToast(false), 2000);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -175,6 +179,46 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
             console.error('Failed to delete post:', error);
             // Re-fetch or handle error if needed
         }
+    };
+
+    const handleAddToMacroBook = () => {
+        if (!activePost) return;
+        
+        if (activePost.macroUpdate) {
+            const mu = activePost.macroUpdate;
+            macrobookStore.addEntry({
+                label: `Update from ${activePost.user.handle}`,
+                calories: mu.newTargets.calories,
+                p: mu.newTargets.p,
+                c: mu.newTargets.c,
+                f: mu.newTargets.f,
+            });
+        } else if (activePost.snapshot) {
+            const snap = activePost.snapshot;
+            macrobookStore.addEntry({
+                label: `Snapshot from ${activePost.user.handle}`,
+                calories: snap.targets.calories,
+                p: snap.targets.p,
+                c: snap.targets.c,
+                f: snap.targets.f,
+            });
+        }
+
+        setOptionsModalVisible(false);
+        setActivePost(null);
+        
+        setToastMessage('Added to macro book');
+        setShowDeleteToast(true);
+        setTimeout(() => setShowDeleteToast(false), 2000);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    };
+
+    const handleToggleSelect = (itemId: string, itemType: string) => {
+        setSelectedItems(prev => 
+            prev.includes(itemId) 
+                ? prev.filter(id => id !== itemId) 
+                : [...prev, itemId]
+        );
     };
 
     const renderHeader = () => (
@@ -216,13 +260,18 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
                 isOwner={activePost?.user.id === session?.user.id}
                 onDelete={handleDeletePost}
                 onReport={() => setOptionsModalVisible(false)}
+                onSelectItems={() => {
+                    setIsSelectMode(true);
+                    setOptionsModalVisible(false);
+                }}
+                onAddToMacroBook={handleAddToMacroBook}
             />
 
             {showDeleteToast && (
                 <View style={styles.toastContainer}>
                     <View style={styles.toast}>
                         <Ionicons name="checkmark-circle" size={20} color="#F5F5DC" />
-                        <Text style={styles.toastText}>Post deleted successfully</Text>
+                        <Text style={styles.toastText}>{toastMessage}</Text>
                     </View>
                 </View>
             )}
@@ -245,6 +294,14 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
                         onPressOptions={() => {
                             setActivePost(item);
                             setOptionsModalVisible(true);
+                        }}
+                        isSelectMode={isSelectMode && activePost?.id === item.id}
+                        selectedItems={selectedItems}
+                        onToggleSelect={handleToggleSelect}
+                        onDismissSelectMode={() => {
+                            setIsSelectMode(false);
+                            setSelectedItems([]);
+                            setActivePost(null);
                         }}
                         sharedTransitionTag={`post-${item.id}`}
                     />

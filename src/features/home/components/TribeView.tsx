@@ -79,7 +79,7 @@ export default function TribeView({ selectedDate }: TribeViewProps) {
         if (!session?.user?.id) return;
 
         const channel = supabase
-            .channel('tribe-feed-updates')
+            .channel(`tribe-feed-${Math.random().toString(36).slice(2)}`)
             .on('postgres_changes', {
                 event: '*',
                 schema: 'public',

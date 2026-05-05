@@ -13,6 +13,7 @@ interface PostOptionsModalProps {
     onSelectItems?: () => void;
     onAddToMealBook?: () => void;
     onAddToLiftBook?: () => void;
+    onAddToMacroBook?: () => void;
     isOwner: boolean;
 }
 
@@ -24,6 +25,7 @@ export default function PostOptionsModal({
     onSelectItems,
     onAddToMealBook,
     onAddToLiftBook,
+    onAddToMacroBook,
     isOwner
 }: PostOptionsModalProps) {
     const handleDelete = () => {
@@ -78,6 +80,21 @@ export default function PostOptionsModal({
                                         <Ionicons name="book" size={28} color="#4A5D4E" />
                                     </View>
                                     <Text style={[styles.optionText, { color: '#4A5D4E' }]}>Add to lift book</Text>
+                                </TouchableOpacity>
+                                <View style={styles.itemDivider} />
+                            </>
+                        )}
+                        {onAddToMacroBook && (
+                            <>
+                                <TouchableOpacity 
+                                    style={styles.option} 
+                                    onPress={onAddToMacroBook}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={styles.iconContainer}>
+                                        <Ionicons name="book" size={28} color="#4A5D4E" />
+                                    </View>
+                                    <Text style={[styles.optionText, { color: '#4A5D4E' }]}>Add to macro book</Text>
                                 </TouchableOpacity>
                                 <View style={styles.itemDivider} />
                             </>

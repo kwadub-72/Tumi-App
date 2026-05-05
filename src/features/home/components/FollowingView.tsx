@@ -65,7 +65,7 @@ export default function FollowingView({ selectedDate }: FollowingViewProps) {
         if (!session?.user?.id) return;
 
         const channel = supabase
-            .channel('following-feed-updates')
+            .channel(`following-feed-${Math.random().toString(36).slice(2)}`)
             .on('postgres_changes', {
                 event: '*',
                 schema: 'public',
