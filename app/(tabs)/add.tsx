@@ -206,12 +206,59 @@ export default function AddMealScreen() {
                 amount: food.servingSizeText ?? `${food.servingSizeG}g`,
                 cals: calPerServing(food),
                 macros,
+                metadata: {
+                    caloriesPer100g: food.caloriesPer100g,
+                    macrosPer100g: food.macrosPer100g,
+                    servingSizeG: food.servingSizeG,
+                    servingSizeText: food.servingSizeText,
+                    fdcId: food.fdcId,
+                    servingUnits: food.servingUnits,
+                }
             };
             addItem(newItem);
             addRecent(food);
         },
         [addItem, addRecent]
     );
+
+    const handleEditItem = useCallback((item: Ingredient) => {
+        // If it's a USDA food with metadata, navigate to meal-entry for full editing
+        if (item.metadata) {
+            router.push({
+                pathname: '/meal-entry',
+                params: {
+                    id: String(item.metadata.fdcId),
+                    title: item.name,
+                    description: '', // could add brand if we store it
+                    caloriesPer100g: String(item.metadata.caloriesPer100g),
+                    proteinPer100g: String(item.metadata.macrosPer100g?.p),
+                    carbsPer100g: String(item.metadata.macrosPer100g?.c),
+                    fatPer100g: String(item.metadata.macrosPer100g?.f),
+                    servingSizeG: String(item.metadata.servingSizeG),
+                    servingSizeText: item.metadata.servingSizeText ?? '',
+                    fdcId: String(item.metadata.fdcId),
+                    fdcName: item.name,
+                    servingUnits: JSON.stringify(item.metadata.servingUnits),
+                    editId: item.id, // Pass the existing ID to update it
+                    initialAmount: item.amount.split(' ')[0], // Try to extract amount
+                },
+            });
+        } else {
+            // Manual items - could open a simple editor or reuse meal-entry
+            // For now, let's treat them as simple entries
+            router.push({
+                pathname: '/meal-entry',
+                params: {
+                    id: item.id,
+                    title: item.name,
+                    editId: item.id,
+                    initialAmount: item.amount.split(' ')[0],
+                    // Manual items in meal-entry currently use fixed macros (L195)
+                    // We might want to fix that, but let's see.
+                }
+            });
+        }
+    }, []);
 
     // ── Navigate to meal-entry for detail view ──
     const goToEntry = useCallback(
@@ -671,6 +718,7 @@ export default function AddMealScreen() {
                 onClose={() => setIsSheetVisible(false)}
                 onPublish={handlePublish}
                 onRemoveItem={removeItem}
+                onPressItem={handleEditItem}
                 capturedImage={capturedImage}
                 mediaType={mediaType}
             />

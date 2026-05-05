@@ -15,6 +15,9 @@ import {
     Image,
     Dimensions,
     ScrollView,
+    ActivityIndicator,
+    Alert,
+    FlatList,
 } from 'react-native';
 import Animated, {
     useAnimatedStyle,
@@ -29,36 +32,159 @@ import { useAuthStore } from '@/store/AuthStore';
 import { FeedPost } from '@/src/shared/models/types';
 import { NutritionService } from '@/src/shared/services/NutritionService';
 import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
-import { useMacrobookStore } from '@/src/store/useMacrobookStore';
 import { Video, ResizeMode } from 'expo-av';
+import { useWorkoutLogStore } from '@/src/store/useWorkoutLogStore';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
-const SHEET_MIN_Y = SCREEN_HEIGHT - 160;
-const SHEET_MAX_Y = SCREEN_HEIGHT * 0.45;
+const SHEET_MIN_Y = SCREEN_HEIGHT - 145;
+const SHEET_MAX_Y = SCREEN_HEIGHT * 0.5;
 
 type ScreenMode = 'macro-update' | 'snapshot' | 'macro-book';
+const MODES: ScreenMode[] = ['macro-update', 'snapshot', 'macro-book'];
+
+const MacroUpdateRow = ({ icon, oldVal, value, onChange, diff }: any) => {
+    const inputRef = React.useRef<TextInput>(null);
+    const isNegative = diff < 0;
+    const hasValue = value !== '';
+    const diffText = !hasValue ? '...g' : (diff === 0 ? '0g' : `${Math.abs(diff)}g`);
+    const diffBg = !hasValue ? '#D3D3D3' : (diff === 0 ? 'rgba(164, 182, 157, 0.5)' : (isNegative ? '#825858' : '#A4B69D'));
+
+    return (
+        <View style={styles.macroRow}>
+            <MaterialCommunityIcons name={icon} size={28} color={Colors.primary} style={styles.macroIconSmall} />
+            <TouchableOpacity 
+                activeOpacity={1} 
+                onPress={() => inputRef.current?.focus()}
+                style={styles.inputBubble}
+            >
+                <TextInput
+                    ref={inputRef}
+                    style={styles.macroInput}
+                    value={value}
+                    onChangeText={onChange}
+                    keyboardType="number-pad"
+                    placeholder="..."
+                    placeholderTextColor="#aaa"
+                />
+                <Text style={styles.suffixText}>g</Text>
+            </TouchableOpacity>
+            <View style={[styles.diffBubble, { backgroundColor: diffBg }]}>
+                <Text style={styles.diffText}>{diffText}</Text>
+            </View>
+        </View>
+    );
+};
+
+const MacroProgressBar = ({ icon, target, consumed }: any) => {
+    const remaining = target - consumed;
+    const total = Math.max(target, consumed);
+    const wPct = (v: number) => (total > 0 ? (v / total) * 100 : 0);
+
+    const logged = Math.min(consumed, target);
+    const rem = Math.max(0, target - consumed);
+    const over = Math.max(0, consumed - target);
+
+    const unit = icon === 'fire' ? ' cals' : 'g';
+
+    const renderSegment = (val: number, bg: string, textCol: string) => {
+        if (val <= 0) return null;
+        const pct = wPct(val);
+        const isSmall = pct < 15;
+        return (
+            <View style={[styles.segment, { width: `${pct}%`, backgroundColor: bg }]}>
+                {!isSmall && (
+                    <Text style={[styles.segmentText, { color: textCol }]}>{val}{unit}</Text>
+                )}
+            </View>
+        );
+    };
+
+    const renderCarrot = (val: number, textCol: string, align: 'center' | 'left' | 'right' = 'center') => {
+        if (val <= 0) return null;
+        const pct = wPct(val);
+        const isSmall = pct < 15;
+        if (!isSmall) return <View style={{ width: `${pct}%` }} />;
+
+        return (
+            <View style={{ width: `${pct}%`, height: 25 }}>
+                <View style={{ position: 'absolute', top: 0, left: '50%', width: 20, marginLeft: -10, alignItems: 'center', overflow: 'visible' }}>
+                    <Ionicons name="chevron-up" size={14} color={textCol} style={{ marginBottom: -4 }} />
+                    <View style={{
+                        position: 'absolute',
+                        top: 14,
+                        width: 100,
+                        alignItems: align === 'left' ? 'flex-end' : align === 'right' ? 'flex-start' : 'center',
+                        ...(align === 'left' ? { right: 10 } : align === 'right' ? { left: 10 } : { left: -40 })
+                    }}>
+                        <Text style={[styles.segmentText, { color: textCol, fontSize: 13 }]} numberOfLines={1}>{val}{unit}</Text>
+                    </View>
+                </View>
+            </View>
+        );
+    };
+
+    return (
+        <View style={styles.progressRow}>
+            <MaterialCommunityIcons name={icon} size={32} color={Colors.theme.sageDark} style={styles.progressIcon} />
+            <View style={styles.progressTrackWrapper}>
+                <View style={styles.progressTrack}>
+                    {renderSegment(logged, Colors.theme.sageDark, 'white')}
+                    {renderSegment(rem, '#8E8E8E', 'white')}
+                    {renderSegment(over, '#825858', 'white')}
+                </View>
+                <View style={{ flexDirection: 'row', height: 25, position: 'relative' }}>
+                    {renderCarrot(logged, Colors.theme.sageDark, 'center')}
+                    {renderCarrot(rem, '#8E8E8E', 'left')}
+                    {renderCarrot(over, '#825858', 'right')}
+                </View>
+            </View>
+        </View>
+    );
+};
 
 export default function MacroUpdateScreen() {
     const router = useRouter();
-    const params = useLocalSearchParams();
+    const { mode: initialMode } = useLocalSearchParams<{ mode: ScreenMode }>();
     const { profile } = useAuthStore();
     const userInfo = useUserStore();
-    const macrobook = useMacrobookStore();
+    const [macroBookEntries, setMacroBookEntries] = useState<any[]>([]);
+    const [loadingBook, setLoadingBook] = useState(false);
+    const [mode, setMode] = useState<ScreenMode>(initialMode || 'snapshot');
+    const [latestHistory, setLatestHistory] = useState<any>(null);
 
-    const [mode, setMode] = useState<ScreenMode>('snapshot');
-
-    // Macro Update State
+    // Macros State
     const targets = profile?.macro_targets || userInfo.macroTargets;
     const oldP = targets.p;
     const oldC = targets.c;
     const oldF = targets.f;
     const oldCal = targets.calories;
 
-    const [pText, setPText] = useState(oldP.toString());
-    const [cText, setCText] = useState(oldC.toString());
-    const [fText, setFText] = useState(oldF.toString());
+    const [pText, setPText] = useState('');
+    const [cText, setCText] = useState('');
+    const [fText, setFText] = useState('');
     const [caption, setCaption] = useState('');
     const [media, setMedia] = useState<{ uri: string; type: 'image' | 'video' } | null>(null);
+
+    const loadMacroBook = async () => {
+        if (!profile?.id) return;
+        setLoadingBook(true);
+        const entries = await SupabasePostService.getMacroBook(profile.id);
+        setMacroBookEntries(entries);
+        setLoadingBook(false);
+    };
+
+    const loadLatestHistory = async () => {
+        if (!profile?.id) return;
+        const history = await SupabasePostService.getLatestMacroHistory(profile.id);
+        setLatestHistory(history);
+    };
+
+    useEffect(() => {
+        if (mode === 'macro-book') {
+            loadMacroBook();
+        }
+        loadLatestHistory();
+    }, [mode, profile?.id]);
 
     // Snapshot Info (Calculated from today's meals)
     const [dailyConsumed, setDailyConsumed] = useState({ calories: 0, p: 0, c: 0, f: 0 });
@@ -84,20 +210,70 @@ export default function MacroUpdateScreen() {
         };
         load();
     }, [profile?.id]);
+    const pagerRef = React.useRef<FlatList<ScreenMode>>(null);
+
+    const handleModeChange = (newMode: ScreenMode) => {
+        setMode(newMode);
+        const index = MODES.indexOf(newMode);
+        if (index !== -1) {
+            pagerRef.current?.scrollToIndex({ index, animated: true });
+        }
+    };
+
+    const handleScroll = (event: any) => {
+        const offset = event.nativeEvent.contentOffset.x;
+        const index = Math.round(offset / SCREEN_WIDTH);
+        if (index >= 0 && index < MODES.length && MODES[index] !== mode) {
+            setMode(MODES[index]);
+        }
+    };
+
+    useEffect(() => {
+        const targetMode = initialMode || 'snapshot';
+        const index = MODES.indexOf(targetMode as ScreenMode);
+        if (index !== -1) {
+            setTimeout(() => {
+                pagerRef.current?.scrollToIndex({ index, animated: false });
+            }, 100);
+        }
+    }, [initialMode]);
 
     // Reanimated values for sheet
     const translateY = useSharedValue(SHEET_MIN_Y);
     const context = useSharedValue({ y: 0 });
+    const keyboardHeight = useSharedValue(0);
 
     useEffect(() => {
-        if (params.capturedImage) {
+        const showSub = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+            (e) => {
+                keyboardHeight.value = withTiming(e.endCoordinates.height);
+            }
+        );
+        const hideSub = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+            () => {
+                keyboardHeight.value = withTiming(0);
+            }
+        );
+
+        return () => {
+            showSub.remove();
+            hideSub.remove();
+        };
+    }, []);
+
+    // Sync media from WorkoutLogStore (camera capture)
+    const storeCapturedMedia = useWorkoutLogStore((s) => s.capturedMedia);
+    useEffect(() => {
+        if (storeCapturedMedia) {
             setMedia({
-                uri: params.capturedImage as string,
-                type: (params.mediaType as 'image' | 'video') || 'image'
+                uri: storeCapturedMedia.uri,
+                type: (storeCapturedMedia.type as 'image' | 'video') || 'image'
             });
             translateY.value = withSpring(SHEET_MAX_Y);
         }
-    }, [params.capturedImage, params.mediaType]);
+    }, [storeCapturedMedia]);
 
     // Derived values for update
     const newP = parseInt(pText) || 0;
@@ -113,34 +289,35 @@ export default function MacroUpdateScreen() {
     const handlePost = async () => {
         if (!profile?.id) return;
 
-        let payload = {};
-        let postType: 'macro_update' | 'snapshot' = 'macro_update';
-
         if (mode === 'macro-update') {
-            postType = 'macro_update';
-            payload = {
-                macroUpdate: {
-                    id: 'mu_' + Date.now(),
-                    caption: caption || 'Macro Update',
-                    timestamp: Date.now(),
-                    oldDate: profile.last_macro_update,
-                    oldTargets: { calories: oldCal, p: oldP, c: oldC, f: oldF },
-                    newTargets: { calories: newCal, p: newP, c: newC, f: newF },
-                    trainingTarget: profile.training_target
-                }
-            };
-            // Update local and remote profile
-            userInfo.setProfile({
-                macroTargets: { p: newP, c: newC, f: newF, calories: newCal },
-                lastMacroUpdate: new Date().toLocaleDateString()
-            });
-            await useAuthStore.getState().updateProfile({
-                macro_targets: { p: newP, c: newC, f: newF, calories: newCal },
-                last_macro_update: new Date().toISOString()
-            });
+            if (!pText || !cText || !fText) {
+                Alert.alert("Missing Macros", "Please enter values for Protein, Carbs, and Fats before posting.");
+                return;
+            }
+            try {
+                // Use the new atomic RPC for macro updates
+                await SupabasePostService.updateMacroTargetsWithPost(
+                    profile.id,
+                    { p: newP, c: newC, f: newF, calories: newCal },
+                    caption || null,
+                    media?.uri,
+                    media?.type
+                );
+                
+                // Update local user store
+                userInfo.setProfile({
+                    macroTargets: { p: newP, c: newC, f: newF, calories: newCal },
+                    lastMacroUpdate: new Date().toLocaleDateString()
+                });
+                
+                useWorkoutLogStore.getState().setCapturedMedia(null);
+                router.replace('/(tabs)?tab=Following');
+            } catch (err) {
+                console.error('Failed to post macro update:', err);
+            }
+            return;
         } else {
-            postType = 'snapshot';
-            payload = {
+            const payload = {
                 snapshot: {
                     id: 'sn_' + Date.now(),
                     timestamp: Date.now(),
@@ -149,19 +326,20 @@ export default function MacroUpdateScreen() {
                     consumed: { ...dailyConsumed }
                 }
             };
-        }
 
-        const success = await SupabasePostService.addPost({
-            authorId: profile.id,
-            postType: postType,
-            payload: payload,
-            caption: caption,
-            mediaUrl: media?.uri,
-            mediaType: media?.type,
-        });
+            const success = await SupabasePostService.addPost({
+                authorId: profile.id,
+                postType: 'snapshot',
+                payload: payload,
+                caption: caption,
+                mediaUrl: media?.uri,
+                mediaType: media?.type,
+            });
 
-        if (success) {
-            router.replace('/(tabs)?tab=Following');
+            if (success) {
+                useWorkoutLogStore.getState().setCapturedMedia(null);
+                router.replace('/(tabs)?tab=Following');
+            }
         }
     };
 
@@ -182,222 +360,214 @@ export default function MacroUpdateScreen() {
         transform: [{ translateY: translateY.value }],
     }));
 
-    const MacroUpdateRow = ({ icon, oldVal, value, onChange, diff }: any) => {
-        const isNegative = diff < 0;
-        const diffText = diff === 0 ? '0g' : `${diff > 0 ? '+' : '—'} ${Math.abs(diff)}g`;
-        const diffBg = diff === 0 ? 'rgba(164, 182, 157, 0.5)' : (isNegative ? '#825858' : '#A4B69D');
-
-        return (
-            <View style={styles.macroRow}>
-                <View style={styles.oldValContainer}>
-                    <Text style={styles.oldValText}>{oldVal}g</Text>
-                </View>
-                <MaterialCommunityIcons name={icon} size={28} color={Colors.primary} style={styles.macroIconSmall} />
-                <View style={styles.inputBubble}>
-                    <TextInput
-                        style={styles.macroInput}
-                        value={value}
-                        onChangeText={onChange}
-                        keyboardType="number-pad"
-                        placeholder="..."
-                        placeholderTextColor="#aaa"
-                    />
-                    <Text style={styles.suffixText}>g</Text>
-                </View>
-                <View style={[styles.diffBubble, { backgroundColor: diffBg }]}>
-                    <Text style={styles.diffText}>{diffText}</Text>
-                </View>
-            </View>
-        );
-    };
-
-    const MacroProgressBar = ({ icon, target, consumed }: any) => {
-        const remaining = target - consumed;
-        const isOver = remaining < 0;
-        const total = Math.max(target, consumed);
-        const loggedWidth = (Math.min(consumed, target) / total) * 100;
-        const remainingWidth = Math.max(0, (target - consumed) / total) * 100;
-        const overWidth = Math.max(0, (consumed - target) / total) * 100;
-
-        return (
-            <View style={styles.progressRow}>
-                <MaterialCommunityIcons name={icon} size={32} color={Colors.theme.sageDark} style={styles.progressIcon} />
-                <View style={styles.progressTrackWrapper}>
-                    <View style={styles.progressTrack}>
-                        {/* Logged Portion */}
-                        <View style={[styles.segment, { width: `${loggedWidth}%`, backgroundColor: Colors.theme.sage }]}>
-                            {loggedWidth > 15 && (
-                                <Text style={styles.segmentText}>{consumed}{icon === 'fire' ? '' : 'g'}</Text>
-                            )}
-                        </View>
-                        {/* Remaining Portion */}
-                        {remainingWidth > 0 && (
-                            <View style={[styles.segment, { width: `${remainingWidth}%`, backgroundColor: '#8E8E8E' }]}>
-                                {remainingWidth > 15 && (
-                                    <Text style={styles.segmentText}>{remaining}{icon === 'fire' ? '' : 'g'}</Text>
-                                )}
-                            </View>
-                        )}
-                        {/* Over Portion */}
-                        {overWidth > 0 && (
-                            <View style={[styles.segment, { width: `${overWidth}%`, backgroundColor: '#825858' }]}>
-                                {overWidth > 15 && (
-                                    <Text style={styles.segmentText}>{consumed - target}{icon === 'fire' ? '' : 'g'}</Text>
-                                )}
-                            </View>
-                        )}
-                    </View>
-                    {isOver && (
-                        <Text style={styles.deltaLabel}>
-                            {remaining}{icon === 'fire' ? ' cals' : 'g'}
-                        </Text>
-                    )}
-                </View>
-            </View>
-        );
-    };
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
             <Stack.Screen options={{ headerShown: false }} />
             <SafeAreaView style={styles.container}>
-                <View style={styles.header}>
-                    <View style={styles.modeToggle}>
-                        <TouchableOpacity
-                            style={[styles.modeBtn, mode === 'macro-update' && styles.modeBtnActive]}
-                            onPress={() => setMode('macro-update')}
-                        >
-                            <Text style={[styles.modeText, mode === 'macro-update' && styles.modeTextActive]}>Macro update</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.modeBtn, mode === 'snapshot' && styles.modeBtnActive]}
-                            onPress={() => setMode('snapshot')}
-                        >
-                            <Text style={[styles.modeText, mode === 'snapshot' && styles.modeTextActive]}>Snapshot</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.modeBtn, mode === 'macro-book' && styles.modeBtnActive]}
-                            onPress={() => setMode('macro-book')}
-                        >
-                            <Text style={[styles.modeText, mode === 'macro-book' && styles.modeTextActive]}>Macro book</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtnHeader}>
-                    <Ionicons name="arrow-back" size={28} color={Colors.theme.sageDark} />
-                </TouchableOpacity>
-
-                {mode === 'macro-update' && (
-                    <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
-                        <Text style={styles.title}>Macro update</Text>
-                        <View style={styles.calSection}>
-                            <MaterialCommunityIcons name="fire" size={36} color={Colors.primary} style={styles.mainFireIcon} />
-                            <View style={styles.calBubbleMain}>
-                                <Text style={styles.calValueMain}>{newCal} cals</Text>
-                            </View>
-                            <View style={[styles.calDiffBubble, { backgroundColor: diffCal < 0 ? '#825858' : '#A4B69D' }]}>
-                                <Text style={styles.calDiffText}>
-                                    {diffCal === 0 ? '0 cals' : `${diffCal > 0 ? '+' : '—'} ${Math.abs(diffCal)} cals`}
-                                </Text>
-                            </View>
-                        </View>
-
-                        <View style={styles.macrosList}>
-                            <MacroUpdateRow icon="food-drumstick" oldVal={oldP} value={pText} onChange={setPText} diff={diffP} />
-                            <MacroUpdateRow icon="barley" oldVal={oldC} value={cText} onChange={setCText} diff={diffC} />
-                            <MacroUpdateRow icon="water" oldVal={oldF} value={fText} onChange={setFText} diff={diffF} />
-                        </View>
-
-                        <View style={styles.newTargetsWrapper}>
-                            <View style={styles.newTargetsLabelCol}>
-                                <Text style={styles.newTargetsLabelPart}>New</Text>
-                                <Text style={styles.newTargetsLabelPart}>targets</Text>
-                            </View>
-                            <View style={styles.newTargetsData}>
-                                <View style={styles.targetIconGroup}>
-                                    <MaterialCommunityIcons name="fire" size={24} color={Colors.primary} />
-                                    <Text style={styles.targetVal}>{newCal}</Text>
-                                    <Text style={styles.targetUnit}>cals</Text>
-                                </View>
-                                <View style={styles.targetIconGroup}>
-                                    <MaterialCommunityIcons name="food-drumstick" size={24} color={Colors.primary} />
-                                    <Text style={styles.targetVal}>{newP}</Text>
-                                    <Text style={styles.targetUnit}>g</Text>
-                                </View>
-                                <View style={styles.targetIconGroup}>
-                                    <MaterialCommunityIcons name="barley" size={24} color={Colors.primary} />
-                                    <Text style={styles.targetVal}>{newC}</Text>
-                                    <Text style={styles.targetUnit}>g</Text>
-                                </View>
-                                <View style={styles.targetIconGroup}>
-                                    <MaterialCommunityIcons name="water" size={24} color={Colors.primary} />
-                                    <Text style={styles.targetVal}>{newF}</Text>
-                                    <Text style={styles.targetUnit}>g</Text>
-                                </View>
-                            </View>
-                        </View>
-                    </ScrollView>
-                )}
-
-                {mode === 'snapshot' && (
-                    <View style={styles.scrollContent}>
-                        <View style={styles.titleDivider} />
-                        <Text style={styles.titleSmall}>Snapshot</Text>
-                        <View style={styles.titleDivider} />
-                        
-                        <View style={styles.snapshotContainer}>
-                            <MacroProgressBar icon="fire" target={targets.calories} consumed={dailyConsumed.calories} />
-                            <MacroProgressBar icon="food-drumstick" target={targets.p} consumed={dailyConsumed.p} />
-                            <MacroProgressBar icon="barley" target={targets.c} consumed={dailyConsumed.c} />
-                            <MacroProgressBar icon="water" target={targets.f} consumed={dailyConsumed.f} />
+                <View style={{ flex: 1 }}>
+                        <View style={styles.header}>
+                            <TouchableOpacity onPress={() => router.back()} style={styles.backBtnRow}>
+                                <Ionicons name="arrow-back" size={28} color={Colors.theme.sageDark} />
+                            </TouchableOpacity>
                             
-                            <View style={styles.legendRow}>
-                                <View style={styles.legendItem}>
-                                    <View style={[styles.legendDot, { backgroundColor: Colors.theme.sage }]} />
-                                    <Text style={styles.legendText}>Logged</Text>
-                                </View>
-                                <View style={styles.legendItem}>
-                                    <View style={[styles.legendDot, { backgroundColor: '#8E8E8E' }]} />
-                                    <Text style={styles.legendText}>Remaining</Text>
+                            <View style={styles.modeToggleContainer}>
+                                <View style={styles.modeToggle}>
+                                    <TouchableOpacity
+                                        style={[styles.modeBtn, mode === 'macro-update' && styles.modeBtnActive]}
+                                        onPress={() => handleModeChange('macro-update')}
+                                    >
+                                        <Text style={[styles.modeText, mode === 'macro-update' && styles.modeTextActive]}>Macros</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.modeBtn, mode === 'snapshot' && styles.modeBtnActive]}
+                                        onPress={() => handleModeChange('snapshot')}
+                                    >
+                                        <Text style={[styles.modeText, mode === 'snapshot' && styles.modeTextActive]}>Snapshot</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.modeBtn, mode === 'macro-book' && styles.modeBtnActive]}
+                                        onPress={() => handleModeChange('macro-book')}
+                                    >
+                                        <Text style={[styles.modeText, mode === 'macro-book' && styles.modeTextActive]}>Macro book</Text>
+                                    </TouchableOpacity>
                                 </View>
                             </View>
                         </View>
-                    </View>
-                )}
 
-                {mode === 'macro-book' && (
-                    <ScrollView style={styles.scrollContent}>
-                        <Text style={styles.title}>Macro book</Text>
-                        {macrobook.entries.length === 0 ? (
-                            <View style={styles.emptyState}>
-                                <MaterialCommunityIcons name="book-open-variant" size={60} color={Colors.theme.sageDark + '44'} />
-                                <Text style={styles.emptyText}>No saved macros yet.</Text>
-                            </View>
-                        ) : (
-                            macrobook.entries.map((entry) => (
-                                <TouchableOpacity 
-                                    key={entry.id} 
-                                    style={styles.macroBookEntry}
-                                    onPress={() => {
-                                        setPText(entry.p.toString());
-                                        setCText(entry.c.toString());
-                                        setFText(entry.f.toString());
-                                        setMode('macro-update');
-                                    }}
-                                >
-                                    <Text style={styles.entryLabel}>{entry.label}</Text>
-                                    <View style={styles.entryValues}>
-                                        <Text style={styles.entryValue}>{entry.calories} cal</Text>
-                                        <Text style={styles.entryValue}>{entry.p}P</Text>
-                                        <Text style={styles.entryValue}>{entry.c}C</Text>
-                                        <Text style={styles.entryValue}>{entry.f}F</Text>
-                                    </View>
-                                </TouchableOpacity>
-                            ))
-                        )}
-                    </ScrollView>
-                )}
+
+                        <FlatList
+                            ref={pagerRef}
+                            data={MODES}
+                            keyExtractor={(item) => item}
+                            horizontal
+                            pagingEnabled
+                            showsHorizontalScrollIndicator={false}
+                            onMomentumScrollEnd={handleScroll}
+                            scrollEventThrottle={16}
+                            style={{ flex: 1 }}
+                            initialNumToRender={3}
+                            windowSize={3}
+                            getItemLayout={(_, index) => ({
+                                length: SCREEN_WIDTH,
+                                offset: SCREEN_WIDTH * index,
+                                index,
+                            })}
+                            renderItem={({ item }) => (
+                                <View style={{ width: SCREEN_WIDTH, flex: 1 }}>
+                                    {item === 'macro-update' && (
+                                        <ScrollView 
+                                            style={styles.scrollContent} 
+                                            showsVerticalScrollIndicator={false}
+                                            keyboardShouldPersistTaps="handled"
+                                            nestedScrollEnabled={true}
+                                        >
+                                            <View style={styles.globalTitleContainer}>
+                                                <Text style={styles.titleSmall}>Macros</Text>
+                                            </View>
+
+                                            <View style={styles.calSection}>
+                                                <MaterialCommunityIcons name="fire" size={36} color={Colors.primary} style={styles.mainFireIcon} />
+                                                <View style={styles.calBubbleMain}>
+                                                    <Text style={styles.calValueMain}>{newCal} cals</Text>
+                                                </View>
+                                                <View style={[styles.calDiffBubble, { backgroundColor: (!pText && !cText && !fText) ? '#D3D3D3' : (diffCal < 0 ? '#825858' : '#A4B69D') }]}>
+                                                    <Text style={styles.calDiffText}>
+                                                        {(!pText && !cText && !fText) ? '... cals' : (diffCal === 0 ? '0 cals' : `${Math.abs(diffCal)} cals`)}
+                                                    </Text>
+                                                </View>
+                                            </View>
+
+                                            <View style={styles.enterNewHeader}>
+                                                <Text style={styles.enterNewText}>Enter new macros</Text>
+                                            </View>
+
+                                            <View style={styles.macrosList}>
+                                                <MacroUpdateRow icon="food-drumstick" oldVal={oldP} value={pText} onChange={setPText} diff={diffP} />
+                                                <MacroUpdateRow icon="barley" oldVal={oldC} value={cText} onChange={setCText} diff={diffC} />
+                                                <MacroUpdateRow icon="water" oldVal={oldF} value={fText} onChange={setFText} diff={diffF} />
+                                            </View>
+
+                                            <View style={styles.newTargetsWrapper}>
+                                                <View style={styles.newTargetsLabelCol}>
+                                                    <Text style={styles.newTargetsLabelPart}>Current</Text>
+                                                    <Text style={styles.newTargetsLabelPart}>targets</Text>
+                                                    {latestHistory && (
+                                                        <Text style={styles.historyDate}>
+                                                            {new Date(latestHistory.created_at).toISOString().split('T')[0]}
+                                                        </Text>
+                                                    )}
+                                                </View>
+                                                <View style={styles.newTargetsData}>
+                                                    <View style={styles.targetIconGroup}>
+                                                        <MaterialCommunityIcons name="fire" size={24} color={Colors.primary} />
+                                                        <Text style={styles.targetVal}>{oldCal}</Text>
+                                                        <Text style={styles.targetUnit}>cals</Text>
+                                                    </View>
+                                                    <View style={styles.targetIconGroup}>
+                                                        <MaterialCommunityIcons name="food-drumstick" size={24} color={Colors.primary} />
+                                                        <Text style={styles.targetVal}>{oldP}</Text>
+                                                        <Text style={styles.targetUnit}>g</Text>
+                                                    </View>
+                                                    <View style={styles.targetIconGroup}>
+                                                        <MaterialCommunityIcons name="barley" size={24} color={Colors.primary} />
+                                                        <Text style={styles.targetVal}>{oldC}</Text>
+                                                        <Text style={styles.targetUnit}>g</Text>
+                                                    </View>
+                                                    <View style={styles.targetIconGroup}>
+                                                        <MaterialCommunityIcons name="water" size={24} color={Colors.primary} />
+                                                        <Text style={styles.targetVal}>{oldF}</Text>
+                                                        <Text style={styles.targetUnit}>g</Text>
+                                                    </View>
+                                                </View>
+                                            </View>
+                                        </ScrollView>
+                                    )}
+
+                                    {item === 'snapshot' && (
+                                        <ScrollView 
+                                            style={styles.scrollContent}
+                                            showsVerticalScrollIndicator={false}
+                                            nestedScrollEnabled={true}
+                                        >
+                                            <View style={styles.globalTitleContainer}>
+                                                <Text style={styles.titleSmall}>Snapshot</Text>
+                                            </View>
+                                            
+                                            <View style={styles.snapshotContainer}>
+                                                <MacroProgressBar icon="fire" target={targets.calories} consumed={dailyConsumed.calories} />
+                                                <MacroProgressBar icon="food-drumstick" target={targets.p} consumed={dailyConsumed.p} />
+                                                <MacroProgressBar icon="barley" target={targets.c} consumed={dailyConsumed.c} />
+                                                <MacroProgressBar icon="water" target={targets.f} consumed={dailyConsumed.f} />
+                                                
+                                                <View style={styles.legendRow}>
+                                                    <View style={styles.legendItem}>
+                                                        <View style={[styles.legendDot, { backgroundColor: Colors.theme.sageDark }]} />
+                                                        <Text style={styles.legendText}>Logged</Text>
+                                                    </View>
+                                                    <View style={styles.legendItem}>
+                                                        <View style={[styles.legendDot, { backgroundColor: '#8E8E8E' }]} />
+                                                        <Text style={styles.legendText}>Remaining</Text>
+                                                    </View>
+                                                </View>
+                                            </View>
+                                        </ScrollView>
+                                    )}
+
+                                    {item === 'macro-book' && (
+                                        <ScrollView 
+                                            style={styles.scrollContent}
+                                            showsVerticalScrollIndicator={false}
+                                            nestedScrollEnabled={true}
+                                        >
+                                            <View style={styles.globalTitleContainer}>
+                                                <Text style={styles.titleSmall}>Macro book</Text>
+                                            </View>
+                                            {loadingBook ? (
+                                                <ActivityIndicator color={Colors.primary} style={{ marginTop: 50 }} />
+                                            ) : macroBookEntries.length === 0 ? (
+                                                <View style={styles.emptyState}>
+                                                    <MaterialCommunityIcons name="book-open-variant" size={60} color={Colors.theme.sageDark + '44'} />
+                                                    <Text style={styles.emptyText}>No saved macros yet.</Text>
+                                                </View>
+                                            ) : (
+                                                macroBookEntries.map((entry) => (
+                                                    <View key={entry.id} style={styles.macroBookEntryContainer}>
+                                                        <TouchableOpacity 
+                                                            style={styles.macroBookEntry}
+                                                            onPress={() => {
+                                                                setPText(entry.protein.toString());
+                                                                setCText(entry.carbs.toString());
+                                                                setFText(entry.fats.toString());
+                                                                handleModeChange('macro-update');
+                                                            }}
+                                                        >
+                                                            <Text style={styles.entryLabel}>{entry.label}</Text>
+                                                            <View style={styles.entryValues}>
+                                                                <Text style={styles.entryValue}>{entry.calories} cal</Text>
+                                                                <Text style={styles.entryValue}>{entry.protein}P</Text>
+                                                                <Text style={styles.entryValue}>{entry.carbs}C</Text>
+                                                                <Text style={styles.entryValue}>{entry.fats}F</Text>
+                                                            </View>
+                                                        </TouchableOpacity>
+                                                        <TouchableOpacity 
+                                                            onPress={async () => {
+                                                                await SupabasePostService.deleteFromMacroBook(entry.id);
+                                                                loadMacroBook();
+                                                            }}
+                                                            style={styles.deleteEntry}
+                                                        >
+                                                            <Ionicons name="trash-outline" size={20} color="#825858" />
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                ))
+                                            )}
+                                        </ScrollView>
+                                    )}
+                                </View>
+                            )}
+                        />
+                    </View>
 
                 <Animated.View style={[styles.loggerSheet, animatedStyle]}>
                     <GestureDetector gesture={panGesture}>
@@ -406,19 +576,23 @@ export default function MacroUpdateScreen() {
                         </View>
                     </GestureDetector>
                     <View style={styles.loggerTopRow}>
-                        <TouchableOpacity style={styles.cameraBtn} onPress={() => router.push('/camera-capture')}>
-                            <Ionicons name="camera" size={28} color={Colors.theme.sageDark} />
+                        <TouchableOpacity style={styles.cameraBtn} onPress={() => router.push('/camera-capture?source=workout')}>
+                            <Ionicons name="camera" size={28} color="white" />
                         </TouchableOpacity>
                         <TextInput
                             style={styles.loggerInput}
                             placeholder="Caption..."
-                            placeholderTextColor={Colors.theme.sageDark + '88'}
+                            placeholderTextColor={Colors.textDark + '88'}
                             value={caption}
                             onChangeText={setCaption}
                             multiline
+                            onFocus={() => {
+                                translateY.value = withSpring(SHEET_MAX_Y);
+                            }}
+                            onBlur={() => {}}
                         />
                         <TouchableOpacity style={styles.postSubmitBtn} onPress={handlePost}>
-                            <MaterialCommunityIcons name="file-document-edit-outline" size={32} color={Colors.theme.sageDark} />
+                            <MaterialCommunityIcons name="post-outline" size={32} color="white" />
                         </TouchableOpacity>
                     </View>
                     {media && (
@@ -451,16 +625,25 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.background,
     },
     header: {
-        alignItems: 'center',
         paddingTop: 10,
+        paddingHorizontal: 15,
         zIndex: 10,
+    },
+    backBtnRow: {
+        alignSelf: 'flex-start',
+        padding: 5,
+        marginBottom: 10,
+    },
+    modeToggleContainer: {
+        width: '100%',
+        alignItems: 'center',
     },
     modeToggle: {
         flexDirection: 'row',
         backgroundColor: Colors.theme.beigeLight,
         borderRadius: 25,
         padding: 5,
-        width: '90%',
+        width: '100%',
         justifyContent: 'space-between',
     },
     modeBtn: {
@@ -480,16 +663,13 @@ const styles = StyleSheet.create({
     modeTextActive: {
         color: 'white',
     },
-    backBtnHeader: {
-        position: 'absolute',
-        top: 70,
-        left: 20,
-        zIndex: 20,
-    },
     scrollContent: {
         flex: 1,
-        paddingHorizontal: 20,
-        marginTop: 40,
+        marginTop: 10,
+    },
+    globalTitleContainer: {
+        marginTop: 20,
+        marginBottom: 5,
     },
     title: {
         fontSize: 42,
@@ -505,21 +685,27 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginVertical: 10,
     },
-    titleDivider: {
-        height: 1,
-        backgroundColor: Colors.theme.sageDark,
-        opacity: 0.2,
-        marginHorizontal: 40,
+    enterNewHeader: {
+        width: '100%',
+        paddingHorizontal: 10,
+        marginBottom: 10,
+    },
+    enterNewText: {
+        fontSize: 16,
+        color: Colors.theme.sageDark,
+        fontWeight: '600',
     },
     calSection: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
+        justifyContent: 'flex-start',
         gap: 12,
         marginBottom: 20,
+        paddingHorizontal: 20, // Increased to give some breathing room but keep flush alignment
     },
     mainFireIcon: {
-        marginRight: -5,
+        width: 36,
+        textAlign: 'center',
     },
     calBubbleMain: {
         backgroundColor: Colors.theme.sageDark,
@@ -527,6 +713,7 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         borderRadius: 25,
         minWidth: 140,
+        flex: 1, // Make it expand like the input bubbles
         alignItems: 'center',
     },
     calValueMain: {
@@ -554,8 +741,9 @@ const styles = StyleSheet.create({
     macroRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
+        justifyContent: 'flex-start',
+        gap: 12, // Match calSection gap
+        paddingHorizontal: 20,
     },
     oldValContainer: {
         borderWidth: 1.5,
@@ -572,15 +760,16 @@ const styles = StyleSheet.create({
         fontSize: 14,
     },
     macroIconSmall: {
-        marginHorizontal: 2,
+        width: 36, // Match fire icon size for alignment
+        textAlign: 'center',
     },
     inputBubble: {
         flexDirection: 'row',
         backgroundColor: 'white',
-        borderRadius: 20,
+        borderRadius: 25, // Match calorie bubble
         paddingHorizontal: 14,
-        paddingVertical: 8,
-        minWidth: 100,
+        paddingVertical: 12, // Match calorie bubble
+        flex: 1, // Expand to fill space
         alignItems: 'center',
         justifyContent: 'center',
         shadowColor: "#000",
@@ -627,10 +816,16 @@ const styles = StyleSheet.create({
         marginBottom: 5,
     },
     newTargetsLabelPart: {
-        fontSize: 18,
+        fontSize: 14,
         fontWeight: 'bold',
         color: Colors.theme.sageDark,
-        lineHeight: 20,
+        textTransform: 'uppercase',
+    },
+    historyDate: {
+        fontSize: 12,
+        color: Colors.theme.sageDark,
+        opacity: 0.6,
+        marginTop: 4,
     },
     newTargetsData: {
         flexDirection: 'row',
@@ -659,12 +854,13 @@ const styles = StyleSheet.create({
     },
     progressRow: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         gap: 15,
     },
     progressIcon: {
         width: 35,
         textAlign: 'center',
+        marginTop: 9,
     },
     progressTrackWrapper: {
         flex: 1,
@@ -726,16 +922,25 @@ const styles = StyleSheet.create({
         color: Colors.theme.sageDark,
         opacity: 0.6,
     },
+    macroBookEntryContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        marginBottom: 10,
+    },
     macroBookEntry: {
         backgroundColor: 'white',
         padding: 15,
         borderRadius: 15,
-        marginBottom: 10,
+        flex: 1,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 3,
+    },
+    deleteEntry: {
+        padding: 10,
     },
     entryLabel: {
         fontSize: 16,
@@ -758,7 +963,7 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         height: SCREEN_HEIGHT,
-        backgroundColor: Colors.theme.sageLight,
+        backgroundColor: Colors.card,
         borderTopLeftRadius: 35,
         borderTopRightRadius: 35,
         paddingHorizontal: 20,
@@ -775,37 +980,34 @@ const styles = StyleSheet.create({
     dragHandle: {
         width: 40,
         height: 5,
-        backgroundColor: 'rgba(255,255,255,0.5)',
+        backgroundColor: 'rgba(255,255,255,0.4)',
         borderRadius: 3,
     },
     loggerTopRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
+        gap: 12,
+        marginBottom: 16,
     },
     cameraBtn: {
-        width: 48,
-        height: 48,
-        backgroundColor: 'white',
-        borderRadius: 24,
+        width: 44,
+        height: 44,
         justifyContent: 'center',
         alignItems: 'center',
     },
     loggerInput: {
         flex: 1,
-        backgroundColor: 'rgba(255,255,255,0.3)',
+        backgroundColor: Colors.theme.beigeLight,
         borderRadius: 24,
         paddingHorizontal: 16,
-        paddingVertical: 12,
-        color: Colors.theme.sageDark,
-        fontSize: 16,
-        maxHeight: 100,
+        paddingVertical: 10,
+        color: Colors.textDark,
+        fontSize: 15,
+        minHeight: 48,
     },
     postSubmitBtn: {
         width: 48,
         height: 48,
-        backgroundColor: 'white',
-        borderRadius: 24,
         justifyContent: 'center',
         alignItems: 'center',
     },

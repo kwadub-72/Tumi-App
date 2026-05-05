@@ -11,7 +11,10 @@ import VerifiedModal from '@/components/VerifiedModal';
 import { useMealLogStore } from '@/src/store/useMealLogStore';
 import { useWorkoutLogStore } from '@/src/store/useWorkoutLogStore';
 import { useUserStore } from '@/store/UserStore';
+import { useAuthStore } from '@/store/AuthStore';
 import { useProfileNavigation } from '@/src/shared/hooks/useProfileNavigation';
+import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
+import * as Haptics from 'expo-haptics';
 
 const BURGUNDY = '#825858';
 const TRIBE_GREEN = '#405F4F';
@@ -27,6 +30,8 @@ export interface FeedItemProps {
     onPressSave?: () => void;
     onPressOptions?: () => void;
     onDismissSelectMode?: () => void;
+    onCopySuccess?: () => void;
+    onCopyError?: (message: string) => void;
     isDetailView?: boolean;
     isSelectMode?: boolean;
     selectedItems?: string[];
@@ -45,6 +50,8 @@ export default function FeedItem({
     onPressSave,
     onPressOptions,
     onDismissSelectMode,
+    onCopySuccess,
+    onCopyError,
     isDetailView = false,
     isSelectMode = false,
     selectedItems = [],
@@ -59,11 +66,13 @@ export default function FeedItem({
     const [isPlaying, setIsPlaying] = useState(true);
     const [isMuted, setIsMuted] = useState(false);
     const [isVerifiedVisible, setIsVerifiedVisible] = useState(false);
+    const [isCopying, setIsCopying] = useState(false);
     const videoRef = useRef<Video>(null);
 
     const mealStore = useMealLogStore();
     const workoutStore = useWorkoutLogStore();
     const { macroTargets: myTargets } = useUserStore();
+    const { session } = useAuthStore();
     const { navigateToProfile } = useProfileNavigation();
 
     useEffect(() => {
@@ -72,144 +81,181 @@ export default function FeedItem({
         }
     }, [isSelectMode]);
 
-    const handleStandardCopy = () => {
-        if (post.meal) {
-            const itemsToCopy = selectedItems.length > 0
-                ? post.meal.ingredients.filter(ing => selectedItems.includes(ing.name))
-                : post.meal.ingredients;
-            if (isSelectMode && selectedItems.length === 0) return;
-            itemsToCopy.forEach(ing => mealStore.addItem({ ...ing, id: Date.now().toString() + Math.random() }));
-            setIsTribeMenuOpen(false);
-        }
-        if (post.workout) {
-            const itemsToCopy = selectedItems.length > 0
-                ? post.workout.exercises.filter(ex => selectedItems.includes(ex.title))
-                : post.workout.exercises;
-            if (isSelectMode && selectedItems.length === 0) return;
-            itemsToCopy.forEach(ex => workoutStore.addExercise({ ...ex, id: Date.now().toString() + Math.random() }));
-            setIsTribeMenuOpen(false);
-        }
-        if (post.macroUpdate) {
-            if (isSelectMode && selectedItems.length === 0) return;
-            const selectedLine = selectedItems[0];
-            if (!selectedLine) return;
+    const handleStandardCopy = async () => {
+        if (isCopying) return;
+        setIsCopying(true);
 
-            const posterTargets = post.user.macroTargets;
-            const myCals = myTargets.calories;
-
-            if (selectedLine === 'old' || selectedLine === 'new') {
-                const targetToUse = selectedLine === 'old' ? post.macroUpdate.oldTargets : post.macroUpdate.newTargets;
-                let myP = myTargets.p;
-                let myC = myTargets.c;
-                let myF = myTargets.f;
-
-                if (targetToUse.calories > 0) {
-                    const scale = myCals / targetToUse.calories;
-                    myP = Math.round(targetToUse.p * scale);
-                    myC = Math.round(targetToUse.c * scale);
-                    myF = Math.round(targetToUse.f * scale);
-                }
-
-                setIsTribeMenuOpen(false);
-                router.push({
-                    pathname: '/signup/manual-macros',
-                    params: { p: myP, c: myC, f: myF, calories: myCals }
-                });
-            } else if (selectedLine === 'diff') {
-                const diffP = post.macroUpdate.oldTargets.p > 0 ? (post.macroUpdate.newTargets.p - post.macroUpdate.oldTargets.p) / post.macroUpdate.oldTargets.p : 0;
-                const diffC = post.macroUpdate.oldTargets.c > 0 ? (post.macroUpdate.newTargets.c - post.macroUpdate.oldTargets.c) / post.macroUpdate.oldTargets.c : 0;
-                const diffF = post.macroUpdate.oldTargets.f > 0 ? (post.macroUpdate.newTargets.f - post.macroUpdate.oldTargets.f) / post.macroUpdate.oldTargets.f : 0;
-
-                const myP = Math.round(myTargets.p * (1 + diffP));
-                const myC = Math.round(myTargets.c * (1 + diffC));
-                const myF = Math.round(myTargets.f * (1 + diffF));
-                const myCals = (myP * 4) + (myC * 4) + (myF * 9);
-
-                setIsTribeMenuOpen(false);
-                router.push({
-                    pathname: '/signup/manual-macros',
-                    params: { p: myP, c: myC, f: myF, calories: myCals }
-                });
-            }
-        }
-        if (post.snapshot) {
-            if (isSelectMode && selectedItems.length === 0) return;
-            const selectedLine = selectedItems[0];
-            if (selectedLine !== 'targets') return;
-
-            setIsTribeMenuOpen(false);
-            router.push({
-                pathname: '/signup/manual-macros',
-                params: { 
-                    p: post.snapshot.targets.p, 
-                    c: post.snapshot.targets.c, 
-                    f: post.snapshot.targets.f, 
-                    calories: post.snapshot.targets.calories 
-                }
-            });
-        }
-    };
-
-    const handleTribeCopy = () => {
-        if (post.meal) {
-            const itemsToCopy = selectedItems.length > 0
-                ? post.meal.ingredients.filter(ing => selectedItems.includes(ing.name))
-                : post.meal.ingredients;
-            if (isSelectMode && selectedItems.length === 0) return;
-
-            const posterTargets = post.user.macroTargets;
-
-            itemsToCopy.forEach(ing => {
-                if (!posterTargets) {
-                    mealStore.addItem({ ...ing, id: Date.now().toString() + Math.random() });
+        try {
+            if (post.meal) {
+                if (isSelectMode && selectedItems.length === 0) {
+                    onCopyError?.('Please select items to copy over before proceeding.');
+                    setIsCopying(false);
                     return;
                 }
-                const p = ing.macros.p;
-                const c = ing.macros.c;
-                const f = ing.macros.f;
-                const maxVal = Math.max(p, c, f);
-
-                let ratio = 1;
-                if (maxVal === p && posterTargets.p > 0) ratio = p / posterTargets.p;
-                else if (maxVal === c && posterTargets.c > 0) ratio = c / posterTargets.c;
-                else if (maxVal === f && posterTargets.f > 0) ratio = f / posterTargets.f;
-
-                const newP = Math.round(myTargets.p * ratio);
-                const newC = Math.round(myTargets.c * ratio);
-                const newF = Math.round(myTargets.f * ratio);
-                const newCals = (newP * 4) + (newC * 4) + (newF * 9);
-
-                // Try to scale amount if it's numeric, otherwise leave
-                const numericAmountMatch = ing.amount.match(/(\d+)/);
-                let scaledAmountStr = ing.amount;
-                if (numericAmountMatch) {
-                    const parsed = parseInt(numericAmountMatch[1]);
-                    const repl = Math.round(parsed * ratio);
-                    scaledAmountStr = ing.amount.replace(numericAmountMatch[1], repl.toString());
+                const itemsToCopy = selectedItems.length > 0
+                    ? post.meal.ingredients.filter(ing => selectedItems.includes(ing.name))
+                    : post.meal.ingredients;
+                
+                itemsToCopy.forEach(ing => mealStore.addItem({ ...ing, id: Date.now().toString() + Math.random() }));
+                
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                onCopySuccess?.();
+                setIsTribeMenuOpen(false);
+                router.push('/add');
+            }
+            else if (post.workout) {
+                if (isSelectMode && selectedItems.length === 0) {
+                    onCopyError?.('Please select items to copy over before proceeding.');
+                    setIsCopying(false);
+                    return;
+                }
+                const itemsToCopy = selectedItems.length > 0
+                    ? post.workout.exercises.filter(ex => selectedItems.includes(ex.title))
+                    : post.workout.exercises;
+                
+                itemsToCopy.forEach(ex => workoutStore.addExercise({ ...ex, id: Date.now().toString() + Math.random() }));
+                
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                onCopySuccess?.();
+                setIsTribeMenuOpen(false);
+                router.push('/add-exercise');
+            }
+            else if (post.macroUpdate) {
+                if (isSelectMode && selectedItems.length === 0) {
+                    onCopyError?.('Please select items to copy over before proceeding.');
+                    setIsCopying(false);
+                    return;
+                }
+                const selectedLine = selectedItems[0];
+                if (!selectedLine) {
+                    setIsCopying(false);
+                    return;
                 }
 
-                const scaledIng = {
-                    ...ing,
-                    id: Date.now().toString() + Math.random(),
-                    name: `${ing.name} (Tribe)`,
-                    amount: scaledAmountStr,
-                    cals: newCals,
-                    macros: { p: newP, c: newC, f: newF }
-                };
-                mealStore.addItem(scaledIng);
-            });
-            setIsTribeMenuOpen(false);
-        }
-        if (post.workout) {
-            handleStandardCopy();
-        }
-        if (post.macroUpdate) {
-            handleStandardCopy();
-        }
-        if (post.snapshot) {
-            handleStandardCopy();
+                const myCals = myTargets.calories;
+
+                if (selectedLine === 'old' || selectedLine === 'new') {
+                    const targetToUse = selectedLine === 'old' ? post.macroUpdate.oldTargets : post.macroUpdate.newTargets;
+                    let myP = myTargets.p;
+                    let myC = myTargets.c;
+                    let myF = myTargets.f;
+
+                    if (targetToUse.calories > 0) {
+                        const scale = myCals / targetToUse.calories;
+                        myP = Math.round(targetToUse.p * scale);
+                        myC = Math.round(targetToUse.c * scale);
+                        myF = Math.round(targetToUse.f * scale);
+                    }
+
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                    onCopySuccess?.();
+                    setIsTribeMenuOpen(false);
+                    router.push({
+                        pathname: '/signup/manual-macros',
+                        params: { p: myP, c: myC, f: myF, calories: myCals }
+                    });
+                } else if (selectedLine === 'diff') {
+                    const diffP = post.macroUpdate.oldTargets.p > 0 ? (post.macroUpdate.newTargets.p - post.macroUpdate.oldTargets.p) / post.macroUpdate.oldTargets.p : 0;
+                    const diffC = post.macroUpdate.oldTargets.c > 0 ? (post.macroUpdate.newTargets.c - post.macroUpdate.oldTargets.c) / post.macroUpdate.oldTargets.c : 0;
+                    const diffF = post.macroUpdate.oldTargets.f > 0 ? (post.macroUpdate.newTargets.f - post.macroUpdate.oldTargets.f) / post.macroUpdate.oldTargets.f : 0;
+
+                    const myP = Math.round(myTargets.p * (1 + diffP));
+                    const myC = Math.round(myTargets.c * (1 + diffC));
+                    const myF = Math.round(myTargets.f * (1 + diffF));
+                    const myCals = (myP * 4) + (myC * 4) + (myF * 9);
+
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                    onCopySuccess?.();
+                    setIsTribeMenuOpen(false);
+                    router.push({
+                        pathname: '/signup/manual-macros',
+                        params: { p: myP, c: myC, f: myF, calories: myCals }
+                    });
+                }
+            }
+            else if (post.snapshot) {
+                if (isSelectMode && selectedItems.length === 0) {
+                    onCopyError?.('Please select items to copy over before proceeding.');
+                    setIsCopying(false);
+                    return;
+                }
+                const selectedLine = selectedItems[0];
+                if (selectedLine !== 'targets') {
+                    setIsCopying(false);
+                    return;
+                }
+
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                onCopySuccess?.();
+                setIsTribeMenuOpen(false);
+                router.push({
+                    pathname: '/signup/manual-macros',
+                    params: { 
+                        p: post.snapshot.targets.p, 
+                        c: post.snapshot.targets.c, 
+                        f: post.snapshot.targets.f, 
+                        calories: post.snapshot.targets.calories 
+                    }
+                });
+            }
+        } finally {
+            setIsCopying(false);
         }
     };
+
+    const handleTribeCopy = async () => {
+        if (isCopying) return;
+        if (!session?.user?.id) return;
+        setIsCopying(true);
+
+        try {
+            if (post.meal) {
+                if (isSelectMode && selectedItems.length === 0) {
+                    onCopyError?.('Please select items to copy over before proceeding.');
+                    setIsCopying(false);
+                    return;
+                }
+
+                // Call the new macro-scaling engine RPC
+                const scaledIngredients = await SupabasePostService.tribeCopyFood(post.id, session.user.id);
+
+                if (scaledIngredients && scaledIngredients.length > 0) {
+                    // If we are in select mode, only add the selected ones from the scaled results
+                    const itemsToAdd = selectedItems.length > 0
+                        ? scaledIngredients.filter(ing => selectedItems.includes(ing.name))
+                        : scaledIngredients;
+
+                    itemsToAdd.forEach(ing => {
+                        mealStore.addItem({ 
+                            ...ing, 
+                            id: Date.now().toString() + Math.random(),
+                            name: `${ing.name} (Tribe)`
+                        });
+                    });
+
+                    // Record the copy engagement
+                    await SupabasePostService.recordCopy(post.id, session.user.id, 'tribe');
+
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                    onCopySuccess?.();
+                    setIsTribeMenuOpen(false);
+                    router.push('/add');
+                } else {
+                    // Fallback to standard copy if RPC fails or returns empty
+                    handleStandardCopy();
+                }
+            } else {
+                // Non-meal posts (workout, macroUpdate, snapshot) use standard copy logic
+                handleStandardCopy();
+            }
+        } catch (error) {
+            console.error('[FeedItem.handleTribeCopy]', error);
+            handleStandardCopy();
+        } finally {
+            setIsCopying(false);
+        }
+    };
+
 
     const toggleExpand = (e?: any) => {
         if (e) e.stopPropagation();
@@ -228,16 +274,8 @@ export default function FeedItem({
 
     const handlePressBody = () => {
         if (isSelectMode) {
-            if (post.macroUpdate) {
-                // For macro updates, we handle it in the sub-rows
-                // but if they tap the very background of the card, we dismiss
-                onDismissSelectMode?.();
-            } else if (post.snapshot) {
-                onToggleSelect?.('snapshot', 'snapshot');
-            } else {
-                // For meals and workouts, we want individual rows to handle it.
-                // Tapping the card background should dismiss select mode.
-                onDismissSelectMode?.();
+            if (post.snapshot) {
+                onToggleSelect?.('targets', 'snapshot');
             }
             return;
         }
@@ -264,82 +302,121 @@ export default function FeedItem({
         </View>
     );
 
-    const renderMacroValue = (icon: any, val: number, unit: string, colorOverride?: string, showPlus?: boolean) => {
-        const formatted = showPlus && val > 0 ? `+${val}` : `${val}`;
-        return renderMacroColumn(icon, formatted as any, unit, undefined, colorOverride, 'normal');
+    const renderMacroValue = (icon: any, val: number, unit: string, colorOverride?: string, showPlus?: boolean, scale: 'normal' | 'small' = 'normal', width?: number) => {
+        return renderMacroColumn(icon, Math.abs(val), unit, width, colorOverride, scale);
     };
 
-    const renderSnapshot = (snapshot: Snapshot) => {
-        const remains = {
-            calories: snapshot.targets.calories - snapshot.consumed.calories,
-            p: snapshot.targets.p - snapshot.consumed.p,
-            c: snapshot.targets.c - snapshot.consumed.c,
-            f: snapshot.targets.f - snapshot.consumed.f,
-        };
+    const MacroProgressBar = ({ icon, target, consumed }: { icon: string, target: number, consumed: number }) => {
+        const total = Math.max(target, consumed);
+        const wPct = (v: number) => (total > 0 ? (v / total) * 100 : 0);
 
-        const getColor = (val: number) => {
-            if (val > 0) return TRIBE_GREEN;
-            if (val < 0) return BURGUNDY;
-            return WHITE;
-        };
+        const logged = Math.min(consumed, target);
+        const rem = Math.max(0, target - consumed);
+        const over = Math.max(0, consumed - target);
 
-        const renderRow = (label: string, vals: { calories: number, p: number, c: number, f: number }, colors: { calories: string, p: string, c: string, f: string }, selectionKey?: string, showPlus = false) => (
-            <TouchableOpacity
-                activeOpacity={isSelectMode && selectionKey ? 0.7 : 1}
-                onPress={() => isSelectMode && selectionKey && onToggleSelect?.(selectionKey, 'snapshot')}
-                style={styles.macroUpdateRow}
-            >
-                {isSelectMode && selectionKey && (
-                    <View style={styles.selectBtnLeft}>
-                        {selectedItems.includes(selectionKey) ? (
-                            <View style={styles.selectedCircle}>
-                                <Ionicons name="checkmark" size={16} color="white" />
-                            </View>
-                        ) : (
-                            <View style={styles.unselectedCircle} />
-                        )}
-                    </View>
-                )}
-                <View style={[styles.macroLabelBox, isSelectMode && { paddingLeft: 28 }]}>
-                    <Text style={styles.macroLabelText}>{label}</Text>
-                </View>
-                <View style={styles.macroValuesRow}>
-                    {renderMacroValue('fire', vals.calories, ' cals', colors.calories, showPlus)}
-                    {renderMacroValue('food-drumstick', vals.p, 'g', colors.p, showPlus)}
-                    {renderMacroValue('barley', vals.c, 'g', colors.c, showPlus)}
-                    {renderMacroValue('water', vals.f, 'g', colors.f, showPlus)}
-                </View>
-            </TouchableOpacity>
-        );
+        const unit = icon === 'fire' ? ' cals' : 'g';
 
-        if (!isExpanded) {
+        const renderSegment = (val: number, bg: string, textCol: string) => {
+            if (val <= 0) return null;
+            const pct = wPct(val);
+            const isSmall = pct < 15;
             return (
-                <View style={styles.macroUpdateContent}>
-                    {renderRow('Snapshot', remains, {
-                        calories: getColor(remains.calories),
-                        p: getColor(remains.p),
-                        c: getColor(remains.c),
-                        f: getColor(remains.f),
-                    }, undefined, true)}
+                <View style={[styles.progressSegment, { width: `${pct}%`, backgroundColor: bg }]}>
+                    {!isSmall && (
+                        <Text style={[styles.segmentText, { color: textCol }]} numberOfLines={1}>
+                            {Math.round(val)}{unit}
+                        </Text>
+                    )}
                 </View>
             );
-        }
+        };
+
+        const renderCarrot = (val: number, textCol: string, align: 'center' | 'left' | 'right' = 'center') => {
+            if (val <= 0) return null;
+            const pct = wPct(val);
+            if (pct >= 15) return <View style={{ width: `${pct}%` }} />;
+
+            return (
+                <View style={{ width: `${pct}%`, height: 25 }}>
+                    <View style={{ position: 'absolute', top: 0, left: '50%', width: 20, marginLeft: -10, alignItems: 'center', overflow: 'visible' }}>
+                        <Ionicons name="chevron-up" size={14} color={textCol} style={{ marginBottom: -4 }} />
+                        <View style={{
+                            position: 'absolute',
+                            top: 14,
+                            width: 100,
+                            alignItems: align === 'left' ? 'flex-end' : align === 'right' ? 'flex-start' : 'center',
+                            ...(align === 'left' ? { right: 10 } : align === 'right' ? { left: 10 } : { left: -40 })
+                        }}>
+                            <Text style={[styles.segmentText, { color: textCol, fontSize: 12 }]} numberOfLines={1}>
+                                {Math.round(val)}{unit}
+                            </Text>
+                        </View>
+                    </View>
+                </View>
+            );
+        };
 
         return (
-            <View style={styles.macroUpdateContent}>
-                {renderRow('Targets', snapshot.targets, { calories: WHITE, p: WHITE, c: WHITE, f: WHITE }, 'targets')}
-                <View style={[styles.divider, { opacity: 0.1, marginVertical: 4 }]} />
-                {renderRow('Actual', snapshot.consumed, { calories: WHITE, p: WHITE, c: WHITE, f: WHITE }, undefined)}
-                <View style={[styles.divider, { opacity: 0.1, marginVertical: 4 }]} />
-                {renderRow('Snapshot', remains, {
-                    calories: getColor(remains.calories),
-                    p: getColor(remains.p),
-                    c: getColor(remains.c),
-                    f: getColor(remains.f),
-                }, undefined, true)}
+            <View style={styles.progressRow}>
+                <MaterialCommunityIcons name={icon as any} size={28} color="white" style={styles.progressIcon} />
+                <View style={styles.progressTrackWrapper}>
+                    <View style={styles.progressTrack}>
+                        {renderSegment(logged, '#FFFFFF', '#405F4F')}
+                        {renderSegment(rem, 'rgba(255,255,255,0.3)', 'white')}
+                        {renderSegment(over, BURGUNDY, 'white')}
+                    </View>
+                    <View style={styles.carrotRow}>
+                        {renderCarrot(logged, '#FFFFFF', 'center')}
+                        {renderCarrot(rem, 'white', 'left')}
+                        {renderCarrot(over, BURGUNDY, 'right')}
+                    </View>
+                </View>
             </View>
         );
     };
+
+    const renderSnapshot = (snapshot: Snapshot) => {
+        const selectionKey = 'targets';
+        const isSelected = selectedItems.includes(selectionKey);
+
+        return (
+            <View style={styles.snapshotContent}>
+                <TouchableOpacity 
+                    activeOpacity={isSelectMode ? 0.7 : 1}
+                    onPress={() => isSelectMode && onToggleSelect?.(selectionKey, 'snapshot')}
+                    style={styles.snapshotHeaderRow}
+                >
+                    {isSelectMode && (
+                        <View style={styles.selectBtnLeft}>
+                            {isSelected ? (
+                                <View style={styles.selectedCircle}>
+                                    <Ionicons name="checkmark" size={16} color="white" />
+                                </View>
+                            ) : (
+                                <View style={styles.unselectedCircle} />
+                            )}
+                        </View>
+                    )}
+                    <View style={isSelectMode && { paddingLeft: 28 }}>
+                        <Text style={styles.snapshotLabel}>Daily Progress</Text>
+                    </View>
+                </TouchableOpacity>
+
+                <View style={{ marginTop: 5 }}>
+                    <MacroProgressBar icon="fire" target={snapshot.targets.calories} consumed={snapshot.consumed.calories} />
+                    {isExpanded && (
+                        <>
+                            <MacroProgressBar icon="food-drumstick" target={snapshot.targets.p} consumed={snapshot.consumed.p} />
+                            <MacroProgressBar icon="barley" target={snapshot.targets.c} consumed={snapshot.consumed.c} />
+                            <MacroProgressBar icon="water" target={snapshot.targets.f} consumed={snapshot.consumed.f} />
+                        </>
+                    )}
+                </View>
+            </View>
+        );
+    };
+
+
 
     const renderMacroUpdate = (mu: MacroUpdate) => {
         const delta = {
@@ -378,14 +455,38 @@ export default function FeedItem({
                         )}
                     </View>
                 )}
-                <View style={[styles.macroLabelBox, isSelectMode && { paddingLeft: 28 }]}>
-                    <Text style={styles.macroLabelText}>{label}</Text>
+                <View style={[
+                    styles.macroLabelBox, 
+                    (isSelectMode && selectionKey) && { paddingLeft: 28 }
+                ]}>
+                    <Text 
+                        style={[
+                            styles.macroLabelText,
+                            (label === 'Balance' || label === 'New targets') && { fontSize: 18, lineHeight: 20 },
+                            label === 'New targets' && { maxWidth: 80 },
+                            (label.includes('/') || label === 'Updates') && { fontSize: 16, lineHeight: 17 }
+                        ]}
+                        numberOfLines={label === 'New targets' ? undefined : 1}
+                        adjustsFontSizeToFit={label === 'New targets' ? false : true}
+                    >
+                        {label}
+                    </Text>
                 </View>
                 <View style={styles.macroValuesRow}>
-                    {renderMacroValue('fire', vals.calories, ' cals', colors.calories, isDelta)}
-                    {renderMacroValue('food-drumstick', vals.p, 'g', colors.p, isDelta)}
-                    {renderMacroValue('barley', vals.c, 'g', colors.c, isDelta)}
-                    {renderMacroValue('water', vals.f, 'g', colors.f, isDelta)}
+                    <View style={{ width: 80 }}>
+                        {renderMacroValue('fire', vals.calories, ' cals', colors.calories, isDelta, 'small', 80)}
+                    </View>
+                    <View style={styles.macroSubRow}>
+                        <View style={styles.macroCol}>
+                            {renderMacroValue('food-drumstick', vals.p, 'g', colors.p, isDelta, 'small')}
+                        </View>
+                        <View style={styles.macroCol}>
+                            {renderMacroValue('barley', vals.c, 'g', colors.c, isDelta, 'small')}
+                        </View>
+                        <View style={styles.macroCol}>
+                            {renderMacroValue('water', vals.f, 'g', colors.f, isDelta, 'small')}
+                        </View>
+                    </View>
                 </View>
             </TouchableOpacity>
         );
@@ -689,7 +790,11 @@ export default function FeedItem({
                         {post.mediaType === 'video' ? (
                             <Video ref={videoRef} source={{ uri: post.mediaUrl }} style={styles.media} resizeMode={ResizeMode.COVER} isLooping shouldPlay={isPlaying} isMuted={isMuted} onPlaybackStatusUpdate={handlePlaybackStatusUpdate} />
                         ) : (
-                            <Image source={{ uri: post.mediaUrl }} style={styles.media} />
+                            <Image 
+                                source={{ uri: post.mediaUrl }} 
+                                style={styles.media} 
+                                resizeMode="cover"
+                            />
                         )}
                     </View>
                 )}
@@ -791,12 +896,18 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
     },
+    snapshotHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 8,
+        marginBottom: 5,
+    },
     snapshotLabel: {
         color: 'white',
-        fontSize: 14,
+        fontSize: 16,
         fontWeight: 'bold',
-        width: 75,
     },
+
     macroUpdateContent: {
         gap: 2,
         paddingLeft: 0,
@@ -808,18 +919,29 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
     },
     macroLabelBox: {
-        width: 105,
+        flex: 1,
+        paddingRight: 4,
+        justifyContent: 'center',
     },
     macroLabelText: {
         color: 'white',
-        fontSize: 18,
+        fontSize: 14,
         fontWeight: 'bold',
     },
     macroValuesRow: {
         flexDirection: 'row',
-        flex: 1,
-        justifyContent: 'space-between',
         alignItems: 'center',
+        justifyContent: 'flex-end',
+        gap: 6,
+    },
+    macroSubRow: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        gap: 6,
+    },
+    macroCol: {
+        width: 46,
+        alignItems: 'flex-end',
     },
     macroValues: {
         flexDirection: 'row',
@@ -836,6 +958,7 @@ const styles = StyleSheet.create({
     macroValueItem: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'flex-end',
         gap: 2,
     },
     macroValueText: {
@@ -957,6 +1080,8 @@ const styles = StyleSheet.create({
         aspectRatio: 1,
         borderWidth: 2,
         borderColor: Colors.theme.beige,
+        alignSelf: 'center',
+        width: '100%',
     },
     media: {
         width: '100%',
@@ -1077,7 +1202,9 @@ const styles = StyleSheet.create({
     selectBtnLeft: {
         position: 'absolute',
         left: 0,
-        top: 2,
+        top: 0,
+        bottom: 0,
+        justifyContent: 'center',
         zIndex: 1,
     },
     selectedCircle: {
@@ -1099,5 +1226,42 @@ const styles = StyleSheet.create({
     detailedWorkoutContainer: {
         marginTop: 10,
         gap: 12,
-    }
+    },
+    // Progress Bar Styles
+    progressRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    progressIcon: {
+        width: 32,
+        alignItems: 'center',
+    },
+    progressTrackWrapper: {
+        flex: 1,
+        marginLeft: 10,
+    },
+    progressTrack: {
+        height: 40,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        borderRadius: 20,
+        flexDirection: 'row',
+        overflow: 'hidden',
+    },
+    progressSegment: {
+        height: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    segmentText: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: 'white',
+    },
+    carrotRow: {
+        flexDirection: 'row',
+        height: 25,
+        position: 'relative',
+    },
 });
+

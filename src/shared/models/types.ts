@@ -11,6 +11,15 @@ export interface Ingredient {
     cals: number;
     macros: MacroNutrients;
     icon?: string;
+    /** Optional metadata for USDA foods to allow re-editing in the cart */
+    metadata?: {
+        caloriesPer100g?: number;
+        macrosPer100g?: MacroNutrients;
+        servingSizeG?: number;
+        servingSizeText?: string;
+        fdcId?: number;
+        servingUnits?: any[];
+    };
 }
 
 export interface Meal {

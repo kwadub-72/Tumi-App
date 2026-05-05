@@ -140,31 +140,54 @@ export const SupabasePostService = {
             query = query.eq('author_id', userId);
         }
 
-        const { data, error } = await query;
-        if (error) {
-            console.error('[SupabasePostService.getFeed]', error.message);
+        try {
+            const { data, error } = await query;
+            if (error) {
+                console.error('[SupabasePostService.getFeed] Supabase Error:', {
+                    message: error.message,
+                    details: error.details,
+                    hint: error.hint,
+                    code: error.code,
+                    feedType,
+                    userId
+                });
+                return [];
+            }
+
+            const posts = (data ?? []).map((row: any) => rowToFeedPost(row, userId));
+
+            // Batch-fetch what the current user has liked / bookmarked
+            const postIds = posts.map(p => p.id);
+            if (postIds.length > 0) {
+                try {
+                    const [likesRes, bookmarksRes] = await Promise.all([
+                        supabase.from('likes').select('post_id').eq('user_id', userId).in('post_id', postIds),
+                        supabase.from('post_bookmarks').select('post_id').eq('user_id', userId).in('post_id', postIds),
+                    ]);
+                    const likedSet = new Set((likesRes.data ?? []).map((l: any) => l.post_id));
+                    const savedSet = new Set((bookmarksRes.data ?? []).map((b: any) => b.post_id));
+                    posts.forEach(p => {
+                        p.isLiked = likedSet.has(p.id);
+                        p.isSaved = savedSet.has(p.id);
+                    });
+                } catch (enrichErr) {
+                    console.warn('[SupabasePostService.getFeed] Interaction enrichment failed:', enrichErr);
+                }
+            }
+
+            return posts;
+        } catch (err: any) {
+            console.error('[SupabasePostService.getFeed] Fatal Fetch Error:', {
+                name: err.name,
+                message: err.message,
+                feedType,
+                userId,
+                isNetworkError: err.message === 'Network request failed'
+            });
             return [];
         }
-
-        const posts = (data ?? []).map((row: any) => rowToFeedPost(row, userId));
-
-        // Batch-fetch what the current user has liked / bookmarked
-        const postIds = posts.map(p => p.id);
-        if (postIds.length > 0) {
-            const [likesRes, bookmarksRes] = await Promise.all([
-                supabase.from('likes').select('post_id').eq('user_id', userId).in('post_id', postIds),
-                supabase.from('post_bookmarks').select('post_id').eq('user_id', userId).in('post_id', postIds),
-            ]);
-            const likedSet = new Set((likesRes.data ?? []).map((l: any) => l.post_id));
-            const savedSet = new Set((bookmarksRes.data ?? []).map((b: any) => b.post_id));
-            posts.forEach(p => {
-                p.isLiked = likedSet.has(p.id);
-                p.isSaved = savedSet.has(p.id);
-            });
-        }
-
-        return posts;
     },
+
 
     async getPostDetails(postId: string, userId: string, commentOffset: number = 0, commentLimit: number = 20): Promise<{ post: FeedPost | null, comments: Comment[] }> {
         // Optimized parallel fetching to simulate a single complex query due to view limitations
@@ -284,6 +307,28 @@ export const SupabasePostService = {
 
     async recordCopy(postId: string, userId: string, copyType: 'standard' | 'tribe' = 'standard'): Promise<void> {
         await supabase.from('post_copies').insert({ post_id: postId, user_id: userId, copy_type: copyType });
+    },
+
+    /**
+     * Calls the tribe_copy_food RPC to compute proportionally scaled
+     * ingredients for User B based on User A's macro targets at post time.
+     * Returns the scaled ingredient array, or null on error.
+     */
+    async tribeCopyFood(
+        postId: string,
+        copierId: string,
+    ): Promise<Ingredient[] | null> {
+        const { data, error } = await supabase.rpc('tribe_copy_food', {
+            p_post_id:   postId,
+            p_copier_id: copierId,
+        });
+
+        if (error) {
+            console.error('[SupabasePostService.tribeCopyFood]', error.message);
+            return null;
+        }
+
+        return (data as any[]) ?? [];
     },
 
     // ── Comments ────────────────────────────────────────────────────────────
@@ -446,5 +491,72 @@ export const SupabasePostService = {
             return [];
         }
         return data;
+    },
+
+    // ── Macro Book ─────────────────────────────────────────────────────────
+
+    async addToMacroBook(userId: string, postId: string, selectionType: 'old' | 'new' | 'targets'): Promise<void> {
+        const { error } = await supabase.rpc('copy_to_macro_book', {
+            p_user_id: userId,
+            p_post_id: postId,
+            p_selection_type: selectionType
+        });
+
+        if (error) {
+            console.error('[SupabasePostService.addToMacroBook]', error.message);
+            throw error;
+        }
+    },
+
+    async getMacroBook(userId: string): Promise<any[]> {
+        const { data, error } = await supabase
+            .from('macro_book')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('[SupabasePostService.getMacroBook]', error.message);
+            return [];
+        }
+        return data;
+    },
+
+    async deleteFromMacroBook(entryId: string): Promise<void> {
+        const { error } = await supabase.from('macro_book').delete().eq('id', entryId);
+        if (error) {
+            console.error('[SupabasePostService.deleteFromMacroBook]', error.message);
+            throw error;
+        }
+    },
+
+    async updateMacroTargetsWithPost(userId: string, newTargets: object, caption?: string, mediaUrl?: string, mediaType?: string): Promise<void> {
+        const { error } = await supabase.rpc('update_macro_targets_with_post', {
+            p_user_id: userId,
+            p_new_targets: newTargets,
+            p_caption: caption || null,
+            p_media_url: mediaUrl || null,
+            p_media_type: mediaType || null
+        });
+
+        if (error) {
+            console.error('[SupabasePostService.updateMacroTargetsWithPost]', error.message);
+            throw error;
+        }
+    },
+
+    async getLatestMacroHistory(userId: string): Promise<any | null> {
+        const { data, error } = await supabase
+            .from('macro_history')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+        if (error) {
+            console.error('[SupabasePostService.getLatestMacroHistory]', error.message);
+            return null;
+        }
+        return data && data.length > 0 ? data[0] : null;
     },
 };

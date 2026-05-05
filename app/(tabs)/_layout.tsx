@@ -252,23 +252,15 @@ export default function TabLayout() {
                             <MaterialCommunityIcons name="fire" size={45} color="white" />
                         </TouchableOpacity>
 
-                        {/* Macro Update Button (New) */}
+                        {/* Macros Button (New) */}
                         <TouchableOpacity
                             style={[styles.subFab, styles.macroFab]}
                             onPress={() => {
                                 setIsMenuOpen(false);
-                                router.push('/macro-update');
+                                router.push('/macro-update?mode=snapshot');
                             }}
                         >
-                            <View>
-                                <MaterialCommunityIcons name="chart-areaspline-variant" size={32} color="white" />
-                                <MaterialCommunityIcons
-                                    name="plus"
-                                    size={16}
-                                    color="white"
-                                    style={{ position: 'absolute', top: -4, right: -4 }}
-                                />
-                            </View>
+                            <Ionicons name="stats-chart" size={30} color="white" />
                         </TouchableOpacity>
 
                         {/* Scale Button */}

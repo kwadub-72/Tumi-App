@@ -154,7 +154,7 @@ export default function ExploreProfileCard({
                     <View style={styles.metricItem}>
                         <Ionicons name="stats-chart" size={28} color="#2F3A27" />
                         <Text style={styles.metricValue}>{user.stats?.updates || 0}</Text>
-                        <Text style={styles.metricLabel}>macro updates</Text>
+                        <Text style={styles.metricLabel}>macros</Text>
                     </View>
                 </View>
             )}

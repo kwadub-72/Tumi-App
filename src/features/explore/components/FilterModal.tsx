@@ -429,9 +429,9 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
 
                         <View style={styles.divider} />
 
-                        {/* Macro Updates */}
+                        {/* Macros */}
                         <View style={styles.inlineRow}>
-                            <Text style={[styles.label, { marginBottom: 0 }]}>Macro updates</Text>
+                            <Text style={[styles.label, { marginBottom: 0 }]}>Macros</Text>
                             <View style={styles.rightAlign}>
                                 <Pressable 
                                     style={[styles.inputContainer, styles.wideInput]}

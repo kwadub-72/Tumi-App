@@ -64,6 +64,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             set({ session });
             if (session?.user) {
                 await get().refreshProfile();
+
+                // Subscribe to profile changes
+                supabase
+                    .channel('profile-sync')
+                    .on('postgres_changes', {
+                        event: 'UPDATE',
+                        schema: 'public',
+                        table: 'profiles',
+                        filter: `id=eq.${session.user.id}`,
+                    }, (payload) => {
+                        set({ profile: payload.new as DbProfile });
+                    })
+                    .subscribe();
             } else {
                 set({ profile: null });
             }

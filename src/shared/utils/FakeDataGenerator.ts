@@ -102,7 +102,7 @@ export function generateFakePosts(count: number): FeedPost[] {
 
     for (let i = 0; i < count; i++) {
         const user = users[i % 20];
-        const type = i % 4; // 0: Macro Update, 1: Workout, 2: Meal, 3: Snapshot
+        const type = i % 4; // 0: Macros, 1: Workout, 2: Meal, 3: Snapshot
 
         const post: FeedPost = {
             id: `fake_${i}`,

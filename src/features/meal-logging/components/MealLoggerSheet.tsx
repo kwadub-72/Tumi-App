@@ -43,6 +43,7 @@ export interface MealLoggerSheetProps {
     onClose: () => void;
     onPublish: (meal: { title: string; type: string; ingredients: Ingredient[]; mediaUrl?: any; mediaType?: 'image' | 'video' | null }) => void;
     onRemoveItem: (id: string) => void;
+    onPressItem?: (item: Ingredient) => void;
     capturedImage?: string | null;
     mediaType?: 'image' | 'video';
 }
@@ -53,9 +54,11 @@ const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Custom'];
 const SwipeableIngredient = ({
     item,
     onRemove,
+    onPress,
 }: {
     item: Ingredient;
     onRemove: (id: string) => void;
+    onPress?: (item: Ingredient) => void;
 }) => {
     const itemTranslateX = useSharedValue(0);
 
@@ -85,28 +88,34 @@ const SwipeableIngredient = ({
             </View>
             <GestureDetector gesture={itemPan}>
                 <Animated.View style={[styles.ingredientRow, rItemStyle]}>
-                    <View style={styles.ingredientInfo}>
-                        <Text style={styles.ingredientName}>{item.name}</Text>
-                        <Text style={styles.ingredientAmount}>{item.amount}</Text>
-                    </View>
-                    <View style={styles.ingredientMacros}>
-                        <View style={styles.miniMacro}>
-                            <MaterialCommunityIcons name="fire" size={14} color={Colors.primary} />
-                            <Text style={styles.miniMacroText}>{item.cals}</Text>
+                    <TouchableOpacity 
+                        style={styles.ingredientRowInner} 
+                        onPress={() => onPress?.(item)}
+                        activeOpacity={0.7}
+                    >
+                        <View style={styles.ingredientInfo}>
+                            <Text style={styles.ingredientName}>{item.name}</Text>
+                            <Text style={styles.ingredientAmount}>{item.amount}</Text>
                         </View>
-                        <View style={styles.miniMacro}>
-                            <MaterialCommunityIcons name="food-drumstick" size={12} color="white" />
-                            <Text style={styles.miniMacroText}>{item.macros.p}g</Text>
+                        <View style={styles.ingredientMacros}>
+                            <View style={styles.miniMacro}>
+                                <MaterialCommunityIcons name="fire" size={14} color={Colors.primary} />
+                                <Text style={styles.miniMacroText}>{item.cals}</Text>
+                            </View>
+                            <View style={styles.miniMacro}>
+                                <MaterialCommunityIcons name="food-drumstick" size={12} color="white" />
+                                <Text style={styles.miniMacroText}>{item.macros.p}g</Text>
+                            </View>
+                            <View style={styles.miniMacro}>
+                                <MaterialCommunityIcons name="barley" size={12} color="white" />
+                                <Text style={styles.miniMacroText}>{item.macros.c}g</Text>
+                            </View>
+                            <View style={styles.miniMacro}>
+                                <Ionicons name="water" size={12} color="white" />
+                                <Text style={styles.miniMacroText}>{item.macros.f}g</Text>
+                            </View>
                         </View>
-                        <View style={styles.miniMacro}>
-                            <MaterialCommunityIcons name="barley" size={12} color="white" />
-                            <Text style={styles.miniMacroText}>{item.macros.c}g</Text>
-                        </View>
-                        <View style={styles.miniMacro}>
-                            <Ionicons name="water" size={12} color="white" />
-                            <Text style={styles.miniMacroText}>{item.macros.f}g</Text>
-                        </View>
-                    </View>
+                    </TouchableOpacity>
                 </Animated.View>
             </GestureDetector>
         </View>
@@ -119,6 +128,7 @@ export default function MealLoggerSheet({
     onClose,
     onPublish,
     onRemoveItem,
+    onPressItem,
     capturedImage: externalImage,
     mediaType: externalType,
 }: MealLoggerSheetProps) {
@@ -425,7 +435,11 @@ export default function MealLoggerSheet({
                             data={items}
                             keyExtractor={(item) => item.id}
                             renderItem={({ item }) => (
-                                <SwipeableIngredient item={item} onRemove={onRemoveItem} />
+                                <SwipeableIngredient 
+                                    item={item} 
+                                    onRemove={onRemoveItem} 
+                                    onPress={onPressItem}
+                                />
                             )}
                             ListFooterComponent={() => null}
                             ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -548,11 +562,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     ingredientRow: {
+        backgroundColor: Colors.card,
+    },
+    ingredientRowInner: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         paddingVertical: 12,
         paddingHorizontal: 12,
-        backgroundColor: Colors.card,
+        alignItems: 'center',
     },
     ingredientInfo: {
         flex: 1,

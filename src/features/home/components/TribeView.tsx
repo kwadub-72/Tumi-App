@@ -38,6 +38,10 @@ export default function TribeView({ selectedDate }: TribeViewProps) {
     const [hammerData, setHammerData] = useState({ name: '', icon: '' });
     const [commentsForPost, setCommentsForPost] = useState<FeedPost['comments']>([]);
     const [commentsLoading, setCommentsLoading] = useState(false);
+    const [isSelectMode, setIsSelectMode] = useState(false);
+    const [selectedItems, setSelectedItems] = useState<string[]>([]);
+    const [toastMessage, setToastMessage] = useState('');
+    const [toastType, setToastType] = useState<'success' | 'error'>('success');
 
     const loadFeed = useCallback(async () => {
         if (!session?.user?.id || !selectedTribe) return;
@@ -190,6 +194,8 @@ export default function TribeView({ selectedDate }: TribeViewProps) {
             await SupabasePostService.deletePost(postId);
             
             // Show toast
+            setToastType('success');
+            setToastMessage('Post deleted successfully');
             setShowDeleteToast(true);
             setTimeout(() => setShowDeleteToast(false), 2000);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -197,6 +203,40 @@ export default function TribeView({ selectedDate }: TribeViewProps) {
             console.error('Failed to delete post:', error);
             // Re-fetch or handle error if needed
         }
+    };
+
+    const handleToggleSelect = (postId: string, itemId: string) => {
+        const post = posts.find(p => p.id === postId);
+        if (!post) return;
+
+        if (!isSelectMode || activePost?.id !== postId) {
+            setIsSelectMode(true);
+            setActivePost(post);
+            setSelectedItems([itemId]);
+            Haptics.selectionAsync();
+        } else {
+            setSelectedItems(prev => {
+                const next = prev.includes(itemId)
+                    ? prev.filter(i => i !== itemId)
+                    : [...prev, itemId];
+                Haptics.selectionAsync();
+                return next;
+            });
+        }
+    };
+
+    const handleCopySuccess = () => {
+        setIsSelectMode(false);
+        setSelectedItems([]);
+        setActivePost(null);
+    };
+
+    const handleCopyError = (msg: string) => {
+        setToastType('error');
+        setToastMessage(msg);
+        setShowDeleteToast(true);
+        setTimeout(() => setShowDeleteToast(false), 2500);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     };
 
     if (!selectedTribe) {
@@ -245,9 +285,13 @@ export default function TribeView({ selectedDate }: TribeViewProps) {
 
             {showDeleteToast && (
                 <View style={styles.toastContainer}>
-                    <View style={styles.toast}>
-                        <Ionicons name="checkmark-circle" size={20} color="#F5F5DC" />
-                        <Text style={styles.toastText}>Post deleted successfully</Text>
+                    <View style={[styles.toast, toastType === 'error' && { backgroundColor: '#825858' }]}>
+                        <Ionicons 
+                            name={toastType === 'success' ? "checkmark-circle" : "close-circle"} 
+                            size={20} 
+                            color="#F5F5DC" 
+                        />
+                        <Text style={styles.toastText}>{toastMessage}</Text>
                     </View>
                 </View>
             )}
@@ -270,9 +314,19 @@ export default function TribeView({ selectedDate }: TribeViewProps) {
                             setActivePost(item);
                             setOptionsModalVisible(true);
                         }}
+                        onDismissSelectMode={() => {
+                            setIsSelectMode(false);
+                            setSelectedItems([]);
+                        }}
+                        onCopySuccess={handleCopySuccess}
+                        onCopyError={handleCopyError}
+                        isSelectMode={isSelectMode && activePost?.id === item.id}
+                        selectedItems={selectedItems}
+                        onToggleSelect={(itemId) => handleToggleSelect(item.id, itemId)}
                         sharedTransitionTag={`post-${item.id}`}
                     />
                 )}
+
                 contentContainerStyle={styles.list}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.textDark} />}
                 showsVerticalScrollIndicator={false}

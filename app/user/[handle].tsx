@@ -245,7 +245,7 @@ export default function OtherUserProfileScreen() {
         return posts.filter(p => {
             if (tab === 'meals') return p.meal;
             if (tab === 'workouts') return p.workout;
-            if (tab === 'macros') return p.macroUpdate;
+            if (tab === 'macros') return p.macroUpdate || p.snapshot;
             return false;
         });
     };
@@ -504,7 +504,7 @@ export default function OtherUserProfileScreen() {
                         )}
                         <Text style={styles.tabLabel}>{
                             tab === 'meals' ? getTabPosts('meals').length : (tab === 'workouts' ? getTabPosts('workouts').length : getTabPosts('macros').length)
-                        }{'\n'}{tab === 'macros' ? 'macro updates' : tab}</Text>
+                        }{'\n'}{tab === 'macros' ? 'macros' : tab}</Text>
                     </TouchableOpacity>
                 ))}
                 
@@ -540,7 +540,7 @@ export default function OtherUserProfileScreen() {
             icon = <Ionicons name="lock-closed" size={70} color="#D4D4D4" />;
         } else {
             const firstWordCap = type.charAt(0).toUpperCase() + type.slice(1);
-            const typeStr = type === 'macros' ? 'macro updates' : type;
+            const typeStr = type === 'macros' ? 'macros' : type;
             message = `${displayName} has no ${typeStr} posted.`;
             
             switch (type) {

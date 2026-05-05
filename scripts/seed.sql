@@ -82,7 +82,7 @@ INSERT INTO public.tribe_members (tribe_id, user_id, role) VALUES
 ('b0000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000009', 'member'); -- preed
 
 -- Create 12 posts for each of the 10 seed users (Skipping kwadub)
--- 3 meals, 3 workouts, 3 macro updates, 3 snapshots
+-- 3 meals, 3 workouts, 3 macros, 3 snapshots
 DO $$
 DECLARE
   seed_users uuid[] := ARRAY[

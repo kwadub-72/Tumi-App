@@ -97,7 +97,7 @@ export default function ProfileScreen() {
         if (tab === 'likes') return p.isLiked;
         if (tab === 'meals') return p.meal && p.user.handle === userInfo.handle;
         if (tab === 'workouts') return p.workout && p.user.handle === userInfo.handle;
-        if (tab === 'macros') return p.macroUpdate && p.user.handle === userInfo.handle;
+        if (tab === 'macros') return (p.macroUpdate || p.snapshot) && p.user.handle === userInfo.handle;
         return false;
     });
     const loadData = async (silent = false) => {
@@ -166,7 +166,7 @@ export default function ProfileScreen() {
     const mealsCount = posts.filter(p => (p.meal && (p.user.handle === userInfo.handle))).length;
     const workoutsCount = posts.filter(p => (p.workout && (p.user.handle === userInfo.handle))).length;
     const likesCount = posts.filter(p => p.isLiked).length;
-    const macroUpdatesCount = posts.filter(p => (p.macroUpdate && (p.user.handle === userInfo.handle))).length;
+    const macroUpdatesCount = posts.filter(p => ((p.macroUpdate || p.snapshot) && (p.user.handle === userInfo.handle))).length;
 
     // No longer using getFilteredPosts directly as it's handled per-tab in the horizontal pager.
 
@@ -383,7 +383,7 @@ export default function ProfileScreen() {
                         )}
                         <Text style={styles.tabLabel}>{
                             tab === 'meals' ? mealsCount : (tab === 'workouts' ? workoutsCount : (tab === 'likes' ? likesCount : macroUpdatesCount))
-                        }{'\n'}{tab === 'macros' ? 'macro updates' : tab}</Text>
+                        }{'\n'}{tab === 'macros' ? 'macros' : tab}</Text>
                     </TouchableOpacity>
                 ))}
                 
@@ -427,7 +427,7 @@ export default function ProfileScreen() {
                 icon = <Ionicons name="heart" size={80} color="#D4D4D4" />;
                 break;
             case 'macros':
-                message = 'Post a macro update to see it here';
+                message = 'Post macros to see it here';
                 icon = <Ionicons name="stats-chart" size={80} color="#D4D4D4" />;
                 break;
         }

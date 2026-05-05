@@ -15,6 +15,7 @@ import PostOptionsModal from '@/src/features/feed/components/PostOptionsModal';
 import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
 import * as Haptics from 'expo-haptics';
 import { useAuthStore } from '@/store/AuthStore';
+import { useMacrobookStore } from '@/src/store/useMacrobookStore';
 
 type NavTab = 'Following' | 'Diary' | 'Tribe';
 
@@ -34,6 +35,7 @@ export default function PostDetailScreen() {
     const router = useRouter();
     const userInfo = useUserStore();
     const session = useAuthStore((state) => state.session);
+    const macrobookStore = useMacrobookStore();
     const insets = useSafeAreaInsets();
     
     const [post, setPost] = useState<FeedPost | null>(null);
@@ -67,10 +69,6 @@ export default function PostDetailScreen() {
     };
 
     const handleToggleSelect = (itemId: string, type: string) => {
-        if (type === 'macro') {
-            setSelectedItems(prev => prev.includes(itemId) ? [] : [itemId]);
-            return;
-        }
         setSelectedItems(prev => prev.includes(itemId) ? prev.filter(i => i !== itemId) : [...prev, itemId]);
     };
 
@@ -340,6 +338,70 @@ export default function PostDetailScreen() {
         }
     };
 
+    const handleAddToMacroBook = async () => {
+        if (!post || !session?.user?.id) return;
+        
+        let itemsToAdd: { targets: any, label: string }[] = [];
+
+        if (isSelectMode && selectedItems.length > 0) {
+            for (const key of selectedItems) {
+                if (key === 'old' && post.macroUpdate) {
+                    itemsToAdd.push({ 
+                        targets: post.macroUpdate.oldTargets, 
+                        label: `Old targets (${post.macroUpdate.oldDate || 'Previous'}) from ${post.user.handle}` 
+                    });
+                } else if ((key === 'new' || key === 'diff') && post.macroUpdate) {
+                    itemsToAdd.push({ 
+                        targets: post.macroUpdate.newTargets, 
+                        label: `New targets from ${post.user.handle}` 
+                    });
+                } else if ((key === 'snapshot' || key === 'targets') && post.snapshot) {
+                    itemsToAdd.push({ 
+                        targets: post.snapshot.targets, 
+                        label: `Snapshot from ${post.user.handle}` 
+                    });
+                }
+            }
+        } else {
+            const targets = post.macroUpdate?.newTargets || post.snapshot?.targets;
+            if (targets) {
+                itemsToAdd.push({ 
+                    targets, 
+                    label: post.caption || `Macros from ${post.user.handle}` 
+                });
+            }
+        }
+
+        if (itemsToAdd.length === 0) return;
+
+        setOptionsModalVisible(false);
+        setIsSelectMode(false);
+        
+        try {
+            for (const item of itemsToAdd) {
+                macrobookStore.addEntry({
+                    label: item.label,
+                    calories: Math.abs(item.targets.calories),
+                    p: Math.abs(item.targets.p),
+                    c: Math.abs(item.targets.c),
+                    f: Math.abs(item.targets.f)
+                });
+            }
+            
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setToastType('success');
+            setShowDeleteToast(true);
+            setToastMessage(`${itemsToAdd.length} macro set${itemsToAdd.length > 1 ? 's' : ''} added to Macro book`);
+            setTimeout(() => {
+                setShowDeleteToast(false);
+            }, 2000);
+            
+            setSelectedItems([]);
+        } catch (error) {
+            console.error('Failed to add to macro book:', error);
+        }
+    };
+
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             <KeyboardAvoidingView 
@@ -371,7 +433,8 @@ export default function PostDetailScreen() {
                     onReport={() => setOptionsModalVisible(false)}
                     onAddToMealBook={post.meal ? handleAddToMealLog : undefined}
                     onAddToLiftBook={post.workout ? handleAddToLiftBook : undefined}
-                    onSelectItems={() => {
+                    onAddToMacroBook={(post.macroUpdate || post.snapshot) ? handleAddToMacroBook : undefined}
+                    onSelectItems={post?.snapshot ? undefined : () => {
                         setOptionsModalVisible(false);
                         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                         setIsSelectMode(true);
@@ -434,6 +497,17 @@ export default function PostDetailScreen() {
                                         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                                         setIsSelectMode(false);
                                         setSelectedItems([]);
+                                    }}
+                                    onCopySuccess={() => {
+                                        setIsSelectMode(false);
+                                        setSelectedItems([]);
+                                    }}
+                                    onCopyError={(msg) => {
+                                        setToastType('error');
+                                        setToastMessage(msg);
+                                        setShowDeleteToast(true);
+                                        setTimeout(() => setShowDeleteToast(false), 3500);
+                                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
                                     }}
                                 />
                             </Animated.View>
@@ -674,7 +748,7 @@ const styles = StyleSheet.create({
         width: '100%',
     },
     toastError: {
-        backgroundColor: '#EF4444',
+        backgroundColor: '#825858',
     },
     toastText: {
         color: '#F5F5DC',

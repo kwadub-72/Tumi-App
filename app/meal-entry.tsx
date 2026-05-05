@@ -17,11 +17,8 @@ import { NutritionService } from '../src/shared/services/NutritionService';
 import { useMealbookStore } from '../src/store/useMealbookStore';
 import { Colors } from '../src/shared/theme/Colors';
 import { useMealLogStore } from '../src/store/useMealLogStore';
+import { useDailyMacros } from '../src/shared/hooks/useDailyMacros';
 
-// ─── Initial stats (consumed today — mocked) ──────────────────────────────────
-const INITIAL_STATS = { p_consumed: 100, p_goal: 200, c_consumed: 100, c_goal: 200, f_consumed: 15, f_goal: 45 };
-const GOAL_CAL = INITIAL_STATS.p_goal * 4 + INITIAL_STATS.c_goal * 4 + INITIAL_STATS.f_goal * 9;
-const CONSUMED_CAL = INITIAL_STATS.p_consumed * 4 + INITIAL_STATS.c_consumed * 4 + INITIAL_STATS.f_consumed * 9;
 
 // ─── MacroSlider ─────────────────────────────────────────────────────────────
 
@@ -143,9 +140,12 @@ export default function MealEntryScreen() {
         fdcName?: string;
         fdcBrand?: string;
         servingUnits?: string;
+        editId?: string;
+        initialAmount?: string;
     }>();
 
     const addItem = useMealLogStore((s) => s.addItem);
+    const updateItem = useMealLogStore((s) => s.updateItem);
     const cartItems = useMealLogStore((s) => s.cartItems);
     const cartTotals = NutritionService.sumMacros(cartItems);
 
@@ -161,7 +161,7 @@ export default function MealEntryScreen() {
     
     const servingSizeLabel = params.servingSizeText || `${servingSizeG}g`;
 
-    const [amount, setAmount] = useState('1'); // Enter multiple
+    const [amount, setAmount] = useState(params.initialAmount || '1'); // Enter multiple
     const [selectedUnitIndex, setSelectedUnitIndex] = useState(0);
     const [showUnitPicker, setShowUnitPicker] = useState(false);
 
@@ -173,9 +173,28 @@ export default function MealEntryScreen() {
 
     // Reset defaults when a new food is loaded
     useEffect(() => {
-        setAmount('1');
-        setSelectedUnitIndex(servingUnits.length - 1); // Prefer the "household" unit if it's last (usually is)
-    }, [params.id]);
+        if (!params.editId) {
+            setAmount('1');
+        } else {
+            setAmount(params.initialAmount || '1');
+        }
+        
+        // If editing, try to find the matching unit
+        if (params.editId && params.initialAmount) {
+            // Check if amount in store has a unit label we recognize
+            const itemInCart = cartItems.find(i => i.id === params.editId);
+            if (itemInCart) {
+                const parts = itemInCart.amount.split(' ');
+                if (parts.length > 1) {
+                    const label = parts.slice(1).join(' ');
+                    const idx = servingUnits.findIndex(u => u.label === label);
+                    if (idx !== -1) setSelectedUnitIndex(idx);
+                }
+            }
+        } else {
+            setSelectedUnitIndex(servingUnits.length - 1); // Prefer the "household" unit if it's last (usually is)
+        }
+    }, [params.id, params.editId]);
 
     const amountValue = parseFloat(amount) || 0;
 
@@ -195,27 +214,59 @@ export default function MealEntryScreen() {
                 f: Math.round(fatPer100g * scale),
             };
         } else {
-            const OZ_CALS = 300, OZ_P = 25, OZ_C = 25, OZ_F = 10;
-            proposedCals = Math.round(OZ_CALS * amountValue);
-            proposedMacros = {
-                p: Math.round(OZ_P * amountValue),
-                c: Math.round(OZ_C * amountValue),
-                f: Math.round(OZ_F * amountValue),
-            };
+            // Manual fallback if not USDA
+            const itemInCart = params.editId ? cartItems.find(i => i.id === params.editId) : null;
+            if (itemInCart) {
+                // If manual, scale based on ratio of original cals/macros
+                const origAmount = parseFloat(params.initialAmount || '1') || 1;
+                const scale = amountValue / origAmount;
+                proposedCals = Math.round(itemInCart.cals * scale);
+                proposedMacros = {
+                    p: Math.round(itemInCart.macros.p * scale),
+                    c: Math.round(itemInCart.macros.c * scale),
+                    f: Math.round(itemInCart.macros.f * scale),
+                };
+            } else {
+                const OZ_CALS = 300, OZ_P = 25, OZ_C = 25, OZ_F = 10;
+                proposedCals = Math.round(OZ_CALS * amountValue);
+                proposedMacros = {
+                    p: Math.round(OZ_P * amountValue),
+                    c: Math.round(OZ_C * amountValue),
+                    f: Math.round(OZ_F * amountValue),
+                };
+            }
         }
     }
 
+    const { consumed, targets, loading } = useDailyMacros();
+
     const handleAdd = () => {
-        const totalAmountNum = amountValue * currentUnit.amount;
-        const formattedAmount = `${totalAmountNum} ${currentUnit.unit}`;
+        const totalAmountNum = amountValue * currentUnit.gramsPerUnit; // Use gramsPerUnit for accuracy
+        const formattedAmount = `${amountValue} ${currentUnit.label}`;
         
-        addItem({
-            id: Date.now().toString(),
+        const itemData = {
             name: (params.title as string) || 'Meal Item',
             amount: formattedAmount,
             cals: proposedCals,
             macros: proposedMacros,
-        });
+            metadata: isUSDAFood ? {
+                caloriesPer100g: caloriesPer100g,
+                macrosPer100g: { p: proteinPer100g, c: carbsPer100g, f: fatPer100g },
+                servingSizeG: servingSizeG,
+                servingSizeText: params.servingSizeText,
+                fdcId: params.fdcId ? parseInt(params.fdcId) : undefined,
+                servingUnits: servingUnits
+            } : undefined
+        };
+
+        if (params.editId) {
+            updateItem(params.editId, itemData);
+        } else {
+            addItem({
+                id: Date.now().toString(),
+                ...itemData
+            });
+        }
 
         if (isUSDAFood && params.fdcId) {
             const food: any = {
@@ -296,31 +347,31 @@ export default function MealEntryScreen() {
                 <View style={styles.chartsContainer}>
                     <MacroSlider 
                         icon="fire" 
-                        logged={CONSUMED_CAL} 
+                        logged={consumed.calories} 
                         cart={cartTotals.cals} 
                         proposed={proposedCals} 
-                        goal={GOAL_CAL} 
+                        goal={targets.calories} 
                     />
                     <MacroSlider 
                         icon="food-drumstick" 
-                        logged={INITIAL_STATS.p_consumed} 
+                        logged={consumed.p} 
                         cart={cartTotals.macros.p} 
                         proposed={proposedMacros.p} 
-                        goal={INITIAL_STATS.p_goal} 
+                        goal={targets.p} 
                     />
                     <MacroSlider 
                         icon="barley" 
-                        logged={INITIAL_STATS.c_consumed} 
+                        logged={consumed.c} 
                         cart={cartTotals.macros.c} 
                         proposed={proposedMacros.c} 
-                        goal={INITIAL_STATS.c_goal} 
+                        goal={targets.c} 
                     />
                     <MacroSlider 
                         icon="water" 
-                        logged={INITIAL_STATS.f_consumed} 
+                        logged={consumed.f} 
                         cart={cartTotals.macros.f} 
                         proposed={proposedMacros.f} 
-                        goal={INITIAL_STATS.f_goal} 
+                        goal={targets.f} 
                     />
                 </View>
                 

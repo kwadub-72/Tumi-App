@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import FeedItem from '@/src/features/feed/components/FeedItem';
 import { FeedPost } from '@/src/shared/models/types';
@@ -10,8 +11,9 @@ import VerifiedModal from '@/components/VerifiedModal';
 import { useAuthStore } from '@/store/AuthStore';
 import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
 import { supabase } from '@/src/shared/services/supabase';
-import { useMacrobookStore } from '@/src/store/useMacrobookStore';
 import { useMealbookStore } from '@/src/store/useMealbookStore';
+import PostOptionsModal from '@/src/features/feed/components/PostOptionsModal';
+import { USDAFoodItem } from '@/src/shared/services/USDAFoodService';
 import * as Haptics from 'expo-haptics';
 
 interface DiaryViewProps {
@@ -21,7 +23,6 @@ interface DiaryViewProps {
 export default function DiaryView({ selectedDate }: DiaryViewProps) {
     const { session, profile } = useAuthStore();
     const { addBookmark } = useMealbookStore();
-    const macrobookStore = useMacrobookStore();
 
     const [posts, setPosts] = useState<FeedPost[]>([]);
     const [loading, setLoading] = useState(true);
@@ -38,7 +39,8 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
     const [commentsLoading, setCommentsLoading] = useState(false);
     const [isSelectMode, setIsSelectMode] = useState(false);
     const [selectedItems, setSelectedItems] = useState<string[]>([]);
-    const [toastMessage, setToastMessage] = useState('Post deleted successfully');
+    const [toastMessage, setToastMessage] = useState('');
+    const [toastType, setToastType] = useState<'success' | 'error'>('success');
 
     const loadFeed = useCallback(async () => {
         if (!session?.user?.id) return;
@@ -46,15 +48,22 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
             userId: session.user.id,
             feedType: 'diary',
             date: selectedDate,
-            limit: 50
         });
         setPosts(data);
     }, [session?.user?.id, selectedDate]);
 
-    useEffect(() => {
-        setLoading(true);
-        loadFeed().finally(() => setLoading(false));
-    }, [loadFeed]);
+    useFocusEffect(
+        useCallback(() => {
+            let isInitial = false;
+            setPosts((prev) => {
+                if (prev.length === 0) isInitial = true;
+                return prev;
+            });
+            if (isInitial) setLoading(true);
+
+            loadFeed().finally(() => setLoading(false));
+        }, [loadFeed])
+    );
 
     useEffect(() => {
         if (!session?.user?.id) return;
@@ -101,20 +110,28 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
         if (!session?.user?.id) return;
         const post = posts.find(p => p.id === postId);
         if (!post) return;
-        const wasLiked = post.isLiked || false;
-        setPosts(prev => prev.map(p => p.id === postId ? { ...p, isLiked: !wasLiked, stats: { ...p.stats, likes: wasLiked ? p.stats.likes - 1 : p.stats.likes + 1 } } : p));
-        await SupabasePostService.toggleLike(postId, session.user.id, wasLiked);
+        const wasLiked = post.isLiked;
+        // Optimistic update
+        setPosts(prev => prev.map(p => p.id === postId
+            ? { ...p, isLiked: !wasLiked, stats: { ...p.stats, likes: wasLiked ? p.stats.likes - 1 : p.stats.likes + 1 } }
+            : p
+        ));
+        await SupabasePostService.toggleLike(postId, session.user.id, !!wasLiked);
     };
 
     const toggleSave = async (postId: string) => {
         if (!session?.user?.id) return;
         const post = posts.find(p => p.id === postId);
         if (!post) return;
-        const wasSaved = post.isSaved || false;
+        const wasSaved = post.isSaved;
+        // Optimistic update
+        setPosts(prev => prev.map(p => p.id === postId
+            ? { ...p, isSaved: !wasSaved, stats: { ...p.stats, saves: wasSaved ? p.stats.saves - 1 : p.stats.saves + 1 } }
+            : p
+        ));
+        await SupabasePostService.toggleBookmark(postId, session.user.id, !!wasSaved);
 
-        setPosts(prev => prev.map(p => p.id === postId ? { ...p, isSaved: !wasSaved, stats: { ...p.stats, saves: wasSaved ? p.stats.saves - 1 : p.stats.saves + 1 } } : p));
-        await SupabasePostService.toggleBookmark(postId, session.user.id, wasSaved);
-
+        // Also save meal ingredients to local mealbook when bookmarking
         if (!wasSaved && post.meal?.ingredients?.length) {
             post.meal.ingredients.forEach(ing => {
                 const food: USDAFoodItem = {
@@ -125,8 +142,8 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
                     servingSizeText: ing.amount || '100g',
                     caloriesPer100g: ing.cals,
                     macrosPer100g: { p: ing.macros.p, c: ing.macros.c, f: ing.macros.f },
-                    netCarbsPer100g: ing.macros.c,
-                    servingUnits: [{ label: '100 g', amount: 100, unit: 'g', gramsPerUnit: 1 }]
+                    netCarbsPer100g: ing.macros.c, // basic fallback
+                    servingUnits: [],
                 };
                 addBookmark(food);
             });
@@ -138,7 +155,7 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
         setCommentsForPost([]); // Clear previous to avoid flash
         setCommentSheetVisible(true); // Show immediately
         setCommentsLoading(true);
-
+        
         const comments = await SupabasePostService.getComments(post.id, session?.user?.id);
         setCommentsForPost(comments);
         setCommentsLoading(false);
@@ -149,7 +166,10 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
         const comment = await SupabasePostService.addComment(activePost.id, session.user.id, text.trim());
         if (comment) {
             setCommentsForPost(prev => [...(prev ?? []), comment]);
-            setPosts(prev => prev.map(p => p.id === activePost.id ? { ...p, stats: { ...p.stats, comments: p.stats.comments + 1 } } : p));
+            setPosts(prev => prev.map(p => p.id === activePost.id
+                ? { ...p, stats: { ...p.stats, comments: p.stats.comments + 1 } }
+                : p
+            ));
         }
     };
 
@@ -171,6 +191,7 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
             await SupabasePostService.deletePost(postId);
             
             // Show toast
+            setToastType('success');
             setToastMessage('Post deleted successfully');
             setShowDeleteToast(true);
             setTimeout(() => setShowDeleteToast(false), 2000);
@@ -181,36 +202,89 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
         }
     };
 
-    const handleAddToMacroBook = () => {
-        if (!activePost) return;
-        
-        if (activePost.macroUpdate) {
-            const mu = activePost.macroUpdate;
-            macrobookStore.addEntry({
-                label: `Update from ${activePost.user.handle}`,
-                calories: mu.newTargets.calories,
-                p: mu.newTargets.p,
-                c: mu.newTargets.c,
-                f: mu.newTargets.f,
-            });
-        } else if (activePost.snapshot) {
-            const snap = activePost.snapshot;
-            macrobookStore.addEntry({
-                label: `Snapshot from ${activePost.user.handle}`,
-                calories: snap.targets.calories,
-                p: snap.targets.p,
-                c: snap.targets.c,
-                f: snap.targets.f,
-            });
-        }
-
-        setOptionsModalVisible(false);
+    const handleCopySuccess = () => {
+        setIsSelectMode(false);
+        setSelectedItems([]);
         setActivePost(null);
-        
-        setToastMessage('Added to macro book');
+    };
+
+    const handleCopyError = (msg: string) => {
+        setToastType('error');
+        setToastMessage(msg);
         setShowDeleteToast(true);
-        setTimeout(() => setShowDeleteToast(false), 2000);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setTimeout(() => setShowDeleteToast(false), 2500);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    };
+
+    const handleAddToMealLog = async () => {
+        if (!activePost?.meal || !session?.user?.id) return;
+        
+        try {
+            const itemsToSave = selectedItems.length > 0 
+                ? activePost.meal.ingredients.filter((ing: any) => selectedItems.includes(ing.name))
+                : activePost.meal.ingredients;
+
+            for (const item of itemsToSave) {
+                await SupabasePostService.addToMealLog(session.user.id, {
+                    item_name: item.name,
+                    calories: item.cals || 0,
+                    protein: item.macros?.p || 0,
+                    carbs: item.macros?.c || 0,
+                    fats: item.macros?.f || 0,
+                    portion_size: item.amount || '',
+                    original_post_id: activePost.id
+                });
+            }
+            
+            setOptionsModalVisible(false);
+            setIsSelectMode(false);
+            setSelectedItems([]);
+            setActivePost(null);
+
+            setToastMessage(`${itemsToSave.length} item${itemsToSave.length > 1 ? 's' : ''} added to Meal book`);
+            setShowDeleteToast(true);
+            setTimeout(() => setShowDeleteToast(false), 2000);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch (error) {
+            console.error('Failed to add to meal log:', error);
+        }
+    };
+
+    const handleAddToMacroBook = async () => {
+        if (!activePost || !session?.user?.id) return;
+        
+        try {
+            if (isSelectMode && selectedItems.length > 0) {
+                for (const key of selectedItems) {
+                    let type: 'old' | 'new' | 'targets' | null = null;
+                    if (key === 'old' && activePost.macroUpdate) type = 'old';
+                    else if ((key === 'new' || key === 'diff') && activePost.macroUpdate) type = 'new';
+                    else if ((key === 'snapshot' || key === 'targets') && activePost.snapshot) type = 'targets';
+                    
+                    if (type) {
+                        await SupabasePostService.addToMacroBook(session.user.id, activePost.id, type);
+                    }
+                }
+            } else {
+                const type = activePost.macroUpdate ? 'new' : 'targets';
+                await SupabasePostService.addToMacroBook(session.user.id, activePost.id, type);
+            }
+
+            setOptionsModalVisible(false);
+            setIsSelectMode(false);
+            setSelectedItems([]);
+            setActivePost(null);
+            
+            setToastMessage('Added to Macro book');
+            setShowDeleteToast(true);
+            setTimeout(() => setShowDeleteToast(false), 2000);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch (error) {
+            console.error('Failed to add to macro book:', error);
+            setToastMessage('Failed to add to Macro book');
+            setShowDeleteToast(true);
+            setTimeout(() => setShowDeleteToast(false), 2000);
+        }
     };
 
     const handleToggleSelect = (itemId: string, itemType: string) => {
@@ -260,10 +334,11 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
                 isOwner={activePost?.user.id === session?.user.id}
                 onDelete={handleDeletePost}
                 onReport={() => setOptionsModalVisible(false)}
-                onSelectItems={() => {
+                onSelectItems={activePost?.snapshot ? undefined : () => {
                     setIsSelectMode(true);
                     setOptionsModalVisible(false);
                 }}
+                onAddToMealBook={activePost?.meal ? handleAddToMealLog : undefined}
                 onAddToMacroBook={handleAddToMacroBook}
             />
 
