@@ -252,6 +252,17 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
 
     const handleAddToMacroBook = async () => {
         if (!activePost || !session?.user?.id) return;
+
+        // Macro Book allowance: max 3 configurations can be saved at once
+        const isMacroPost = !!(activePost.macroUpdate || activePost.snapshot);
+        if (isMacroPost && isSelectMode && selectedItems.length > 3) {
+            setToastType('error');
+            setToastMessage('You can add up to 3 configurations to your Macro book at a time.');
+            setShowDeleteToast(true);
+            setTimeout(() => setShowDeleteToast(false), 3000);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            return;
+        }
         
         try {
             if (isSelectMode && selectedItems.length > 0) {
@@ -281,6 +292,7 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         } catch (error) {
             console.error('Failed to add to macro book:', error);
+            setToastType('error');
             setToastMessage('Failed to add to Macro book');
             setShowDeleteToast(true);
             setTimeout(() => setShowDeleteToast(false), 2000);
@@ -344,8 +356,12 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
 
             {showDeleteToast && (
                 <View style={styles.toastContainer}>
-                    <View style={styles.toast}>
-                        <Ionicons name="checkmark-circle" size={20} color="#F5F5DC" />
+                    <View style={[styles.toast, toastType === 'error' && { backgroundColor: '#825858' }]}>
+                        <Ionicons
+                            name={toastType === 'success' ? 'checkmark-circle' : 'close-circle'}
+                            size={20}
+                            color="#F5F5DC"
+                        />
                         <Text style={styles.toastText}>{toastMessage}</Text>
                     </View>
                 </View>

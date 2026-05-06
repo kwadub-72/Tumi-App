@@ -14,6 +14,7 @@ import { useUserStore } from '@/store/UserStore';
 import { useAuthStore } from '@/store/AuthStore';
 import { useProfileNavigation } from '@/src/shared/hooks/useProfileNavigation';
 import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
+import { supabase } from '@/src/shared/services/supabase';
 import * as Haptics from 'expo-haptics';
 
 const BURGUNDY = '#825858';
@@ -71,9 +72,17 @@ export default function FeedItem({
 
     const mealStore = useMealLogStore();
     const workoutStore = useWorkoutLogStore();
-    const { macroTargets: myTargets } = useUserStore();
-    const { session } = useAuthStore();
+    const { session, profile } = useAuthStore();
     const { navigateToProfile } = useProfileNavigation();
+
+    // myTargets: prefer live Supabase profile over persisted UserStore to ensure
+    // copy math always uses the copier's actual current targets, not a cached value.
+    const authTargets = profile?.macro_targets;
+    const { macroTargets: storeTargets } = useUserStore();
+    const myTargets = authTargets ?? storeTargets;
+
+    // Overlay shown when user tries to copy >1 macro row simultaneously
+    const [showMacroMultiSelectWarning, setShowMacroMultiSelectWarning] = useState(false);
 
     useEffect(() => {
         if (isSelectMode) {
@@ -81,8 +90,61 @@ export default function FeedItem({
         }
     }, [isSelectMode]);
 
+    /**
+     * Checks if a macro/snapshot copy action should be blocked due to multi-row selection.
+     * Returns true if blocked (shows the warning overlay).
+     */
+    const checkMacroSingleRowConstraint = (): boolean => {
+        const isMacroPost = !!(post.macroUpdate || post.snapshot);
+        if (isMacroPost && isSelectMode && selectedItems.length > 1) {
+            setShowMacroMultiSelectWarning(true);
+            return true;
+        }
+        return false;
+    };
+
+    /**
+     * Fetches the copier's macro targets fresh from Supabase at copy-time.
+     * This guarantees math correctness even if the Zustand store is stale
+     * (e.g. the user posted a macro update during the same session, updating
+     * their profile targets, but the store hydrated before that change).
+     * Falls back to the in-memory profile/store value if the fetch fails.
+     */
+    const getFreshMyTargets = async (): Promise<{ p: number; c: number; f: number; calories: number }> => {
+        if (!session?.user?.id) return myTargets;
+        try {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('macro_targets')
+                .eq('id', session.user.id)
+                .single();
+            if (!error && data?.macro_targets) {
+                const fresh = data.macro_targets as { p: number; c: number; f: number; calories: number };
+                console.log('[CopyEngine] Store targets:', JSON.stringify(myTargets));
+                console.log('[CopyEngine] DB fresh targets:', JSON.stringify(fresh));
+                return fresh;
+            }
+        } catch {
+            // Fallback silently to cached value
+        }
+        console.log('[CopyEngine] Fallback to store targets:', JSON.stringify(myTargets));
+        return myTargets;
+    };
+
+    /**
+     * Standard Copy — raw value-based transformation.
+     *
+     * MacroUpdate (Old/New row): copies exact raw numbers from User B directly.
+     * MacroUpdate (Delta row): applies User B's raw gram/calorie delta to User A's current macros.
+     * Snapshot (Targets row only): copies exact raw values from User B's target row.
+     * Routes User A to the Macro Update creation screen with pre-populated input pills.
+     */
     const handleStandardCopy = async () => {
         if (isCopying) return;
+
+        // Gate: single-row constraint for macro posts
+        if (checkMacroSingleRowConstraint()) return;
+
         setIsCopying(true);
 
         try {
@@ -122,80 +184,81 @@ export default function FeedItem({
             }
             else if (post.macroUpdate) {
                 if (isSelectMode && selectedItems.length === 0) {
-                    onCopyError?.('Please select items to copy over before proceeding.');
+                    onCopyError?.('Please select a row to copy before proceeding.');
                     setIsCopying(false);
                     return;
                 }
                 const selectedLine = selectedItems[0];
                 if (!selectedLine) {
-                    setIsCopying(false);
+                    // No row selected and not in select mode — default to 'new'
+                    const t = post.macroUpdate.newTargets;
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                    onCopySuccess?.();
+                    setIsTribeMenuOpen(false);
+                    router.push({
+                        pathname: '/macro-update',
+                        params: { mode: 'macro-update', p: t.p, c: t.c, f: t.f, calories: t.calories }
+                    });
                     return;
                 }
 
-                const myCals = myTargets.calories;
-
                 if (selectedLine === 'old' || selectedLine === 'new') {
-                    const targetToUse = selectedLine === 'old' ? post.macroUpdate.oldTargets : post.macroUpdate.newTargets;
-                    let myP = myTargets.p;
-                    let myC = myTargets.c;
-                    let myF = myTargets.f;
-
-                    if (targetToUse.calories > 0) {
-                        const scale = myCals / targetToUse.calories;
-                        myP = Math.round(targetToUse.p * scale);
-                        myC = Math.round(targetToUse.c * scale);
-                        myF = Math.round(targetToUse.f * scale);
-                    }
+                    // Standard Copy: use exact raw values from User B's chosen row
+                    const t = selectedLine === 'old'
+                        ? post.macroUpdate.oldTargets
+                        : post.macroUpdate.newTargets;
 
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
                     onCopySuccess?.();
                     setIsTribeMenuOpen(false);
                     router.push({
-                        pathname: '/signup/manual-macros',
-                        params: { p: myP, c: myC, f: myF, calories: myCals }
+                        pathname: '/macro-update',
+                        params: { mode: 'macro-update', p: t.p, c: t.c, f: t.f, calories: t.calories }
                     });
                 } else if (selectedLine === 'diff') {
-                    const diffP = post.macroUpdate.oldTargets.p > 0 ? (post.macroUpdate.newTargets.p - post.macroUpdate.oldTargets.p) / post.macroUpdate.oldTargets.p : 0;
-                    const diffC = post.macroUpdate.oldTargets.c > 0 ? (post.macroUpdate.newTargets.c - post.macroUpdate.oldTargets.c) / post.macroUpdate.oldTargets.c : 0;
-                    const diffF = post.macroUpdate.oldTargets.f > 0 ? (post.macroUpdate.newTargets.f - post.macroUpdate.oldTargets.f) / post.macroUpdate.oldTargets.f : 0;
+                    // Standard Copy Delta: apply User B's raw gram adjustments to User A's CURRENT macros
+                    // Fetch fresh from DB to avoid stale-store math errors
+                    const freshTargets = await getFreshMyTargets();
+                    const rawDiffP = post.macroUpdate.newTargets.p - post.macroUpdate.oldTargets.p;
+                    const rawDiffC = post.macroUpdate.newTargets.c - post.macroUpdate.oldTargets.c;
+                    const rawDiffF = post.macroUpdate.newTargets.f - post.macroUpdate.oldTargets.f;
 
-                    const myP = Math.round(myTargets.p * (1 + diffP));
-                    const myC = Math.round(myTargets.c * (1 + diffC));
-                    const myF = Math.round(myTargets.f * (1 + diffF));
+                    const myP = Math.max(0, freshTargets.p + rawDiffP);
+                    const myC = Math.max(0, freshTargets.c + rawDiffC);
+                    const myF = Math.max(0, freshTargets.f + rawDiffF);
                     const myCals = (myP * 4) + (myC * 4) + (myF * 9);
 
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
                     onCopySuccess?.();
                     setIsTribeMenuOpen(false);
                     router.push({
-                        pathname: '/signup/manual-macros',
-                        params: { p: myP, c: myC, f: myF, calories: myCals }
+                        pathname: '/macro-update',
+                        params: { mode: 'macro-update', p: myP, c: myC, f: myF, calories: myCals }
                     });
                 }
             }
             else if (post.snapshot) {
                 if (isSelectMode && selectedItems.length === 0) {
-                    onCopyError?.('Please select items to copy over before proceeding.');
+                    onCopyError?.('Please select a row to copy before proceeding.');
                     setIsCopying(false);
                     return;
                 }
                 const selectedLine = selectedItems[0];
-                if (selectedLine !== 'targets') {
+                if (selectedLine && selectedLine !== 'targets') {
+                    // Guard: only the Targets row is copyable for Snapshots
+                    onCopyError?.('Only the Targets row can be copied from a Snapshot post.');
                     setIsCopying(false);
                     return;
                 }
 
+                // Standard Copy: raw target values from User B
+                const t = post.snapshot.targets;
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
                 onCopySuccess?.();
                 setIsTribeMenuOpen(false);
                 router.push({
-                    pathname: '/signup/manual-macros',
-                    params: { 
-                        p: post.snapshot.targets.p, 
-                        c: post.snapshot.targets.c, 
-                        f: post.snapshot.targets.f, 
-                        calories: post.snapshot.targets.calories 
-                    }
+                    pathname: '/macro-update',
+                    params: { mode: 'macro-update', p: t.p, c: t.c, f: t.f, calories: t.calories }
                 });
             }
         } finally {
@@ -203,9 +266,23 @@ export default function FeedItem({
         }
     };
 
+    /**
+     * Tribe Copy — percentage-based transformation.
+     *
+     * MacroUpdate (Old/New row): calculates each macro's % of User B's total calories;
+     *   applies those ratios to User A's current total calorie goal.
+     * MacroUpdate (Delta row): calculates User B's % increase/decrease per macro;
+     *   applies those exact percentage shifts to User A's current macro values.
+     * Snapshot (Targets row only): same percentage-ratio logic as MacroUpdate Old/New.
+     * Routes User A to the Macro Update creation screen with pre-populated input pills.
+     */
     const handleTribeCopy = async () => {
         if (isCopying) return;
         if (!session?.user?.id) return;
+
+        // Gate: single-row constraint for macro posts
+        if (checkMacroSingleRowConstraint()) return;
+
         setIsCopying(true);
 
         try {
@@ -216,11 +293,10 @@ export default function FeedItem({
                     return;
                 }
 
-                // Call the new macro-scaling engine RPC
+                // Call the macro-scaling engine RPC
                 const scaledIngredients = await SupabasePostService.tribeCopyFood(post.id, session.user.id);
 
                 if (scaledIngredients && scaledIngredients.length > 0) {
-                    // If we are in select mode, only add the selected ones from the scaled results
                     const itemsToAdd = selectedItems.length > 0
                         ? scaledIngredients.filter(ing => selectedItems.includes(ing.name))
                         : scaledIngredients;
@@ -233,7 +309,6 @@ export default function FeedItem({
                         });
                     });
 
-                    // Record the copy engagement
                     await SupabasePostService.recordCopy(post.id, session.user.id, 'tribe');
 
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -241,11 +316,122 @@ export default function FeedItem({
                     setIsTribeMenuOpen(false);
                     router.push('/add');
                 } else {
-                    // Fallback to standard copy if RPC fails or returns empty
                     handleStandardCopy();
                 }
-            } else {
-                // Non-meal posts (workout, macroUpdate, snapshot) use standard copy logic
+            }
+            else if (post.macroUpdate) {
+                if (isSelectMode && selectedItems.length === 0) {
+                    onCopyError?.('Please select a row to copy before proceeding.');
+                    setIsCopying(false);
+                    return;
+                }
+                const selectedLine = selectedItems[0];
+
+                // Fetch User A's current macro targets fresh from Supabase
+                // to guarantee percentage math uses the correct baseline.
+                const freshTargets = await getFreshMyTargets();
+
+                if (!selectedLine || selectedLine === 'old' || selectedLine === 'new') {
+                    // Tribe Copy Old/New: percentage-ratio transform
+                    // Calculate each macro's caloric share of User B's total, apply to User A's budget.
+                    const t = selectedLine === 'old'
+                        ? post.macroUpdate.oldTargets
+                        : post.macroUpdate.newTargets;
+
+                    const bCals = t.calories > 0 ? t.calories : (t.p * 4) + (t.c * 4) + (t.f * 9);
+                    const myCals = freshTargets.calories;
+
+                    let myP: number, myC: number, myF: number;
+
+                    if (bCals > 0) {
+                        const pPct = (t.p * 4) / bCals;
+                        const cPct = (t.c * 4) / bCals;
+                        const fPct = (t.f * 9) / bCals;
+
+                        myP = Math.round((pPct * myCals) / 4);
+                        myC = Math.round((cPct * myCals) / 4);
+                        myF = Math.round((fPct * myCals) / 9);
+                    } else {
+                        myP = freshTargets.p;
+                        myC = freshTargets.c;
+                        myF = freshTargets.f;
+                    }
+                    const calcCals = (myP * 4) + (myC * 4) + (myF * 9);
+
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                    onCopySuccess?.();
+                    setIsTribeMenuOpen(false);
+                    router.push({
+                        pathname: '/macro-update',
+                        params: { mode: 'macro-update', p: myP, c: myC, f: myF, calories: calcCals }
+                    });
+                } else if (selectedLine === 'diff') {
+                    // Tribe Copy Delta: compute User B's % shift per macro, apply to User A's fresh values
+                    const oldT = post.macroUpdate.oldTargets;
+                    const newT = post.macroUpdate.newTargets;
+
+                    const pShift = oldT.p > 0 ? (newT.p - oldT.p) / oldT.p : 0;
+                    const cShift = oldT.c > 0 ? (newT.c - oldT.c) / oldT.c : 0;
+                    const fShift = oldT.f > 0 ? (newT.f - oldT.f) / oldT.f : 0;
+
+                    const myP = Math.max(0, Math.round(freshTargets.p * (1 + pShift)));
+                    const myC = Math.max(0, Math.round(freshTargets.c * (1 + cShift)));
+                    const myF = Math.max(0, Math.round(freshTargets.f * (1 + fShift)));
+                    const myCals = (myP * 4) + (myC * 4) + (myF * 9);
+
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                    onCopySuccess?.();
+                    setIsTribeMenuOpen(false);
+                    router.push({
+                        pathname: '/macro-update',
+                        params: { mode: 'macro-update', p: myP, c: myC, f: myF, calories: myCals }
+                    });
+                }
+            }
+            else if (post.snapshot) {
+                if (isSelectMode && selectedItems.length === 0) {
+                    onCopyError?.('Please select a row to copy before proceeding.');
+                    setIsCopying(false);
+                    return;
+                }
+                const selectedLine = selectedItems[0];
+                if (selectedLine && selectedLine !== 'targets') {
+                    onCopyError?.('Only the Targets row can be copied from a Snapshot post.');
+                    setIsCopying(false);
+                    return;
+                }
+
+                // Tribe Copy Snapshot Targets: percentage-ratio transform using User B's target cals
+                const freshTargets = await getFreshMyTargets();
+                const t = post.snapshot.targets;
+                const bCals = t.calories > 0 ? t.calories : (t.p * 4) + (t.c * 4) + (t.f * 9);
+                const myCals = freshTargets.calories;
+
+                let myP: number, myC: number, myF: number;
+                if (bCals > 0) {
+                    const pPct = (t.p * 4) / bCals;
+                    const cPct = (t.c * 4) / bCals;
+                    const fPct = (t.f * 9) / bCals;
+                    myP = Math.round((pPct * myCals) / 4);
+                    myC = Math.round((cPct * myCals) / 4);
+                    myF = Math.round((fPct * myCals) / 9);
+                } else {
+                    myP = freshTargets.p;
+                    myC = freshTargets.c;
+                    myF = freshTargets.f;
+                }
+                const calcCals = (myP * 4) + (myC * 4) + (myF * 9);
+
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                onCopySuccess?.();
+                setIsTribeMenuOpen(false);
+                router.push({
+                    pathname: '/macro-update',
+                    params: { mode: 'macro-update', p: myP, c: myC, f: myF, calories: calcCals }
+                });
+            }
+            else {
+                // Workout — tribe copy handled by handleWorkoutTribeCopy, fallback
                 handleStandardCopy();
             }
         } catch (error) {
@@ -256,6 +442,38 @@ export default function FeedItem({
         }
     };
 
+    /**
+     * Single-tap tribe copy for exercise posts.
+     * Respects selector-mode gatekeeper rules and flushes state on success.
+     */
+    const handleWorkoutTribeCopy = async () => {
+        if (isCopying || !post.workout) return;
+
+        // Rule C: selector open but nothing checked
+        if (isSelectMode && selectedItems.length === 0) {
+            onCopyError?.('Please select at least one exercise to copy over before proceeding.');
+            return;
+        }
+
+        setIsCopying(true);
+        try {
+            // Rule A (all) or Rule B (selection subset)
+            const exercisesToCopy = selectedItems.length > 0
+                ? post.workout.exercises.filter(ex => selectedItems.includes(ex.title))
+                : post.workout.exercises;
+
+            exercisesToCopy.forEach(ex =>
+                workoutStore.addExercise({ ...ex, id: Date.now().toString() + Math.random() })
+            );
+
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            // onCopySuccess flushes selectedItems and collapses select mode in the parent
+            onCopySuccess?.();
+            router.push('/add-exercise');
+        } finally {
+            setIsCopying(false);
+        }
+    };
 
     const toggleExpand = (e?: any) => {
         if (e) e.stopPropagation();
@@ -306,112 +524,99 @@ export default function FeedItem({
         return renderMacroColumn(icon, Math.abs(val), unit, width, colorOverride, scale);
     };
 
-    const MacroProgressBar = ({ icon, target, consumed }: { icon: string, target: number, consumed: number }) => {
-        const total = Math.max(target, consumed);
-        const wPct = (v: number) => (total > 0 ? (v / total) * 100 : 0);
-
-        const logged = Math.min(consumed, target);
-        const rem = Math.max(0, target - consumed);
-        const over = Math.max(0, consumed - target);
-
-        const unit = icon === 'fire' ? ' cals' : 'g';
-
-        const renderSegment = (val: number, bg: string, textCol: string) => {
-            if (val <= 0) return null;
-            const pct = wPct(val);
-            const isSmall = pct < 15;
-            return (
-                <View style={[styles.progressSegment, { width: `${pct}%`, backgroundColor: bg }]}>
-                    {!isSmall && (
-                        <Text style={[styles.segmentText, { color: textCol }]} numberOfLines={1}>
-                            {Math.round(val)}{unit}
-                        </Text>
-                    )}
-                </View>
-            );
-        };
-
-        const renderCarrot = (val: number, textCol: string, align: 'center' | 'left' | 'right' = 'center') => {
-            if (val <= 0) return null;
-            const pct = wPct(val);
-            if (pct >= 15) return <View style={{ width: `${pct}%` }} />;
-
-            return (
-                <View style={{ width: `${pct}%`, height: 25 }}>
-                    <View style={{ position: 'absolute', top: 0, left: '50%', width: 20, marginLeft: -10, alignItems: 'center', overflow: 'visible' }}>
-                        <Ionicons name="chevron-up" size={14} color={textCol} style={{ marginBottom: -4 }} />
-                        <View style={{
-                            position: 'absolute',
-                            top: 14,
-                            width: 100,
-                            alignItems: align === 'left' ? 'flex-end' : align === 'right' ? 'flex-start' : 'center',
-                            ...(align === 'left' ? { right: 10 } : align === 'right' ? { left: 10 } : { left: -40 })
-                        }}>
-                            <Text style={[styles.segmentText, { color: textCol, fontSize: 12 }]} numberOfLines={1}>
-                                {Math.round(val)}{unit}
-                            </Text>
-                        </View>
-                    </View>
-                </View>
-            );
-        };
-
-        return (
-            <View style={styles.progressRow}>
-                <MaterialCommunityIcons name={icon as any} size={28} color="white" style={styles.progressIcon} />
-                <View style={styles.progressTrackWrapper}>
-                    <View style={styles.progressTrack}>
-                        {renderSegment(logged, '#FFFFFF', '#405F4F')}
-                        {renderSegment(rem, 'rgba(255,255,255,0.3)', 'white')}
-                        {renderSegment(over, BURGUNDY, 'white')}
-                    </View>
-                    <View style={styles.carrotRow}>
-                        {renderCarrot(logged, '#FFFFFF', 'center')}
-                        {renderCarrot(rem, 'white', 'left')}
-                        {renderCarrot(over, BURGUNDY, 'right')}
-                    </View>
-                </View>
-            </View>
-        );
-    };
-
     const renderSnapshot = (snapshot: Snapshot) => {
-        const selectionKey = 'targets';
-        const isSelected = selectedItems.includes(selectionKey);
+        const remains = {
+            calories: snapshot.targets.calories - snapshot.consumed.calories,
+            p: snapshot.targets.p - snapshot.consumed.p,
+            c: snapshot.targets.c - snapshot.consumed.c,
+            f: snapshot.targets.f - snapshot.consumed.f,
+        };
+
+        const getColor = (val: number) => {
+            if (val > 0) return TRIBE_GREEN;
+            if (val < 0) return BURGUNDY;
+            return WHITE;
+        };
+
+        const renderRow = (
+            label: string,
+            vals: { calories: number; p: number; c: number; f: number },
+            colors: { calories: string; p: string; c: string; f: string },
+            selectionKey?: string,
+        ) => (
+            <TouchableOpacity
+                activeOpacity={isSelectMode && selectionKey ? 0.7 : 1}
+                onPress={() => isSelectMode && selectionKey && onToggleSelect?.(selectionKey, 'snapshot')}
+                style={styles.macroUpdateRow}
+            >
+                {isSelectMode && selectionKey && (
+                    <View style={styles.selectBtnLeft}>
+                        {selectedItems.includes(selectionKey) ? (
+                            <View style={styles.selectedCircle}>
+                                <Ionicons name="checkmark" size={16} color="white" />
+                            </View>
+                        ) : (
+                            <View style={styles.unselectedCircle} />
+                        )}
+                    </View>
+                )}
+                <View style={[styles.macroLabelBox, isSelectMode && selectionKey ? { paddingLeft: 28 } : {}]}>
+                    <Text
+                        style={[
+                            styles.macroLabelText,
+                            label === 'Balance' && { fontSize: 18, lineHeight: 20 },
+                            (label === 'Targets' || label === 'Actual') && { fontSize: 16, lineHeight: 17 },
+                        ]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                    >
+                        {label}
+                    </Text>
+                </View>
+                <View style={styles.macroValuesRow}>
+                    <View style={{ width: 80 }}>
+                        {renderMacroValue('fire', Math.abs(vals.calories), ' cals', colors.calories, false, 'small', 80)}
+                    </View>
+                    <View style={styles.macroSubRow}>
+                        <View style={styles.macroCol}>
+                            {renderMacroValue('food-drumstick', Math.abs(vals.p), 'g', colors.p, false, 'small')}
+                        </View>
+                        <View style={styles.macroCol}>
+                            {renderMacroValue('barley', Math.abs(vals.c), 'g', colors.c, false, 'small')}
+                        </View>
+                        <View style={styles.macroCol}>
+                            {renderMacroValue('water', Math.abs(vals.f), 'g', colors.f, false, 'small')}
+                        </View>
+                    </View>
+                </View>
+            </TouchableOpacity>
+        );
+
+        if (!isExpanded) {
+            return (
+                <View style={styles.macroUpdateContent}>
+                    {renderRow('Balance', remains, {
+                        calories: getColor(remains.calories),
+                        p: getColor(remains.p),
+                        c: getColor(remains.c),
+                        f: getColor(remains.f),
+                    })}
+                </View>
+            );
+        }
 
         return (
-            <View style={styles.snapshotContent}>
-                <TouchableOpacity 
-                    activeOpacity={isSelectMode ? 0.7 : 1}
-                    onPress={() => isSelectMode && onToggleSelect?.(selectionKey, 'snapshot')}
-                    style={styles.snapshotHeaderRow}
-                >
-                    {isSelectMode && (
-                        <View style={styles.selectBtnLeft}>
-                            {isSelected ? (
-                                <View style={styles.selectedCircle}>
-                                    <Ionicons name="checkmark" size={16} color="white" />
-                                </View>
-                            ) : (
-                                <View style={styles.unselectedCircle} />
-                            )}
-                        </View>
-                    )}
-                    <View style={isSelectMode && { paddingLeft: 28 }}>
-                        <Text style={styles.snapshotLabel}>Daily Progress</Text>
-                    </View>
-                </TouchableOpacity>
-
-                <View style={{ marginTop: 5 }}>
-                    <MacroProgressBar icon="fire" target={snapshot.targets.calories} consumed={snapshot.consumed.calories} />
-                    {isExpanded && (
-                        <>
-                            <MacroProgressBar icon="food-drumstick" target={snapshot.targets.p} consumed={snapshot.consumed.p} />
-                            <MacroProgressBar icon="barley" target={snapshot.targets.c} consumed={snapshot.consumed.c} />
-                            <MacroProgressBar icon="water" target={snapshot.targets.f} consumed={snapshot.consumed.f} />
-                        </>
-                    )}
-                </View>
+            <View style={styles.macroUpdateContent}>
+                {renderRow('Targets', snapshot.targets, { calories: WHITE, p: WHITE, c: WHITE, f: WHITE }, 'targets')}
+                <View style={[styles.divider, { opacity: 0.1, marginVertical: 4 }]} />
+                {renderRow('Actual', snapshot.consumed, { calories: WHITE, p: WHITE, c: WHITE, f: WHITE })}
+                <View style={[styles.divider, { opacity: 0.1, marginVertical: 4 }]} />
+                {renderRow('Balance', remains, {
+                    calories: getColor(remains.calories),
+                    p: getColor(remains.p),
+                    c: getColor(remains.c),
+                    f: getColor(remains.f),
+                })}
             </View>
         );
     };
@@ -720,6 +925,25 @@ export default function FeedItem({
                 </TouchableWithoutFeedback>
             )}
 
+            {/* Single-row gatekeeper overlay for macro posts */}
+            {showMacroMultiSelectWarning && (
+                <View style={styles.macroWarningOverlay}>
+                    <View style={styles.macroWarningBox}>
+                        <Ionicons name="warning" size={24} color="#825858" style={{ marginBottom: 8 }} />
+                        <Text style={styles.macroWarningTitle}>One config at a time</Text>
+                        <Text style={styles.macroWarningBody}>
+                            You can only copy one target configuration at a time to your active macro update. However, you can add up to three configurations to your Macro book for later review.
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.macroWarningDismiss}
+                            onPress={() => setShowMacroMultiSelectWarning(false)}
+                        >
+                            <Text style={styles.macroWarningDismissText}>Got it</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
+
             <VerifiedModal visible={isVerifiedVisible} onClose={() => setIsVerifiedVisible(false)} status={post.user.status} />
             <View style={[styles.header, { zIndex: 1 }]}>
                 <TouchableOpacity onPress={() => navigateToProfile(post.user)}>
@@ -801,34 +1025,48 @@ export default function FeedItem({
             </TouchableOpacity>
 
             <View style={[styles.footerActions, { zIndex: 10 }]}>
-                {isTribeMenuOpen && (
-                    <View style={styles.floatingButtonsRow}>
-                        <TouchableOpacity style={styles.floatingTribeBtn} onPress={handleTribeCopy}>
-                            <TabonoLogo size={24} color="#A4B69D" />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.floatingCopyBtn} onPress={handleStandardCopy}>
-                            <Ionicons name="copy" size={20} color="white" />
-                        </TouchableOpacity>
-                    </View>
-                )}
-
                 <View style={styles.actionsRow}>
-                    <TouchableOpacity style={styles.actionItem} onPress={() => setIsTribeMenuOpen(!isTribeMenuOpen)}>
-                        <View style={styles.tribeCircle}>
-                            <TabonoLogo size={20} color={Colors.theme.sageLight} />
+                    <TouchableOpacity
+                        style={styles.actionItem}
+                        onPress={post.workout
+                            ? handleWorkoutTribeCopy
+                            : () => setIsTribeMenuOpen(!isTribeMenuOpen)
+                        }
+                    >
+                        {/* Sub-menu only shown for non-workout posts */}
+                        {isTribeMenuOpen && !post.workout && (
+                            <View style={styles.floatingButtonsWrapper}>
+                                <TouchableOpacity style={styles.floatingTribeBtn} onPress={handleTribeCopy}>
+                                    <TabonoLogo size={20} color="white" />
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.floatingCopyBtn} onPress={handleStandardCopy}>
+                                    <Ionicons name="copy" size={18} color="white" />
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                        <View style={styles.iconBox}>
+                            <View style={styles.tribeCircle}>
+                                <TabonoLogo size={20} color="#A5B79D" />
+                            </View>
                         </View>
-                        <Text style={styles.actionCount}>0</Text>
+                        <Text style={styles.actionCount}>{post.stats.shares}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actionItem} onPress={onPressLike}>
-                        <Ionicons name={post.isLiked ? "heart" : "heart-outline"} size={28} color="white" />
+                        <View style={styles.iconBox}>
+                            <Ionicons name={post.isLiked ? "heart" : "heart-outline"} size={28} color="white" />
+                        </View>
                         <Text style={styles.actionCount}>{post.stats.likes}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actionItem} onPress={onPressComment}>
-                        <Ionicons name="chatbubble-ellipses" size={26} color="white" />
+                        <View style={styles.iconBox}>
+                            <Ionicons name="chatbubble-ellipses" size={26} color="white" />
+                        </View>
                         <Text style={styles.actionCount}>{post.stats.comments}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actionItem} onPress={onPressShare || onPressSave}>
-                        <Ionicons name="arrow-redo-outline" size={26} color="white" />
+                        <View style={styles.iconBox}>
+                            <Ionicons name="arrow-redo-outline" size={26} color="white" />
+                        </View>
                         <Text style={styles.actionCount}>{post.stats.shares}</Text>
                     </TouchableOpacity>
                 </View>
@@ -1094,9 +1332,14 @@ const styles = StyleSheet.create({
     actionsRow: {
         flexDirection: 'row',
         justifyContent: 'center',
-        gap: 30,
+        gap: 20,
     },
     actionItem: {
+        alignItems: 'center',
+    },
+    iconBox: {
+        height: 34,
+        justifyContent: 'center',
         alignItems: 'center',
     },
     actionCount: {
@@ -1117,20 +1360,22 @@ const styles = StyleSheet.create({
         zIndex: 1,
         borderRadius: 45,
     },
-    floatingButtonsRow: {
+    floatingButtonsWrapper: {
         position: 'absolute',
         bottom: 50,
-        left: 0, // Align exactly horizontally with the first tribe button.
+        width: 80,
+        left: '50%',
+        marginLeft: -40,
         flexDirection: 'row',
-        gap: 15,
+        justifyContent: 'space-between',
         alignItems: 'center',
-        paddingLeft: 35, // Adjusting so the floating tribe button centers nicely above the original
+        zIndex: 20,
     },
     floatingTribeBtn: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: '#2D3A26',
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#A5B79D',
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -1149,10 +1394,6 @@ const styles = StyleSheet.create({
         backgroundColor: 'white',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 1,
     },
     detailedMealContainer: {
         marginTop: 10,
@@ -1262,6 +1503,52 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         height: 25,
         position: 'relative',
+    },
+    // Macro multi-select gatekeeper overlay
+    macroWarningOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.55)',
+        borderRadius: 45,
+        zIndex: 100,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    macroWarningBox: {
+        backgroundColor: '#EAE7D6',
+        borderRadius: 24,
+        padding: 22,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.35,
+        shadowRadius: 12,
+        elevation: 10,
+    },
+    macroWarningTitle: {
+        fontSize: 17,
+        fontWeight: '700',
+        color: '#2F3A27',
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    macroWarningBody: {
+        fontSize: 14,
+        color: '#4A5D4E',
+        textAlign: 'center',
+        lineHeight: 20,
+        marginBottom: 16,
+    },
+    macroWarningDismiss: {
+        backgroundColor: '#4A5D4E',
+        paddingVertical: 10,
+        paddingHorizontal: 32,
+        borderRadius: 20,
+    },
+    macroWarningDismissText: {
+        color: '#F5F5DC',
+        fontSize: 15,
+        fontWeight: '700',
     },
 });
 

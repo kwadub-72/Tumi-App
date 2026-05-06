@@ -144,12 +144,21 @@ const MacroProgressBar = ({ icon, target, consumed }: any) => {
 
 export default function MacroUpdateScreen() {
     const router = useRouter();
-    const { mode: initialMode } = useLocalSearchParams<{ mode: ScreenMode }>();
+    const { mode: initialMode, p: paramP, c: paramC, f: paramF, calories: paramCal } = useLocalSearchParams<{ 
+        mode: ScreenMode; 
+        p?: string; 
+        c?: string; 
+        f?: string; 
+        calories?: string; 
+    }>();
     const { profile } = useAuthStore();
     const userInfo = useUserStore();
     const [macroBookEntries, setMacroBookEntries] = useState<any[]>([]);
     const [loadingBook, setLoadingBook] = useState(false);
-    const [mode, setMode] = useState<ScreenMode>(initialMode || 'snapshot');
+    // When copy params are present, always open on macro-update tab
+    const [mode, setMode] = useState<ScreenMode>(
+        (paramP && paramC && paramF) ? 'macro-update' : (initialMode || 'snapshot')
+    );
     const [latestHistory, setLatestHistory] = useState<any>(null);
 
     // Macros State
@@ -159,9 +168,12 @@ export default function MacroUpdateScreen() {
     const oldF = targets.f;
     const oldCal = targets.calories;
 
-    const [pText, setPText] = useState('');
-    const [cText, setCText] = useState('');
-    const [fText, setFText] = useState('');
+    // Pre-populate directly from URL params when arriving from a copy action.
+    // Using initial state values instead of a useEffect avoids a render cycle
+    // that would briefly show empty pills before populating them.
+    const [pText, setPText] = useState(paramP ?? '');
+    const [cText, setCText] = useState(paramC ?? '');
+    const [fText, setFText] = useState(paramF ?? '');
     const [caption, setCaption] = useState('');
     const [media, setMedia] = useState<{ uri: string; type: 'image' | 'video' } | null>(null);
 
@@ -299,7 +311,7 @@ export default function MacroUpdateScreen() {
                 await SupabasePostService.updateMacroTargetsWithPost(
                     profile.id,
                     { p: newP, c: newC, f: newF, calories: newCal },
-                    caption || null,
+                    caption || undefined,
                     media?.uri,
                     media?.type
                 );
