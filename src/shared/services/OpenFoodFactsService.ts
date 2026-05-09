@@ -33,14 +33,19 @@ export class OpenFoodFactsService {
             const carbs = nutriments['carbohydrates_100g'] || nutriments['carbohydrates'] || 0;
             const fat = nutriments['fat_100g'] || nutriments['fat'] || 0;
 
+            const pNum = Number(protein);
+            const cNum = Number(carbs);
+            const fNum = Number(fat);
+            const computedCalories = Math.round((pNum * 4) + (cNum * 4) + (fNum * 9));
+
             return {
                 name: product.product_name || 'Unknown Product',
                 brand: product.brands || 'Unknown Brand',
-                calories: Number(calories),
+                calories: computedCalories,
                 macros: {
-                    p: Number(protein),
-                    c: Number(carbs),
-                    f: Number(fat)
+                    p: pNum,
+                    c: cNum,
+                    f: fNum
                 },
                 servingSize: product.serving_size
             };

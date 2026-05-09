@@ -23,24 +23,25 @@ export class NutritionService {
     }
 
     static calculateMacros(amountInOz: number): { cals: number; macros: MacroNutrients } {
+        const p = Math.round(BASE_OZ_MACROS.p * amountInOz);
+        const c = Math.round(BASE_OZ_MACROS.c * amountInOz);
+        const f = Math.round(BASE_OZ_MACROS.f * amountInOz);
         return {
-            cals: Math.round(BASE_OZ_MACROS.cals * amountInOz),
-            macros: {
-                p: Math.round(BASE_OZ_MACROS.p * amountInOz),
-                c: Math.round(BASE_OZ_MACROS.c * amountInOz),
-                f: Math.round(BASE_OZ_MACROS.f * amountInOz)
-            }
+            cals: Math.round(p * 4 + c * 4 + f * 9),
+            macros: { p, c, f }
         };
     }
 
     static sumMacros(items: { cals?: number; calories?: number; macros: MacroNutrients }[]): { cals: number; macros: MacroNutrients } {
-        return items.reduce((acc, curr) => ({
-            cals: acc.cals + (curr.cals ?? curr.calories ?? 0),
-            macros: {
-                p: acc.macros.p + curr.macros.p,
-                c: acc.macros.c + curr.macros.c,
-                f: acc.macros.f + curr.macros.f,
-            }
-        }), { cals: 0, macros: { p: 0, c: 0, f: 0 } } as { cals: number; macros: MacroNutrients });
+        const sums = items.reduce((acc, curr) => ({
+            p: acc.p + curr.macros.p,
+            c: acc.c + curr.macros.c,
+            f: acc.f + curr.macros.f,
+        }), { p: 0, c: 0, f: 0 });
+        
+        return {
+            cals: Math.round((sums.p * 4) + (sums.c * 4) + (sums.f * 9)),
+            macros: sums
+        };
     }
 }

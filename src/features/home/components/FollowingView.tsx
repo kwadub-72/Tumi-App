@@ -140,9 +140,9 @@ export default function FollowingView({ selectedDate }: FollowingViewProps) {
                     brand: post.meal!.title,
                     servingSizeG: 100,
                     servingSizeText: ing.amount || '100g',
-                    caloriesPer100g: ing.cals,
-                    macrosPer100g: { p: ing.macros.p, c: ing.macros.c, f: ing.macros.f },
-                    netCarbsPer100g: ing.macros.c, // basic fallback
+                    caloriesPer100g: Math.round((ing.macros?.p || 0) * 4 + (ing.macros?.c || 0) * 4 + (ing.macros?.f || 0) * 9),
+                    macrosPer100g: { p: ing.macros?.p || 0, c: ing.macros?.c || 0, f: ing.macros?.f || 0 },
+                    netCarbsPer100g: ing.macros?.c || 0, // basic fallback
                     servingUnits: [],
                 };
                 addBookmark(food);

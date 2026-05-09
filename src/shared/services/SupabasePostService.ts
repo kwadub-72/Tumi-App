@@ -53,7 +53,7 @@ function rowToFeedPost(row: any, currentUserId: string): FeedPost {
     };
 }
 
-function formatTimeAgo(isoString: string): string {
+export function formatTimeAgo(isoString: string): string {
     const seconds = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
     if (seconds < 60) return `${seconds}s ago`;
     const minutes = Math.floor(seconds / 60);
@@ -460,6 +460,54 @@ export const SupabasePostService = {
         }
     },
 
+    async getMealBook(userId: string): Promise<any[]> {
+        const { data, error } = await supabase
+            .from('meal_log')
+            .select(`
+                *,
+                posts!original_post_id (
+                    author_id,
+                    profiles!author_id (
+                        id,
+                        handle,
+                        name,
+                        avatar_url,
+                        status,
+                        activity_icon,
+                        activity
+                    )
+                )
+            `)
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('[SupabasePostService.getMealBook]', error.message);
+            return [];
+        }
+
+        const postIds = data.map((item: any) => item.original_post_id).filter(Boolean);
+        let copyCounts: Record<string, number> = {};
+        if (postIds.length > 0) {
+            const { data: copies } = await supabase
+                .from('post_copies')
+                .select('post_id')
+                .in('post_id', postIds);
+            
+            if (copies) {
+                copies.forEach((c: any) => {
+                    copyCounts[c.post_id] = (copyCounts[c.post_id] || 0) + 1;
+                });
+            }
+        }
+
+        return data.map((item: any) => ({
+            ...item,
+            copy_count: copyCounts[item.original_post_id] || 0,
+            original_author: item.posts?.profiles
+        }));
+    },
+
     // ── Lift book ───────────────────────────────────────────────────────────
 
     /**
@@ -482,7 +530,18 @@ export const SupabasePostService = {
     async getLiftBook(userId: string): Promise<any[]> {
         const { data, error } = await supabase
             .from('lift_book')
-            .select('*')
+            .select(`
+                *,
+                posts!original_post_id (
+                    author_id,
+                    payload,
+                    profiles!author_id (
+                        handle,
+                        name,
+                        avatar_url
+                    )
+                )
+            `)
             .eq('user_id', userId)
             .order('created_at', { ascending: false });
 
@@ -490,12 +549,33 @@ export const SupabasePostService = {
             console.error('[SupabasePostService.getLiftBook]', error.message);
             return [];
         }
-        return data;
+
+        const postIds = data.map((item: any) => item.original_post_id).filter(Boolean);
+        let copyCounts: Record<string, number> = {};
+        if (postIds.length > 0) {
+            const { data: copies } = await supabase
+                .from('post_copies')
+                .select('post_id')
+                .in('post_id', postIds);
+            
+            if (copies) {
+                copies.forEach((c: any) => {
+                    copyCounts[c.post_id] = (copyCounts[c.post_id] || 0) + 1;
+                });
+            }
+        }
+
+        return data.map((item: any) => ({
+            ...item,
+            copy_count: copyCounts[item.original_post_id] || 0,
+            original_author: item.posts?.profiles
+        }));
     },
 
     // ── Macro Book ─────────────────────────────────────────────────────────
 
-    async addToMacroBook(userId: string, postId: string, selectionType: 'old' | 'new' | 'targets'): Promise<void> {
+    async addToMacroBook(userId: string, postId: string, selectionType: 'old' | 'new' | 'targets' | 'delta'): Promise<void> {
+        console.log('[addToMacroBook]', { userId, postId, selectionType });
         const { error } = await supabase.rpc('copy_to_macro_book', {
             p_user_id: userId,
             p_post_id: postId,
@@ -511,7 +591,17 @@ export const SupabasePostService = {
     async getMacroBook(userId: string): Promise<any[]> {
         const { data, error } = await supabase
             .from('macro_book')
-            .select('*')
+            .select(`
+                *,
+                posts!original_post_id (
+                    author_id,
+                    profiles!author_id (
+                        handle,
+                        name,
+                        avatar_url
+                    )
+                )
+            `)
             .eq('user_id', userId)
             .order('created_at', { ascending: false });
 
@@ -519,7 +609,27 @@ export const SupabasePostService = {
             console.error('[SupabasePostService.getMacroBook]', error.message);
             return [];
         }
-        return data;
+
+        const postIds = data.map((item: any) => item.original_post_id).filter(Boolean);
+        let copyCounts: Record<string, number> = {};
+        if (postIds.length > 0) {
+            const { data: copies } = await supabase
+                .from('post_copies')
+                .select('post_id')
+                .in('post_id', postIds);
+            
+            if (copies) {
+                copies.forEach((c: any) => {
+                    copyCounts[c.post_id] = (copyCounts[c.post_id] || 0) + 1;
+                });
+            }
+        }
+
+        return data.map((item: any) => ({
+            ...item,
+            copy_count: copyCounts[item.original_post_id] || 0,
+            original_author: item.posts?.profiles
+        }));
     },
 
     async deleteFromMacroBook(entryId: string): Promise<void> {

@@ -1,5 +1,5 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     FlatList,
@@ -28,6 +28,8 @@ import { PostStore } from '@/store/PostStore';
 import { useUserStore } from '@/store/UserStore';
 import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
 import { useAuthStore } from '@/store/AuthStore';
+import { CondensedLiftCard } from '@/src/features/feed/components/CondensedLiftCard';
+import { useProfileNavigation } from '@/src/shared/hooks/useProfileNavigation';
 
 // ─── Tribe creator attribution ──────────────────────────────────────────────
 
@@ -160,7 +162,10 @@ export default function AddExerciseScreen() {
     const router = useRouter();
     const userInfo = useUserStore();
     const session = useAuthStore((state) => state.session);
-    const [activeTab, setActiveTab] = useState<Tab>('All');
+    const profile = useAuthStore((state) => state.profile);
+    const { navigateToProfile } = useProfileNavigation();
+    const params = useLocalSearchParams();
+    const [activeTab, setActiveTab] = useState<Tab>((params.tab as Tab) || 'All');
     const [searchFocused, setSearchFocused] = useState(false);
 
     // Live search via API Ninjas
@@ -200,7 +205,48 @@ export default function AddExerciseScreen() {
         setIsLoadingLiftBook(true);
         try {
             const data = await SupabasePostService.getLiftBook(session.user.id);
-            setLiftBookLifts(data);
+            
+            const processedData = data.map((item: any) => {
+                const originalExerciseData = (() => {
+                    const payload = item.posts?.payload;
+                    if (payload && payload.workout && Array.isArray(payload.workout.exercises)) {
+                        return payload.workout.exercises.find((ex: any) => ex.title === item.exercise_name);
+                    }
+                    return null;
+                })();
+
+                const setsData = (() => {
+                    if (item.sets && (typeof item.sets === 'string' || (Array.isArray(item.sets) && item.sets.length > 0))) {
+                        if (typeof item.sets === 'string') {
+                            try {
+                                const parsed = JSON.parse(item.sets);
+                                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                            } catch (e) {
+                                console.error('Failed to parse sets', e);
+                            }
+                        } else {
+                            return item.sets;
+                        }
+                    }
+                    return originalExerciseData?.sets || [];
+                })();
+
+                const eccentric = item.eccentric || originalExerciseData?.eccentric;
+
+                const isArray = Array.isArray(setsData);
+                const reps = isArray ? setsData[0]?.reps : undefined;
+                const sameReps = isArray ? setsData.every((s: any) => s.reps === reps) : false;
+                const setsReps = isArray && setsData.length > 0 ? (sameReps ? `${setsData.length} sets x ${reps} reps` : `${setsData.length} sets`) : '0 sets';
+
+                return {
+                    ...item,
+                    processedSets: setsData,
+                    setsReps,
+                    eccentric,
+                };
+            });
+
+            setLiftBookLifts(processedData);
         } catch (e) {
             console.error('Error fetching lift book', e);
         } finally {
@@ -398,43 +444,31 @@ export default function AddExerciseScreen() {
                     <FlatList
                         data={liftBookLifts}
                         renderItem={({ item }) => {
-                            // Map lift_book row back to ExerciseSearchResult shape for ExerciseSearchCard
-                            const searchResult: ExerciseSearchResult = {
-                                id: item.id,
-                                name: item.exercise_name,
-                                category: item.type === 'Cardio' ? 'Cardio' : 'Strength',
-                                muscle: item.muscle_group || '',
-                                equipment: '',
-                                difficulty: '',
-                                instructions: ''
-                            };
                             return (
-                                <ExerciseSearchCard
-                                    item={searchResult}
-                                    countInCart={historicalCounts[item.exercise_name] || 0}
-                                    onAdd={() => {
-                                        // Custom logic to add with saved sets/stats
+                                <CondensedLiftCard
+                                    title={item.exercise_name}
+                                    setsReps={item.setsReps}
+                                    subText={item.notes || item.intensity_rating}
+                                    eccentric={item.eccentric}
+                                    savedAt={item.created_at}
+                                    copyCount={item.copy_count || 0}
+                                    authorName={item.original_author?.name || profile?.name || 'Me'}
+                                    authorHandle={item.original_author?.handle || profile?.handle || 'me'}
+                                    authorAvatar={item.original_author?.avatar_url || profile?.avatar_url || ''}
+                                    authorStatus={item.original_author?.status || profile?.status}
+                                    authorActivityIcon={item.original_author?.activity_icon || profile?.activity_icon}
+                                    authorActivity={item.original_author?.activity || profile?.activity}
+                                    onPressProfile={() => navigateToProfile({ 
+                                        id: item.original_author?.id || profile?.id, 
+                                        handle: item.original_author?.handle || profile?.handle || 'me' 
+                                    })}
+                                    onPressTribeButton={() => {
                                         const exercise: Exercise = {
                                             id: `${item.id}-${Date.now()}`,
                                             title: item.exercise_name,
                                             type: item.type,
                                             muscleGroup: item.muscle_group,
-                                            sets: item.sets || [],
-                                            speed: item.speed,
-                                            incline: item.incline,
-                                            duration: item.duration,
-                                            logCount: 0,
-                                            createdBy: TRIBE_CREATOR,
-                                        };
-                                        addExercise(exercise);
-                                    }}
-                                    onQuickAdd={() => {
-                                        const exercise: Exercise = {
-                                            id: `${item.id}-${Date.now()}`,
-                                            title: item.exercise_name,
-                                            type: item.type,
-                                            muscleGroup: item.muscle_group,
-                                            sets: item.sets || [],
+                                            sets: item.processedSets || [],
                                             speed: item.speed,
                                             incline: item.incline,
                                             duration: item.duration,

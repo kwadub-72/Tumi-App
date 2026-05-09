@@ -60,7 +60,7 @@ export default function DashboardScreen() {
 
     // Sync with UserStore
     const goals = userInfo.macroTargets;
-    const calorieGoal = goals.calories;
+    const calorieGoal = (goals.p * 4) + (goals.c * 4) + (goals.f * 9);
 
     const getWeekDates = (start: Date) => {
         return Array.from({ length: 7 }, (_, i) => {

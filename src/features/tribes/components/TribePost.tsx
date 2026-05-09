@@ -46,7 +46,7 @@ export default function TribePost({ post, cardColor }: TribePostProps) {
                         <Text style={[styles.cell, { flex: 2, textAlign: 'left' }]}>Meal</Text>
                         <View style={styles.headerCell}>
                             <MaterialCommunityIcons name="fire" size={12} color="#E6A8A8" />
-                            <Text style={styles.headerText}> {post.meal.calories} cals</Text>
+                            <Text style={styles.headerText}> {Math.round((post.meal.macros.p || 0) * 4 + (post.meal.macros.c || 0) * 4 + (post.meal.macros.f || 0) * 9)} cals</Text>
                         </View>
                         <View style={styles.headerCell}>
                             <MaterialCommunityIcons name="food-drumstick" size={12} color="white" />
@@ -69,7 +69,7 @@ export default function TribePost({ post, cardColor }: TribePostProps) {
                             </View>
                             <View style={styles.cellRow}>
                                 <MaterialCommunityIcons name="fire" size={12} color="#E6A8A8" />
-                                <Text style={styles.rowText}> {ing.cals} cals</Text>
+                                <Text style={styles.rowText}> {Math.round((ing.macros?.p || 0) * 4 + (ing.macros?.c || 0) * 4 + (ing.macros?.f || 0) * 9)} cals</Text>
                             </View>
                             <View style={styles.cellRow}>
                                 <MaterialCommunityIcons name="food-drumstick" size={12} color="white" />

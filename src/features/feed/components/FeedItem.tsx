@@ -333,13 +333,13 @@ export default function FeedItem({
 
                 if (!selectedLine || selectedLine === 'old' || selectedLine === 'new') {
                     // Tribe Copy Old/New: percentage-ratio transform
-                    // Calculate each macro's caloric share of User B's total, apply to User A's budget.
+                    // Always compute bCals from grams — never trust the stored calories field.
                     const t = selectedLine === 'old'
                         ? post.macroUpdate.oldTargets
                         : post.macroUpdate.newTargets;
 
-                    const bCals = t.calories > 0 ? t.calories : (t.p * 4) + (t.c * 4) + (t.f * 9);
-                    const myCals = freshTargets.calories;
+                    const bCals = (t.p * 4) + (t.c * 4) + (t.f * 9);
+                    const myFreshCals = (freshTargets.p * 4) + (freshTargets.c * 4) + (freshTargets.f * 9);
 
                     let myP: number, myC: number, myF: number;
 
@@ -348,9 +348,9 @@ export default function FeedItem({
                         const cPct = (t.c * 4) / bCals;
                         const fPct = (t.f * 9) / bCals;
 
-                        myP = Math.round((pPct * myCals) / 4);
-                        myC = Math.round((cPct * myCals) / 4);
-                        myF = Math.round((fPct * myCals) / 9);
+                        myP = Math.round((pPct * myFreshCals) / 4);
+                        myC = Math.round((cPct * myFreshCals) / 4);
+                        myF = Math.round((fPct * myFreshCals) / 9);
                     } else {
                         myP = freshTargets.p;
                         myC = freshTargets.c;
@@ -404,17 +404,28 @@ export default function FeedItem({
                 // Tribe Copy Snapshot Targets: percentage-ratio transform using User B's target cals
                 const freshTargets = await getFreshMyTargets();
                 const t = post.snapshot.targets;
-                const bCals = t.calories > 0 ? t.calories : (t.p * 4) + (t.c * 4) + (t.f * 9);
-                const myCals = freshTargets.calories;
+                // Always compute from grams — never trust the stored calories field
+                const bCals = (t.p * 4) + (t.c * 4) + (t.f * 9);
+                const myFreshCals = (freshTargets.p * 4) + (freshTargets.c * 4) + (freshTargets.f * 9);
+
+                console.log('[Snapshot Copy] Avery targets:', JSON.stringify(t));
+                console.log('[Snapshot Copy] Avery computed bCals:', bCals);
+                console.log('[Snapshot Copy] My fresh targets:', JSON.stringify(freshTargets));
+                console.log('[Snapshot Copy] My computed fresh cals:', myFreshCals);
 
                 let myP: number, myC: number, myF: number;
                 if (bCals > 0) {
                     const pPct = (t.p * 4) / bCals;
                     const cPct = (t.c * 4) / bCals;
                     const fPct = (t.f * 9) / bCals;
-                    myP = Math.round((pPct * myCals) / 4);
-                    myC = Math.round((cPct * myCals) / 4);
-                    myF = Math.round((fPct * myCals) / 9);
+                    
+                    console.log('[Snapshot Copy] Pct P/C/F:', pPct, cPct, fPct);
+
+                    myP = Math.round((pPct * myFreshCals) / 4);
+                    myC = Math.round((cPct * myFreshCals) / 4);
+                    myF = Math.round((fPct * myFreshCals) / 9);
+                    
+                    console.log('[Snapshot Copy] Calculated myP/myC/myF:', myP, myC, myF);
                 } else {
                     myP = freshTargets.p;
                     myC = freshTargets.c;
@@ -524,9 +535,18 @@ export default function FeedItem({
         return renderMacroColumn(icon, Math.abs(val), unit, width, colorOverride, scale);
     };
 
+    /** Always derive calories from grams — never trust the stored calories field which may be stale */
+    const computeCals = (p?: number, c?: number, f?: number) => Math.round((p || 0) * 4 + (c || 0) * 4 + (f || 0) * 9);
+
     const renderSnapshot = (snapshot: Snapshot) => {
+        const targetCals = computeCals(snapshot.targets.p, snapshot.targets.c, snapshot.targets.f);
+        const consumedCals = computeCals(snapshot.consumed.p, snapshot.consumed.c, snapshot.consumed.f);
+        
+        const targetDisplay = { ...snapshot.targets, calories: targetCals };
+        const consumedDisplay = { ...snapshot.consumed, calories: consumedCals };
+
         const remains = {
-            calories: snapshot.targets.calories - snapshot.consumed.calories,
+            calories: targetCals - consumedCals,
             p: snapshot.targets.p - snapshot.consumed.p,
             c: snapshot.targets.c - snapshot.consumed.c,
             f: snapshot.targets.f - snapshot.consumed.f,
@@ -607,9 +627,9 @@ export default function FeedItem({
 
         return (
             <View style={styles.macroUpdateContent}>
-                {renderRow('Targets', snapshot.targets, { calories: WHITE, p: WHITE, c: WHITE, f: WHITE }, 'targets')}
+                {renderRow('Targets', targetDisplay, { calories: WHITE, p: WHITE, c: WHITE, f: WHITE }, 'targets')}
                 <View style={[styles.divider, { opacity: 0.1, marginVertical: 4 }]} />
-                {renderRow('Actual', snapshot.consumed, { calories: WHITE, p: WHITE, c: WHITE, f: WHITE })}
+                {renderRow('Actual', consumedDisplay, { calories: WHITE, p: WHITE, c: WHITE, f: WHITE })}
                 <View style={[styles.divider, { opacity: 0.1, marginVertical: 4 }]} />
                 {renderRow('Balance', remains, {
                     calories: getColor(remains.calories),
@@ -620,16 +640,19 @@ export default function FeedItem({
             </View>
         );
     };
-
-
-
     const renderMacroUpdate = (mu: MacroUpdate) => {
+        // Recompute all calories from grams so display is always accurate
+        const oldCals = computeCals(mu.oldTargets.p, mu.oldTargets.c, mu.oldTargets.f);
+        const newCals = computeCals(mu.newTargets.p, mu.newTargets.c, mu.newTargets.f);
         const delta = {
-            calories: mu.newTargets.calories - mu.oldTargets.calories,
+            calories: newCals - oldCals,
             p: mu.newTargets.p - mu.oldTargets.p,
             c: mu.newTargets.c - mu.oldTargets.c,
             f: mu.newTargets.f - mu.oldTargets.f,
         };
+        // Build display-safe copies with computed calories
+        const oldDisplay = { ...mu.oldTargets, calories: oldCals };
+        const newDisplay = { ...mu.newTargets, calories: newCals };
 
         const getDeltaColor = (val: number) => {
             if (val > 0) return TRIBE_GREEN;
@@ -699,11 +722,11 @@ export default function FeedItem({
         if (!isExpanded) {
             return (
                 <View style={styles.macroUpdateContent}>
-                    {renderRow('New targets', mu.newTargets, {
-                        calories: getNewColor(mu.newTargets.calories, mu.oldTargets.calories),
-                        p: getNewColor(mu.newTargets.p, mu.oldTargets.p),
-                        c: getNewColor(mu.newTargets.c, mu.oldTargets.c),
-                        f: getNewColor(mu.newTargets.f, mu.oldTargets.f),
+                    {renderRow('New targets', newDisplay, {
+                        calories: getNewColor(newDisplay.calories, oldDisplay.calories),
+                        p: getNewColor(newDisplay.p, oldDisplay.p),
+                        c: getNewColor(newDisplay.c, oldDisplay.c),
+                        f: getNewColor(newDisplay.f, oldDisplay.f),
                     }, 'new')}
                 </View>
             );
@@ -711,7 +734,7 @@ export default function FeedItem({
 
         return (
             <View style={styles.macroUpdateContent}>
-                {renderRow(mu.oldDate || '12/25/2025', mu.oldTargets, { calories: WHITE, p: WHITE, c: WHITE, f: WHITE }, 'old')}
+                {renderRow(mu.oldDate || '12/25/2025', oldDisplay, { calories: WHITE, p: WHITE, c: WHITE, f: WHITE }, 'old')}
                 <View style={[styles.divider, { opacity: 0.1, marginVertical: 4 }]} />
                 {renderRow('Updates', delta, {
                     calories: getDeltaColor(delta.calories),
@@ -720,11 +743,11 @@ export default function FeedItem({
                     f: getDeltaColor(delta.f),
                 }, 'diff', true)}
                 <View style={[styles.divider, { opacity: 0.1, marginVertical: 4 }]} />
-                {renderRow('New targets', mu.newTargets, {
-                    calories: getNewColor(mu.newTargets.calories, mu.oldTargets.calories),
-                    p: getNewColor(mu.newTargets.p, mu.oldTargets.p),
-                    c: getNewColor(mu.newTargets.c, mu.oldTargets.c),
-                    f: getNewColor(mu.newTargets.f, mu.oldTargets.f),
+                {renderRow('New targets', newDisplay, {
+                    calories: getNewColor(newDisplay.calories, oldDisplay.calories),
+                    p: getNewColor(newDisplay.p, oldDisplay.p),
+                    c: getNewColor(newDisplay.c, oldDisplay.c),
+                    f: getNewColor(newDisplay.f, oldDisplay.f),
                 }, 'new')}
             </View>
         );
@@ -737,10 +760,10 @@ export default function FeedItem({
                     <View style={styles.mealMainStats}>
                         <Text style={styles.mealType}>{meal.type}</Text>
                         <View style={styles.mealMacrosFixed}>
-                            {renderMacroColumn('fire', meal.calories, ' cals', 85, undefined, 'normal')}
-                            {renderMacroColumn('food-drumstick', meal.macros.p, 'g', 55, undefined, 'normal')}
-                            {renderMacroColumn('barley', meal.macros.c, 'g', 55, undefined, 'normal')}
-                            {renderMacroColumn('water', meal.macros.f, 'g', 55, undefined, 'normal')}
+                            {renderMacroColumn('fire', computeCals(meal.macros?.p, meal.macros?.c, meal.macros?.f), ' cals', 85, undefined, 'normal')}
+                            {renderMacroColumn('food-drumstick', meal.macros?.p || 0, 'g', 55, undefined, 'normal')}
+                            {renderMacroColumn('barley', meal.macros?.c || 0, 'g', 55, undefined, 'normal')}
+                            {renderMacroColumn('water', meal.macros?.f || 0, 'g', 55, undefined, 'normal')}
                         </View>
                     </View>
                 )}
@@ -774,10 +797,10 @@ export default function FeedItem({
                                         </View>
                                     </View>
                                     <View style={styles.ingMacrosFixed}>
-                                        {renderMacroColumn('fire', ing.cals, ' cals', isSelectMode ? 75 : 85, 'white', 'small')}
-                                        {renderMacroColumn('food-drumstick', ing.macros.p, 'g', isSelectMode ? 42 : 55, 'white', 'small')}
-                                        {renderMacroColumn('barley', ing.macros.c, 'g', isSelectMode ? 42 : 55, 'white', 'small')}
-                                        {renderMacroColumn('water', ing.macros.f, 'g', isSelectMode ? 42 : 55, 'white', 'small')}
+                                        {renderMacroColumn('fire', computeCals(ing.macros?.p, ing.macros?.c, ing.macros?.f), ' cals', isSelectMode ? 75 : 85, 'white', 'small')}
+                                        {renderMacroColumn('food-drumstick', ing.macros?.p || 0, 'g', isSelectMode ? 42 : 55, 'white', 'small')}
+                                        {renderMacroColumn('barley', ing.macros?.c || 0, 'g', isSelectMode ? 42 : 55, 'white', 'small')}
+                                        {renderMacroColumn('water', ing.macros?.f || 0, 'g', isSelectMode ? 42 : 55, 'white', 'small')}
                                     </View>
                                 </TouchableOpacity>
                             );

@@ -78,11 +78,16 @@ export function useDailyMacros(date: Date = new Date()): DailyMacroState {
         };
     }, [session?.user?.id, date, fetchMacros]);
 
-    const targets = profile?.macro_targets || {
+    const rawTargets = profile?.macro_targets || {
         calories: 2000,
         p: 150,
         c: 200,
         f: 60
+    };
+
+    const targets = {
+        ...rawTargets,
+        calories: (rawTargets.p * 4) + (rawTargets.c * 4) + (rawTargets.f * 9)
     };
 
     return {

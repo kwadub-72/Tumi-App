@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, router } from 'expo-router';
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import FeedItem from '@/src/features/feed/components/FeedItem';
 import { FeedPost } from '@/src/shared/models/types';
 import { Colors } from '@/src/shared/theme/Colors';
@@ -140,9 +140,9 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
                     brand: post.meal!.title,
                     servingSizeG: 100,
                     servingSizeText: ing.amount || '100g',
-                    caloriesPer100g: ing.cals,
-                    macrosPer100g: { p: ing.macros.p, c: ing.macros.c, f: ing.macros.f },
-                    netCarbsPer100g: ing.macros.c, // basic fallback
+                    caloriesPer100g: Math.round((ing.macros?.p || 0) * 4 + (ing.macros?.c || 0) * 4 + (ing.macros?.f || 0) * 9),
+                    macrosPer100g: { p: ing.macros?.p || 0, c: ing.macros?.c || 0, f: ing.macros?.f || 0 },
+                    netCarbsPer100g: ing.macros?.c || 0, // basic fallback
                     servingUnits: [],
                 };
                 addBookmark(food);
@@ -227,7 +227,7 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
             for (const item of itemsToSave) {
                 await SupabasePostService.addToMealLog(session.user.id, {
                     item_name: item.name,
-                    calories: item.cals || 0,
+                    calories: item.macros ? Math.round(item.macros.p * 4 + item.macros.c * 4 + item.macros.f * 9) : (item.cals || 0),
                     protein: item.macros?.p || 0,
                     carbs: item.macros?.c || 0,
                     fats: item.macros?.f || 0,
@@ -269,7 +269,8 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
                 for (const key of selectedItems) {
                     let type: 'old' | 'new' | 'targets' | null = null;
                     if (key === 'old' && activePost.macroUpdate) type = 'old';
-                    else if ((key === 'new' || key === 'diff') && activePost.macroUpdate) type = 'new';
+                    else if (key === 'new' && activePost.macroUpdate) type = 'new';
+                    else if (key === 'diff' && activePost.macroUpdate) type = 'delta';
                     else if ((key === 'snapshot' || key === 'targets') && activePost.snapshot) type = 'targets';
                     
                     if (type) {
@@ -277,7 +278,7 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
                     }
                 }
             } else {
-                const type = activePost.macroUpdate ? 'new' : 'targets';
+                const type = activePost.macroUpdate ? 'delta' : 'targets';
                 await SupabasePostService.addToMacroBook(session.user.id, activePost.id, type);
             }
 
@@ -351,19 +352,31 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
                     setOptionsModalVisible(false);
                 }}
                 onAddToMealBook={activePost?.meal ? handleAddToMealLog : undefined}
-                onAddToMacroBook={handleAddToMacroBook}
+                onAddToMacroBook={activePost?.macroUpdate || activePost?.snapshot ? handleAddToMacroBook : undefined}
             />
 
             {showDeleteToast && (
                 <View style={styles.toastContainer}>
-                    <View style={[styles.toast, toastType === 'error' && { backgroundColor: '#825858' }]}>
+                    <TouchableOpacity 
+                        style={[styles.toast, toastType === 'error' && { backgroundColor: '#825858' }]}
+                        onPress={() => {
+                            if (toastMessage.includes('Meal book')) {
+                                router.push({ pathname: '/(tabs)/add', params: { tab: 'Meal book' } });
+                            } else if (toastMessage.includes('Lift book')) {
+                                router.push({ pathname: '/add-exercise', params: { tab: 'Lift book' } });
+                            } else if (toastMessage.includes('Macro book')) {
+                                router.push({ pathname: '/macro-update', params: { mode: 'macro-book' } });
+                            }
+                            setShowDeleteToast(false);
+                        }}
+                    >
                         <Ionicons
                             name={toastType === 'success' ? 'checkmark-circle' : 'close-circle'}
                             size={20}
                             color="#F5F5DC"
                         />
                         <Text style={styles.toastText}>{toastMessage}</Text>
-                    </View>
+                    </TouchableOpacity>
                 </View>
             )}
 

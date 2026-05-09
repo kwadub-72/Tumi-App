@@ -63,8 +63,8 @@ function mapFood(raw: any): USDAFoodItem {
 
     const netCarbsPerServing = Math.max(0, totalCarbsPerServing - fiberPerServing);
     
-    // Custom calorie calculation as requested: (net carbs * 4) + (protein * 4) + (fats * 9)
-    const calPerServing = (netCarbsPerServing * 4) + (pPerServing * 4) + (fPerServing * 9);
+    // Custom calorie calculation as requested: (total carbs * 4) + (protein * 4) + (fats * 9)
+    const calPerServing = (totalCarbsPerServing * 4) + (pPerServing * 4) + (fPerServing * 9);
 
     // Casing and shorter description logic
     let rawName = raw.description || 'Unknown';

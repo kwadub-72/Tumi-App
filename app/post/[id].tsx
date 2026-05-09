@@ -381,7 +381,7 @@ export default function PostDetailScreen() {
             for (const item of itemsToAdd) {
                 macrobookStore.addEntry({
                     label: item.label,
-                    calories: Math.abs(item.targets.calories),
+                    calories: Math.abs(item.targets.p * 4 + item.targets.c * 4 + item.targets.f * 9),
                     p: Math.abs(item.targets.p),
                     c: Math.abs(item.targets.c),
                     f: Math.abs(item.targets.f)
@@ -446,8 +446,20 @@ export default function PostDetailScreen() {
                 />
 
                 {showDeleteToast && (
-                    <View style={styles.toastContainer} pointerEvents="none">
-                        <View style={[styles.toast, toastType === 'error' && styles.toastError]}>
+                    <View style={styles.toastContainer}>
+                        <TouchableOpacity 
+                            style={[styles.toast, toastType === 'error' && styles.toastError]}
+                            onPress={() => {
+                                if (toastMessage.includes('Meal book')) {
+                                    router.push({ pathname: '/(tabs)/add', params: { tab: 'Meal book' } });
+                                } else if (toastMessage.includes('Lift book')) {
+                                    router.push({ pathname: '/add-exercise', params: { tab: 'Lift book' } });
+                                } else if (toastMessage.includes('Macro book')) {
+                                    router.push({ pathname: '/macro-update', params: { mode: 'macro-book' } });
+                                }
+                                setShowDeleteToast(false);
+                            }}
+                        >
                             <Ionicons 
                                 name={toastType === 'error' ? "close-circle" : "checkmark-circle"} 
                                 size={20} 
@@ -456,7 +468,7 @@ export default function PostDetailScreen() {
                             <Text style={[styles.toastText, toastType === 'error' && { color: 'white' }]}>
                                 {toastMessage}
                             </Text>
-                        </View>
+                        </TouchableOpacity>
                     </View>
                 )}
 

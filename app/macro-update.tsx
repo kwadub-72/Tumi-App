@@ -1,6 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
-import React, { useState, useEffect, useMemo } from 'react';
+import { useRouter, useLocalSearchParams, Stack, useFocusEffect } from 'expo-router';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
     View,
     Text,
@@ -18,6 +18,7 @@ import {
     ActivityIndicator,
     Alert,
     FlatList,
+    RefreshControl,
 } from 'react-native';
 import Animated, {
     useAnimatedStyle,
@@ -34,6 +35,8 @@ import { NutritionService } from '@/src/shared/services/NutritionService';
 import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
 import { Video, ResizeMode } from 'expo-av';
 import { useWorkoutLogStore } from '@/src/store/useWorkoutLogStore';
+import { BookCard } from '@/src/features/feed/components/BookCard';
+import { CondensedMacroCard } from '@/src/features/feed/components/CondensedMacroCard';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const SHEET_MIN_Y = SCREEN_HEIGHT - 145;
@@ -166,7 +169,7 @@ export default function MacroUpdateScreen() {
     const oldP = targets.p;
     const oldC = targets.c;
     const oldF = targets.f;
-    const oldCal = targets.calories;
+    const oldCal = (oldP * 4) + (oldC * 4) + (oldF * 9);
 
     // Pre-populate directly from URL params when arriving from a copy action.
     // Using initial state values instead of a useEffect avoids a render cycle
@@ -185,18 +188,28 @@ export default function MacroUpdateScreen() {
         setLoadingBook(false);
     };
 
+    const [refreshingBook, setRefreshingBook] = useState(false);
+
+    const onRefreshBook = async () => {
+        setRefreshingBook(true);
+        await loadMacroBook();
+        setRefreshingBook(false);
+    };
+
     const loadLatestHistory = async () => {
         if (!profile?.id) return;
         const history = await SupabasePostService.getLatestMacroHistory(profile.id);
         setLatestHistory(history);
     };
 
-    useEffect(() => {
-        if (mode === 'macro-book') {
-            loadMacroBook();
-        }
-        loadLatestHistory();
-    }, [mode, profile?.id]);
+    useFocusEffect(
+        useCallback(() => {
+            if (mode === 'macro-book') {
+                loadMacroBook();
+            }
+            loadLatestHistory();
+        }, [mode, profile?.id])
+    );
 
     // Snapshot Info (Calculated from today's meals)
     const [dailyConsumed, setDailyConsumed] = useState({ calories: 0, p: 0, c: 0, f: 0 });
@@ -531,6 +544,13 @@ export default function MacroUpdateScreen() {
                                             style={styles.scrollContent}
                                             showsVerticalScrollIndicator={false}
                                             nestedScrollEnabled={true}
+                                            refreshControl={
+                                                <RefreshControl
+                                                    refreshing={refreshingBook}
+                                                    onRefresh={onRefreshBook}
+                                                    tintColor={Colors.theme.sageDark}
+                                                />
+                                            }
                                         >
                                             <View style={styles.globalTitleContainer}>
                                                 <Text style={styles.titleSmall}>Macro book</Text>
@@ -544,34 +564,73 @@ export default function MacroUpdateScreen() {
                                                 </View>
                                             ) : (
                                                 macroBookEntries.map((entry) => (
-                                                    <View key={entry.id} style={styles.macroBookEntryContainer}>
-                                                        <TouchableOpacity 
-                                                            style={styles.macroBookEntry}
-                                                            onPress={() => {
+                                                    <CondensedMacroCard
+                                                        key={entry.id}
+                                                        isDeltaRow={entry.is_delta_row}
+                                                        calories={entry.calories}
+                                                        protein={entry.protein}
+                                                        carbs={entry.carbs}
+                                                        fats={entry.fats}
+                                                        savedAt={entry.created_at}
+                                                        dateLabel={entry.date_label}
+                                                        copyCount={entry.copy_count || 0}
+                                                        authorName={entry.original_author?.name || profile?.name || 'Me'}
+                                                        authorHandle={entry.original_author?.handle || profile?.handle || 'me'}
+                                                        authorAvatar={entry.original_author?.avatar_url || profile?.avatar_url || ''}
+                                                        authorStatus={entry.original_author?.status || profile?.status}
+                                                        authorActivityIcon={(entry.original_author as any)?.activityIcon || (profile as any)?.activityIcon}
+                                                        authorActivity={(entry.original_author as any)?.activity || (profile as any)?.activity}
+                                                        onPressProfile={() => {
+                                                            if (entry.original_author?.handle) {
+                                                                router.push(`/user/${entry.original_author.handle}`);
+                                                            } else if (profile?.handle) {
+                                                                router.push(`/user/${profile.handle}`);
+                                                            }
+                                                        }}
+                                                        onPressTribeCopy={() => {
+                                                            let newP = entry.protein;
+                                                            let newC = entry.carbs;
+                                                            let newF = entry.fats;
+                                                            
+                                                            if (!entry.is_delta_row) {
+                                                                const calsFromP = Math.abs(entry.protein * 4);
+                                                                const calsFromC = Math.abs(entry.carbs * 4);
+                                                                const calsFromF = Math.abs(entry.fats * 9);
+                                                                const totalCals = calsFromP + calsFromC + calsFromF;
+                                                                
+                                                                if (totalCals > 0) {
+                                                                    const pPct = calsFromP / totalCals;
+                                                                    const cPct = calsFromC / totalCals;
+                                                                    const fPct = calsFromF / totalCals;
+                                                                    
+                                                                    const userTargetCals = oldCal;
+                                                                    newP = Math.round((userTargetCals * pPct) / 4);
+                                                                    newC = Math.round((userTargetCals * cPct) / 4);
+                                                                    newF = Math.round((userTargetCals * fPct) / 9);
+                                                                }
+                                                                setPText(newP.toString());
+                                                                setCText(newC.toString());
+                                                                setFText(newF.toString());
+                                                            } else {
+                                                                setPText((oldP + newP).toString());
+                                                                setCText((oldC + newC).toString());
+                                                                setFText((oldF + newF).toString());
+                                                            }
+                                                            handleModeChange('macro-update');
+                                                        }}
+                                                        onPressStandardCopy={() => {
+                                                            if (entry.is_delta_row) {
+                                                                setPText((oldP + entry.protein).toString());
+                                                                setCText((oldC + entry.carbs).toString());
+                                                                setFText((oldF + entry.fats).toString());
+                                                            } else {
                                                                 setPText(entry.protein.toString());
                                                                 setCText(entry.carbs.toString());
                                                                 setFText(entry.fats.toString());
-                                                                handleModeChange('macro-update');
-                                                            }}
-                                                        >
-                                                            <Text style={styles.entryLabel}>{entry.label}</Text>
-                                                            <View style={styles.entryValues}>
-                                                                <Text style={styles.entryValue}>{entry.calories} cal</Text>
-                                                                <Text style={styles.entryValue}>{entry.protein}P</Text>
-                                                                <Text style={styles.entryValue}>{entry.carbs}C</Text>
-                                                                <Text style={styles.entryValue}>{entry.fats}F</Text>
-                                                            </View>
-                                                        </TouchableOpacity>
-                                                        <TouchableOpacity 
-                                                            onPress={async () => {
-                                                                await SupabasePostService.deleteFromMacroBook(entry.id);
-                                                                loadMacroBook();
-                                                            }}
-                                                            style={styles.deleteEntry}
-                                                        >
-                                                            <Ionicons name="trash-outline" size={20} color="#825858" />
-                                                        </TouchableOpacity>
-                                                    </View>
+                                                            }
+                                                            handleModeChange('macro-update');
+                                                        }}
+                                                    />
                                                 ))
                                             )}
                                         </ScrollView>

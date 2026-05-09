@@ -100,7 +100,7 @@ const SwipeableIngredient = ({
                         <View style={styles.ingredientMacros}>
                             <View style={styles.miniMacro}>
                                 <MaterialCommunityIcons name="fire" size={14} color={Colors.primary} />
-                                <Text style={styles.miniMacroText}>{item.cals}</Text>
+                                <Text style={styles.miniMacroText}>{Math.round((item.macros?.p || 0) * 4 + (item.macros?.c || 0) * 4 + (item.macros?.f || 0) * 9)}</Text>
                             </View>
                             <View style={styles.miniMacro}>
                                 <MaterialCommunityIcons name="food-drumstick" size={12} color="white" />

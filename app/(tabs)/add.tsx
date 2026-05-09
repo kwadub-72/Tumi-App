@@ -1,5 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useProfileNavigation } from '@/src/shared/hooks/useProfileNavigation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -24,13 +25,15 @@ import { useMealLogStore } from '../../src/store/useMealLogStore';
 import { useAuthStore } from '../../store/AuthStore';
 import { SupabasePostService } from '../../src/shared/services/SupabasePostService';
 import { PostStore } from '../../store/PostStore';
+import { BookCard } from '../../src/features/feed/components/BookCard';
+import { CondensedMealCard } from '../../src/features/feed/components/CondensedMealCard';
 
 import { supabase } from '../../src/shared/services/supabase';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-type Tab = 'All' | 'Recents' | 'Following' | 'Meal book';
-const TABS: Tab[] = ['All', 'Recents', 'Following', 'Meal book'];
+type Tab = 'All' | 'Recents' | 'Meal book';
+const TABS: Tab[] = ['All', 'Recents', 'Meal book'];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -105,8 +108,10 @@ function USDAResultCard({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function AddMealScreen() {
+    const { navigateToProfile } = useProfileNavigation();
+    const params = useLocalSearchParams();
     const [searchQuery, setSearchQuery] = useState('');
-    const [activeTab, setActiveTab] = useState<Tab>('All');
+    const [activeTab, setActiveTab] = useState<Tab>((params.tab as Tab) || 'All');
     const [isLocked, setIsLocked] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
     const [suggestions, setSuggestions] = useState<USDAFoodItem[]>([]);
@@ -135,25 +140,10 @@ export default function AddMealScreen() {
     useFocusEffect(
         useCallback(() => {
             if (!session?.user?.id) return;
-            SupabasePostService.getFeed({
-                userId: session.user.id,
-                feedType: 'following',
-                date: new Date(),
-                limit: 50
-            }).then((posts) => {
-                setFollowingPosts(posts);
-            });
             
             const fetchMealLog = async () => {
-                const { data, error } = await supabase
-                    .from('meal_log')
-                    .select('*')
-                    .eq('user_id', session.user.id)
-                    .order('created_at', { ascending: false });
-                
-                if (!error && data) {
-                    setMealLogItems(data);
-                }
+                const data = await SupabasePostService.getMealBook(session.user.id);
+                setMealLogItems(data);
             };
             fetchMealLog();
         }, [session?.user?.id])
@@ -362,125 +352,64 @@ export default function AddMealScreen() {
         />
     );
 
-    /** Following tab: extract unique foods from following's meal posts */
-    const followingFoods = (() => {
-        const seen = new Set<string>();
-        const foods: Array<{ name: string; cals: number; p: number; c: number; f: number; userName: string; avatar: any }> = [];
-        followingPosts.forEach((post) => {
-            if (!post.meal) return;
-            const q = searchQuery.toLowerCase();
-            post.meal.ingredients.forEach((ing) => {
-                if (q && !ing.name.toLowerCase().includes(q)) return;
-                if (seen.has(ing.name)) return;
-                seen.add(ing.name);
-                foods.push({
-                    name: ing.name,
-                    cals: ing.cals,
-                    p: ing.macros.p,
-                    c: ing.macros.c,
-                    f: ing.macros.f,
-                    userName: post.user.name,
-                    avatar: post.user.avatar,
-                });
-            });
-        });
-        return foods;
-    })();
-
-    const renderFollowingFood = ({ item }: { item: typeof followingFoods[0] }) => (
-        <View style={styles.followingCard}>
-            <View style={styles.followingLeft}>
-                <View style={styles.followingUserRow}>
-                    <Image
-                        source={typeof item.avatar === 'string' ? { uri: item.avatar } : item.avatar}
-                        style={styles.followingAvatar}
-                    />
-                    <Text style={styles.followingUser}>{item.userName}</Text>
-                </View>
-                <Text style={styles.followingName}>{item.name}</Text>
-                <View style={styles.usdaMacros}>
-                    <View style={styles.usdaMacroItem}>
-                        <MaterialCommunityIcons name="fire" size={13} color={Colors.primary} />
-                        <Text style={styles.usdaMacroText}>{item.cals}</Text>
-                    </View>
-                    <View style={styles.usdaMacroItem}>
-                        <MaterialCommunityIcons name="food-drumstick" size={12} color="white" />
-                        <Text style={styles.usdaMacroText}>{item.p}g</Text>
-                    </View>
-                    <View style={styles.usdaMacroItem}>
-                        <MaterialCommunityIcons name="barley" size={12} color="white" />
-                        <Text style={styles.usdaMacroText}>{item.c}g</Text>
-                    </View>
-                    <View style={styles.usdaMacroItem}>
-                        <Ionicons name="water" size={12} color="white" />
-                        <Text style={styles.usdaMacroText}>{item.f}g</Text>
-                    </View>
-                </View>
-            </View>
-            <TouchableOpacity
-                style={styles.usdaAddBtn}
-                onPress={() => {
-                    const ing: Ingredient = {
-                        id: `following-${Date.now()}-${Math.random()}`,
-                        name: item.name,
-                        amount: '1 serving',
-                        cals: item.cals,
-                        macros: { p: item.p, c: item.c, f: item.f },
-                    };
-                    addItem(ing);
-                }}
-            >
-                <Ionicons name="add" size={22} color={Colors.primary} />
-            </TouchableOpacity>
-        </View>
-    );
-
     const renderMealLogCard = ({ item }: { item: any }) => (
-        <View style={styles.followingCard}>
-            <View style={styles.followingLeft}>
-                <View style={styles.followingUserRow}>
-                    <Image
-                        source={typeof userInfo.avatar === 'string' ? { uri: userInfo.avatar } : userInfo.avatar}
-                        style={styles.followingAvatar}
-                    />
-                    <Text style={styles.followingUser}>{userInfo.name}</Text>
-                </View>
-                <Text style={styles.followingName}>{item.item_name}</Text>
-                <View style={styles.usdaMacros}>
-                    <View style={styles.usdaMacroItem}>
-                        <MaterialCommunityIcons name="fire" size={13} color={Colors.primary} />
-                        <Text style={styles.usdaMacroText}>{item.calories}</Text>
-                    </View>
-                    <View style={styles.usdaMacroItem}>
-                        <MaterialCommunityIcons name="food-drumstick" size={12} color="white" />
-                        <Text style={styles.usdaMacroText}>{item.protein}g</Text>
-                    </View>
-                    <View style={styles.usdaMacroItem}>
-                        <MaterialCommunityIcons name="barley" size={12} color="white" />
-                        <Text style={styles.usdaMacroText}>{item.carbs}g</Text>
-                    </View>
-                    <View style={styles.usdaMacroItem}>
-                        <Ionicons name="water" size={12} color="white" />
-                        <Text style={styles.usdaMacroText}>{item.fats}g</Text>
-                    </View>
-                </View>
-            </View>
-            <TouchableOpacity
-                style={styles.usdaAddBtn}
-                onPress={() => {
+        <CondensedMealCard
+            title={item.item_name}
+            portionSize={item.portion_size || item.notes || '1 serving'}
+            calories={item.calories}
+            protein={item.protein}
+            carbs={item.carbs}
+            fats={item.fats}
+            savedAt={item.created_at}
+            copyCount={item.copy_count || 0}
+            authorName={item.original_author?.name || profile?.name || 'Me'}
+            authorHandle={item.original_author?.handle || profile?.handle || 'me'}
+            authorAvatar={item.original_author?.avatar_url || profile?.avatar_url || ''}
+            authorStatus={item.original_author?.status || profile?.status}
+            authorActivityIcon={item.original_author?.activity_icon || profile?.activity_icon}
+            authorActivity={item.original_author?.activity || profile?.activity}
+            onPressProfile={() => navigateToProfile({ 
+                id: item.original_author?.id || profile?.id, 
+                handle: item.original_author?.handle || profile?.handle || 'me' 
+            })}
+            onPressStandardCopy={() => {
+                const ing: Ingredient = {
+                    id: `meal_log-${item.id}-${Math.random()}`,
+                    name: item.item_name,
+                    amount: item.portion_size,
+                    cals: item.calories,
+                    macros: { p: item.protein, c: item.carbs, f: item.fats },
+                };
+                addItem(ing);
+            }}
+            onPressTribeCopy={async () => {
+                if (!session?.user?.id || !item.original_post_id) return;
+                
+                // If the user is copying their own post, it should be a 1:1 copy
+                if (item.original_author?.id === session.user.id) {
                     const ing: Ingredient = {
-                        id: `meal_log-${item.id}-${Math.random()}`,
+                        id: `tribe_copy-${item.id}-${Math.random()}`,
                         name: item.item_name,
                         amount: item.portion_size,
-                        cals: item.calories,
+                        cals: Math.round(item.protein * 4 + item.carbs * 4 + item.fats * 9),
                         macros: { p: item.protein, c: item.carbs, f: item.fats },
                     };
                     addItem(ing);
-                }}
-            >
-                <Ionicons name="add" size={22} color={Colors.primary} />
-            </TouchableOpacity>
-        </View>
+                    return;
+                }
+
+                const scaledIngredients = await SupabasePostService.tribeCopyFood(item.original_post_id, session.user.id);
+                if (scaledIngredients) {
+                    scaledIngredients.forEach((ing: Ingredient) => {
+                        addItem({
+                            ...ing,
+                            id: `tribe_copy-${ing.id}-${Math.random()}`,
+                            cals: Math.round(ing.macros.p * 4 + ing.macros.c * 4 + ing.macros.f * 9) // Ensure correct calories
+                        });
+                    });
+                }
+            }}
+        />
     );
 
     const renderRecentCard = ({ item }: { item: typeof recents[0] }) => (
@@ -569,39 +498,7 @@ export default function AddMealScreen() {
         );
     };
 
-    const renderFollowingTab = () => {
-        if (followingPosts.length === 0) {
-            return (
-                <View style={styles.centered}>
-                    <Ionicons name="people-outline" size={56} color={Colors.primary + '44'} />
-                    <Text style={styles.emptyText}>Nobody followed yet</Text>
-                    <Text style={styles.emptySubText}>
-                        Follow people to see their recent foods here
-                    </Text>
-                </View>
-            );
-        }
-        if (followingFoods.length === 0) {
-            return (
-                <View style={styles.centered}>
-                    <Ionicons name="restaurant-outline" size={56} color={Colors.primary + '44'} />
-                    <Text style={styles.emptyText}>No meals logged yet</Text>
-                    <Text style={styles.emptySubText}>
-                        Your followed users haven&apos;t logged any meals
-                    </Text>
-                </View>
-            );
-        }
-        return (
-            <FlatList
-                data={followingFoods}
-                keyExtractor={(i, idx) => `${i.name}-${idx}`}
-                renderItem={renderFollowingFood}
-                contentContainerStyle={styles.listContent}
-                showsVerticalScrollIndicator={false}
-            />
-        );
-    };
+
 
     const renderMealLogTab = () => {
         if (filteredMealLog.length === 0) {
@@ -630,7 +527,6 @@ export default function AddMealScreen() {
         switch (activeTab) {
             case 'All': return renderAllTab();
             case 'Recents': return renderRecentsTab();
-            case 'Following': return renderFollowingTab();
             case 'Meal book': return renderMealLogTab();
         }
     };
@@ -652,7 +548,7 @@ export default function AddMealScreen() {
                     <Ionicons name="search" size={20} color={Colors.primary} style={styles.searchIcon} />
                     <TextInput
                         style={styles.searchInput}
-                        placeholder={activeTab === 'Following' ? 'Search following foods…' : 'Log it…'}
+                        placeholder="Log it…"
                         placeholderTextColor="#666"
                         value={searchQuery}
                         onChangeText={(t) => {
