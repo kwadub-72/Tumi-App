@@ -2,6 +2,7 @@ import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View, TouchableOpacity, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { Colors } from '@/src/shared/theme/Colors';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -14,6 +15,7 @@ interface PostOptionsModalProps {
     onAddToMealBook?: () => void;
     onAddToLiftBook?: () => void;
     onAddToMacroBook?: () => void;
+    onShare?: () => void;
     isOwner: boolean;
 }
 
@@ -26,6 +28,7 @@ export default function PostOptionsModal({
     onAddToMealBook,
     onAddToLiftBook,
     onAddToMacroBook,
+    onShare,
     isOwner
 }: PostOptionsModalProps) {
     const handleDelete = () => {
@@ -54,6 +57,21 @@ export default function PostOptionsModal({
                     </View>
                     
                     <View style={styles.optionsContainer}>
+                        {onShare && (
+                            <>
+                                <TouchableOpacity 
+                                    style={styles.option} 
+                                    onPress={onShare}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={styles.iconContainer}>
+                                        <Ionicons name="share-social" size={28} color={Colors.theme.harvestGold} />
+                                    </View>
+                                    <Text style={[styles.optionText, { color: Colors.theme.harvestGold }]}>Share Tribe Mark</Text>
+                                </TouchableOpacity>
+                                <View style={styles.itemDivider} />
+                            </>
+                        )}
                         {onAddToMealBook && (
                             <>
                                 <TouchableOpacity 
@@ -62,9 +80,9 @@ export default function PostOptionsModal({
                                     activeOpacity={0.7}
                                 >
                                     <View style={styles.iconContainer}>
-                                        <Ionicons name="book" size={28} color="#4A5D4E" />
+                                        <Ionicons name="book" size={28} color={Colors.theme.softWhite} />
                                     </View>
-                                    <Text style={[styles.optionText, { color: '#4A5D4E' }]}>Add to meal book</Text>
+                                    <Text style={[styles.optionText, { color: Colors.theme.softWhite }]}>Add to meal book</Text>
                                 </TouchableOpacity>
                                 <View style={styles.itemDivider} />
                             </>
@@ -77,9 +95,9 @@ export default function PostOptionsModal({
                                     activeOpacity={0.7}
                                 >
                                     <View style={styles.iconContainer}>
-                                        <Ionicons name="book" size={28} color="#4A5D4E" />
+                                        <Ionicons name="book" size={28} color={Colors.theme.softWhite} />
                                     </View>
-                                    <Text style={[styles.optionText, { color: '#4A5D4E' }]}>Add to lift book</Text>
+                                    <Text style={[styles.optionText, { color: Colors.theme.softWhite }]}>Add to lift book</Text>
                                 </TouchableOpacity>
                                 <View style={styles.itemDivider} />
                             </>
@@ -92,9 +110,9 @@ export default function PostOptionsModal({
                                     activeOpacity={0.7}
                                 >
                                     <View style={styles.iconContainer}>
-                                        <Ionicons name="book" size={28} color="#4A5D4E" />
+                                        <Ionicons name="book" size={28} color={Colors.theme.softWhite} />
                                     </View>
-                                    <Text style={[styles.optionText, { color: '#4A5D4E' }]}>Add to macro book</Text>
+                                    <Text style={[styles.optionText, { color: Colors.theme.softWhite }]}>Add to macro book</Text>
                                 </TouchableOpacity>
                                 <View style={styles.itemDivider} />
                             </>
@@ -107,9 +125,9 @@ export default function PostOptionsModal({
                                     activeOpacity={0.7}
                                 >
                                     <View style={styles.selectIconContainer}>
-                                        <Ionicons name="checkmark" size={18} color="white" />
+                                        <Ionicons name="checkmark" size={18} color={Colors.theme.matteBlack} />
                                     </View>
-                                    <Text style={[styles.optionText, { color: '#4A5D4E' }]}>Select items</Text>
+                                    <Text style={[styles.optionText, { color: Colors.theme.softWhite }]}>Select items</Text>
                                 </TouchableOpacity>
                                 <View style={styles.itemDivider} />
                             </>
@@ -120,8 +138,8 @@ export default function PostOptionsModal({
                                 onPress={handleDelete}
                                 activeOpacity={0.7}
                             >
-                                <Ionicons name="trash" size={26} color="#3D2B1F" />
-                                <Text style={[styles.optionText, { color: '#3D2B1F' }]}>Delete</Text>
+                                <Ionicons name="trash" size={26} color={Colors.theme.burntSienna} />
+                                <Text style={[styles.optionText, { color: Colors.theme.burntSienna }]}>Delete</Text>
                             </TouchableOpacity>
                         ) : (
                             <TouchableOpacity 
@@ -129,8 +147,8 @@ export default function PostOptionsModal({
                                 onPress={handleReport}
                                 activeOpacity={0.7}
                             >
-                                <Ionicons name="flag" size={26} color="#3D2B1F" />
-                                <Text style={[styles.optionText, { color: '#3D2B1F' }]}>Report</Text>
+                                <Ionicons name="flag" size={26} color={Colors.theme.burntSienna} />
+                                <Text style={[styles.optionText, { color: Colors.theme.burntSienna }]}>Report</Text>
                             </TouchableOpacity>
                         )}
                     </View>
@@ -147,7 +165,7 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     modalContent: {
-        backgroundColor: '#EAE7D6',
+        backgroundColor: Colors.theme.matteBlack,
         borderTopLeftRadius: 40,
         borderTopRightRadius: 40,
         paddingBottom: 40,
@@ -160,21 +178,21 @@ const styles = StyleSheet.create({
     handle: {
         width: 60,
         height: 4,
-        backgroundColor: '#A4B69D',
+        backgroundColor: Colors.theme.dust,
         borderRadius: 2,
         opacity: 0.5,
     },
     headerTitle: {
         fontSize: 18,
         fontWeight: '600',
-        color: '#4A5D4E',
+        color: Colors.theme.dust,
         marginTop: 8,
         marginBottom: 8,
     },
     divider: {
         width: '85%',
         height: 1,
-        backgroundColor: 'rgba(164, 182, 157, 0.4)',
+        backgroundColor: 'rgba(237, 232, 213, 0.2)', // Dust with 0.2 opacity
     },
     optionsContainer: {
         paddingHorizontal: 35,
@@ -198,14 +216,14 @@ const styles = StyleSheet.create({
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: '#4A5D4E',
+        backgroundColor: Colors.theme.harvestGold,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: -3, // To compensate for the smaller icon visual footprint compared to raw Ionicons
     },
     itemDivider: {
         height: 1,
-        backgroundColor: 'rgba(164, 182, 157, 0.4)',
+        backgroundColor: 'rgba(237, 232, 213, 0.2)', // Dust with 0.2 opacity
         marginVertical: 10,
     }
 });

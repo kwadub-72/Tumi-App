@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
         height: 50,
         borderRadius: 25,
         borderWidth: 2,
-        borderColor: '#E3E3CC', // Match main background or white
+        borderColor: Colors.theme.matteBlack, // Match main background
         backgroundColor: '#E1E1E1',
     },
     centerColumn: {

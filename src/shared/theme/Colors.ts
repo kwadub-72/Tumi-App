@@ -1,18 +1,11 @@
 const Palette = {
-    sage: '#A4B69D',
-    sageLight: '#B7C4B0',
-    sageDark: '#4F6352', // Active tab green from image
-    olive: '#6E7A66',
-    blueGreen: '#A4B69D',
-    beige: '#E3E3CC', // Main background from image
-    beigeLight: '#EFF0E1', // Nav bubble
-    leafGreen: '#789370',
-    darkGreen: '#2D3A26',
-    white: '#FFFFFF',
-
-    // Computed variants
-    cardBackground: '#A4B69D',
-    mainBackground: '#E3E3CC',
+    matteBlack: '#1A1A1A',
+    harvestGold: '#DAA520',
+    burntSienna: '#8B4513',
+    oliveDrab: '#556B2F',
+    dust: '#EDE8D5',
+    softWhite: '#FFFFFF',
+    transparent: 'transparent',
 };
 
 export const Colors = {
@@ -20,29 +13,29 @@ export const Colors = {
     theme: Palette,
 
     // Semantic Roles
-    primary: Palette.darkGreen,
-    background: Palette.mainBackground,
-    card: Palette.cardBackground,
+    primary: Palette.harvestGold,
+    background: Palette.matteBlack,
+    card: Palette.matteBlack,
 
-    text: '#FFFFFF',
-    textDark: Palette.sageDark,
-    textDim: 'rgba(255,255,255,0.7)',
+    text: Palette.softWhite,
+    textDark: Palette.matteBlack,
+    textDim: Palette.dust,
 
     // UI Elements
-    tint: Palette.sageDark,
-    tabIconDefault: 'rgba(255,255,255,0.5)',
-    tabIconSelected: '#FFFFFF',
-    tabBar: '#A4B69D',
+    tint: Palette.harvestGold,
+    tabIconDefault: Palette.dust,
+    tabIconSelected: Palette.harvestGold,
+    tabBar: Palette.matteBlack,
 
-    white: '#FFFFFF',
-    black: '#000000',
+    white: Palette.softWhite,
+    black: Palette.matteBlack,
 
     // Status
-    success: '#789370',
-    error: '#EF4444',
+    success: Palette.oliveDrab,
+    error: Palette.burntSienna,
 
     // Feature specific
-    pillBackground: Palette.sageDark,
-    pillText: '#FFFFFF',
-    topNavBackground: '#EFF0E1',
+    pillBackground: Palette.harvestGold,
+    pillText: Palette.matteBlack,
+    topNavBackground: Palette.matteBlack,
 };

@@ -23,6 +23,7 @@ import VerifiedModal from '../../components/VerifiedModal';
 import HammerModal from '../../components/HammerModal';
 import CommentSheet from '@/components/CommentSheet';
 import FeedItem from '@/src/features/feed/components/FeedItem';
+import TribeShareModal from '@/src/features/feed/components/TribeShareModal';
 import { ActivityIcon } from '@/src/shared/components/ActivityIcon';
 import { supabase } from '@/src/shared/services/supabase';
 import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
@@ -35,6 +36,15 @@ import { useUserTribeStore } from '@/src/store/UserTribeStore';
 import { WeightStore } from '@/store/WeightStore';
 
 const { width, height } = Dimensions.get('window');
+
+const TEST_COLORS = {
+    background: Colors.theme.matteBlack,
+    text: Colors.theme.softWhite,
+    accent1: Colors.theme.harvestGold,
+    accent2: Colors.theme.burntSienna,
+    accent3: Colors.theme.oliveDrab,
+    surface: Colors.theme.dust,
+};
 
 type TabType = 'meals' | 'workouts' | 'likes' | 'macros';
 
@@ -53,6 +63,8 @@ export default function ProfileScreen() {
     const [isHammerModalVisible, setHammerModalVisible] = useState(false);
     const [isCommentSheetVisible, setCommentSheetVisible] = useState(false);
     const [activePost, setActivePost] = useState<FeedPost | null>(null);
+    const [isShareModalVisible, setShareModalVisible] = useState(false);
+    const [shareTargetPost, setShareTargetPost] = useState<FeedPost | null>(null);
     
     // User Tribe Store
     const { myTribes, selectedTribe, selectTribe, init: initTribes } = useUserTribeStore();
@@ -244,7 +256,7 @@ export default function ProfileScreen() {
             <View style={styles.topBar}>
                 <View style={{ flex: 1 }} />
                 <TouchableOpacity onPress={() => router.push('/settings')}>
-                    <Ionicons name="menu" size={32} color={Colors.primary} />
+                    <Ionicons name="menu" size={32} color={TEST_COLORS.text} />
                 </TouchableOpacity>
             </View>
 
@@ -267,7 +279,7 @@ export default function ProfileScreen() {
                         {(userInfo.status === 'enhanced' || userInfo.status === 'natural') && (
                             <TouchableOpacity onPress={() => setVerifiedModalVisible(true)}>
                                 {userInfo.status === 'enhanced' ? (
-                                    <MaterialCommunityIcons name="lightning-bolt" size={18} color="#FFD700" style={{ marginLeft: 4 }} />
+                                    <MaterialCommunityIcons name="lightning-bolt" size={18} color={TEST_COLORS.accent2} style={{ marginLeft: 4 }} />
                                 ) : (
                                     <Ionicons name="leaf" size={18} color={Colors.success} style={{ marginLeft: 4 }} />
                                 )}
@@ -304,7 +316,7 @@ export default function ProfileScreen() {
                             }}
                             style={[styles.socialIconBtn, !userInfo.instagramLink && styles.socialIconInactive]}
                         >
-                            <MaterialCommunityIcons name="instagram" size={24} color={userInfo.instagramLink ? Colors.primary : '#C0C0C0'} />
+                            <MaterialCommunityIcons name="instagram" size={24} color={userInfo.instagramLink ? TEST_COLORS.text : '#C0C0C0'} />
                         </TouchableOpacity>
                         <TouchableOpacity
                             onPress={() => {
@@ -312,7 +324,7 @@ export default function ProfileScreen() {
                             }}
                             style={[styles.socialIconBtn, !userInfo.tiktokLink && styles.socialIconInactive]}
                         >
-                            <Ionicons name="logo-tiktok" size={22} color={userInfo.tiktokLink ? Colors.primary : '#C0C0C0'} />
+                            <Ionicons name="logo-tiktok" size={22} color={userInfo.tiktokLink ? TEST_COLORS.text : '#C0C0C0'} />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -372,13 +384,13 @@ export default function ProfileScreen() {
                             <MaterialCommunityIcons 
                                 name={tab === 'meals' ? 'fire' : 'dumbbell'} 
                                 size={32} 
-                                color={activeTab === tab ? Colors.primary : '#D4D4D4'} 
+                                color={activeTab === tab ? TEST_COLORS.text : '#D4D4D4'} 
                             />
                         ) : (
                             <Ionicons 
                                 name={tab === 'likes' ? 'heart' : 'stats-chart'} 
                                 size={32} 
-                                color={activeTab === tab ? Colors.primary : '#D4D4D4'} 
+                                color={activeTab === tab ? TEST_COLORS.text : '#D4D4D4'} 
                             />
                         )}
                         <Text style={styles.tabLabel}>{
@@ -465,6 +477,12 @@ export default function ProfileScreen() {
                 comments={activePost?.comments || []}
             />
 
+            <TribeShareModal
+                visible={isShareModalVisible}
+                onClose={() => { setShareModalVisible(false); setShareTargetPost(null); }}
+                post={shareTargetPost}
+            />
+
             {/*
              * Horizontal pager fills the ENTIRE container from top=0.
              * Each FlatList has paddingTop=headerHeight so the first item
@@ -509,6 +527,10 @@ export default function ProfileScreen() {
                                         onPressLike={() => toggleLike(item)}
                                         onPressVerified={() => setVerifiedModalVisible(true)}
                                         onPressHammer={() => setHammerModalVisible(true)}
+                                        onPressShare={() => {
+                                            setShareTargetPost(item);
+                                            setShareModalVisible(true);
+                                        }}
                                         sharedTransitionTag={`post-${item.id}`}
                                     />
                                 </View>
@@ -526,7 +548,7 @@ export default function ProfileScreen() {
                                     <RefreshControl
                                         refreshing={refreshing}
                                         onRefresh={loadData}
-                                        tintColor={Colors.primary}
+                                        tintColor={TEST_COLORS.text}
                                     />
                                 ) : undefined
                             }
@@ -560,14 +582,14 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: Colors.background, // Beige
+        backgroundColor: TEST_COLORS.background,
     },
     listContent: {
         paddingTop: 0,
         paddingBottom: 40, // Reduced from 100 to prevent excessive bottom scroll
     },
     headerContainer: {
-        backgroundColor: Colors.background,
+        backgroundColor: TEST_COLORS.background,
         paddingBottom: 20,
     },
     topBar: {
@@ -598,7 +620,7 @@ const styles = StyleSheet.create({
     name: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: Colors.primary, // Dark Green
+        color: TEST_COLORS.accent1, // Harvest Gold for headers
         marginBottom: 2,
     },
     handleRow: {
@@ -608,7 +630,7 @@ const styles = StyleSheet.create({
     },
     handle: {
         fontSize: 16,
-        color: '#999', // Grey
+        color: TEST_COLORS.accent2, // Burnt Sienna for handle
         fontWeight: '600',
     },
     tribeRow: {
@@ -631,7 +653,7 @@ const styles = StyleSheet.create({
     },
     statsText: {
         fontSize: 14,
-        color: Colors.primary,
+        color: TEST_COLORS.accent2, // Burnt Sienna for stats
         fontWeight: '600',
         marginBottom: 6,
     },
@@ -640,7 +662,7 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     socialIcon: {
-        color: Colors.primary,
+        color: TEST_COLORS.text,
     },
     socialIconBtn: {
         padding: 4,
@@ -660,16 +682,14 @@ const styles = StyleSheet.create({
     },
     actionButton: {
         flex: 1,
-        backgroundColor: '#E8F0E5', // Very light green/white
+        backgroundColor: TEST_COLORS.surface,
         paddingVertical: 12,
         borderRadius: 25,
         alignItems: 'center',
-        borderWidth: 1, // Optional definition
-        borderColor: 'rgba(255,255,255,0.5)',
     },
     actionButtonText: {
         fontSize: 16,
-        color: Colors.primary,
+        color: TEST_COLORS.background,
         fontWeight: 'bold',
     },
     followStatsRow: {
@@ -683,11 +703,11 @@ const styles = StyleSheet.create({
     followValue: {
         fontSize: 28,
         fontWeight: 'bold',
-        color: Colors.primary,
+        color: TEST_COLORS.accent1, // Harvest Gold for big numbers (like "95%")
     },
     followLabel: {
         fontSize: 14,
-        color: '#888',
+        color: TEST_COLORS.accent2, // Burnt Sienna for subtitle/labels
     },
     tabsContainer: {
         flexDirection: 'row',
@@ -707,7 +727,7 @@ const styles = StyleSheet.create({
     },
     bioText: {
         fontSize: 14,
-        color: Colors.primary,
+        color: TEST_COLORS.surface, // Dust for softer body text
     },
     tabLabel: {
         fontSize: 10,
@@ -722,7 +742,7 @@ const styles = StyleSheet.create({
         position: 'absolute',
         bottom: 0,
         height: 3,
-        backgroundColor: Colors.primary,
+        backgroundColor: TEST_COLORS.accent1, // Harvest Gold for active indicator
         borderRadius: 2,
     },
     thickDivider: {

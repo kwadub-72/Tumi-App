@@ -32,6 +32,7 @@ function rowToFeedPost(row: any, currentUserId: string): FeedPost {
             macroTargets: row.author_macro_targets,
         },
         timeAgo: formatTimeAgo(row.created_at),
+        createdAt: row.created_at,
         meal: payload.meal ?? undefined,
         workout: payload.workout ?? undefined,
         macroUpdate: payload.macroUpdate ?? undefined,

@@ -17,9 +17,9 @@ import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
 import { supabase } from '@/src/shared/services/supabase';
 import * as Haptics from 'expo-haptics';
 
-const BURGUNDY = '#825858';
-const TRIBE_GREEN = '#405F4F';
-const WHITE = '#FFFFFF';
+const BURGUNDY = Colors.theme.burntSienna; // Accent 2 (Burnt Sienna)
+const TRIBE_GREEN = Colors.theme.oliveDrab; // Secondary (Olive)
+const WHITE = Colors.theme.softWhite;
 
 export interface FeedItemProps {
     post: FeedPost;
@@ -520,7 +520,7 @@ export default function FeedItem({
 
     const renderMacroColumn = (icon: any, val: number, unit: string, width?: number, colorOverride?: string, scale: 'normal' | 'small' = 'normal') => (
         <View style={[styles.macroValueItem, width ? { width, justifyContent: 'flex-start' } : {}]}>
-            <MaterialCommunityIcons name={icon} size={scale === 'small' ? 14 : 18} color={colorOverride || "white"} />
+            <MaterialCommunityIcons name={icon} size={scale === 'small' ? 14 : 18} color={colorOverride || Colors.theme.softWhite} />
             <Text style={[
                 styles.macroValueText, 
                 colorOverride && { color: colorOverride },
@@ -573,7 +573,7 @@ export default function FeedItem({
                     <View style={styles.selectBtnLeft}>
                         {selectedItems.includes(selectionKey) ? (
                             <View style={styles.selectedCircle}>
-                                <Ionicons name="checkmark" size={16} color="white" />
+                                <Ionicons name="checkmark" size={16} color={Colors.theme.softWhite} />
                             </View>
                         ) : (
                             <View style={styles.unselectedCircle} />
@@ -676,7 +676,7 @@ export default function FeedItem({
                     <View style={styles.selectBtnLeft}>
                         {selectedItems.includes(selectionKey) ? (
                             <View style={styles.selectedCircle}>
-                                <Ionicons name="checkmark" size={16} color="white" />
+                                <Ionicons name="checkmark" size={16} color={Colors.theme.softWhite} />
                             </View>
                         ) : (
                             <View style={styles.unselectedCircle} />
@@ -784,7 +784,7 @@ export default function FeedItem({
                                             <View style={styles.selectBtnLeft}>
                                                 {isSelected ? (
                                                     <View style={styles.selectedCircle}>
-                                                        <Ionicons name="checkmark" size={16} color="white" />
+                                                        <Ionicons name="checkmark" size={16} color={Colors.theme.softWhite} />
                                                     </View>
                                                 ) : (
                                                     <View style={styles.unselectedCircle} />
@@ -830,7 +830,7 @@ export default function FeedItem({
                         <Text style={styles.workoutHeaderTitle}>{workout.title}</Text>
                         {workout.duration > 0 && (
                             <View style={styles.workoutHeaderTimeBlock}>
-                                <MaterialCommunityIcons name="timer-outline" size={20} color="white" />
+                                <MaterialCommunityIcons name="timer-outline" size={20} color={Colors.theme.softWhite} />
                                 <Text style={styles.workoutDurationText}>{formatDuration(workout.duration)}</Text>
                             </View>
                         )}
@@ -858,7 +858,7 @@ export default function FeedItem({
                                             <View style={styles.selectBtnLeft}>
                                                 {selectedItems.includes(ex.title) ? (
                                                     <View style={styles.selectedCircle}>
-                                                        <Ionicons name="checkmark" size={16} color="white" />
+                                                        <Ionicons name="checkmark" size={16} color={Colors.theme.softWhite} />
                                                     </View>
                                                 ) : (
                                                     <View style={styles.unselectedCircle} />
@@ -909,7 +909,7 @@ export default function FeedItem({
                                     >
                                         {isSelected ? (
                                             <View style={styles.selectedCircle}>
-                                                <Ionicons name="checkmark" size={16} color="white" />
+                                                <Ionicons name="checkmark" size={16} color={Colors.theme.softWhite} />
                                             </View>
                                         ) : (
                                             <View style={styles.unselectedCircle} />
@@ -982,7 +982,7 @@ export default function FeedItem({
                                 <MaterialCommunityIcons
                                     name={post.user.status === 'enhanced' ? "lightning-bolt" : "leaf"}
                                     size={16}
-                                    color={post.user.status === 'enhanced' ? "#FFD700" : Colors.success}
+                                    color={post.user.status === 'enhanced' ? Colors.theme.harvestGold : Colors.theme.oliveDrab}
                                 />
                             </TouchableOpacity>
                         )}
@@ -1006,7 +1006,7 @@ export default function FeedItem({
                         <Text style={styles.handle}>{post.user.handle}</Text>
                     </TouchableOpacity>
                 </View>
-                <TouchableOpacity onPress={onPressOptions}><Ionicons name="ellipsis-horizontal" size={20} color="white" /></TouchableOpacity>
+                <TouchableOpacity onPress={onPressOptions}><Ionicons name="ellipsis-horizontal" size={20} color={Colors.theme.softWhite} /></TouchableOpacity>
             </View>
 
             <TouchableOpacity activeOpacity={isSelectMode ? 1 : 0.9} onPress={handlePressBody} style={{ zIndex: 1 }}>
@@ -1069,26 +1069,26 @@ export default function FeedItem({
                         )}
                         <View style={styles.iconBox}>
                             <View style={styles.tribeCircle}>
-                                <TabonoLogo size={20} color="#A5B79D" />
+                                <TabonoLogo size={20} color={Colors.theme.matteBlack} />
                             </View>
                         </View>
                         <Text style={styles.actionCount}>{post.stats.shares}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actionItem} onPress={onPressLike}>
                         <View style={styles.iconBox}>
-                            <Ionicons name={post.isLiked ? "heart" : "heart-outline"} size={28} color="white" />
+                            <Ionicons name={post.isLiked ? "heart" : "heart-outline"} size={28} color={post.isLiked ? Colors.theme.harvestGold : Colors.theme.dust} />
                         </View>
                         <Text style={styles.actionCount}>{post.stats.likes}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actionItem} onPress={onPressComment}>
                         <View style={styles.iconBox}>
-                            <Ionicons name="chatbubble-ellipses" size={26} color="white" />
+                            <Ionicons name="chatbubble-ellipses" size={26} color={Colors.theme.dust} />
                         </View>
                         <Text style={styles.actionCount}>{post.stats.comments}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actionItem} onPress={onPressShare || onPressSave}>
                         <View style={styles.iconBox}>
-                            <Ionicons name="arrow-redo-outline" size={26} color="white" />
+                            <Ionicons name="arrow-redo-outline" size={26} color={Colors.theme.dust} />
                         </View>
                         <Text style={styles.actionCount}>{post.stats.shares}</Text>
                     </TouchableOpacity>
@@ -1101,10 +1101,12 @@ export default function FeedItem({
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: '#A4B69D',
+        backgroundColor: Colors.theme.matteBlack, // Dark Onyx Card
         borderRadius: 45,
         padding: 20,
         marginBottom: 20,
+        borderWidth: 1,
+        borderColor: `rgba(139, 69, 19, 0.3)`, // Low opacity Burnt Sienna border
     },
     header: {
         flexDirection: 'row',
@@ -1117,7 +1119,7 @@ const styles = StyleSheet.create({
         borderRadius: 24,
         marginRight: 10,
         borderWidth: 1,
-        borderColor: Colors.theme.beige,
+        borderColor: Colors.theme.dust, // Tertiary (Dust)
     },
     headerText: {
         flex: 1,
@@ -1128,16 +1130,16 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     name: {
-        color: 'white',
+        color: Colors.theme.harvestGold, // Harvest Gold for headers
         fontSize: 18,
         fontWeight: 'bold',
     },
     handle: {
-        color: 'rgba(255,255,255,0.6)',
+        color: Colors.theme.burntSienna, // Burnt Sienna for handle
         fontSize: 14,
     },
     titleText: {
-        color: 'white',
+        color: Colors.theme.dust, // Dust instead of soft white for less stark text
         fontSize: 24,
         fontWeight: 'bold',
         marginBottom: 12,
@@ -1340,7 +1342,7 @@ const styles = StyleSheet.create({
         marginTop: 10,
         aspectRatio: 1,
         borderWidth: 2,
-        borderColor: Colors.theme.beige,
+        borderColor: Colors.theme.dust, // Tertiary (Dust)
         alignSelf: 'center',
         width: '100%',
     },
@@ -1398,7 +1400,7 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 18,
-        backgroundColor: '#A5B79D',
+        backgroundColor: Colors.theme.oliveDrab, // Olive
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -1406,7 +1408,7 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 18,
-        backgroundColor: '#C5D7C2',
+        backgroundColor: Colors.theme.burntSienna, // Burnt Sienna
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -1414,7 +1416,7 @@ const styles = StyleSheet.create({
         width: 34,
         height: 34,
         borderRadius: 17,
-        backgroundColor: 'white',
+        backgroundColor: Colors.theme.harvestGold,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -1475,7 +1477,7 @@ const styles = StyleSheet.create({
         width: 22,
         height: 22,
         borderRadius: 11,
-        backgroundColor: '#2F3A27',
+        backgroundColor: Colors.theme.oliveDrab, // Olive
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -1538,7 +1540,7 @@ const styles = StyleSheet.create({
         padding: 20,
     },
     macroWarningBox: {
-        backgroundColor: '#EAE7D6',
+        backgroundColor: Colors.theme.matteBlack,
         borderRadius: 24,
         padding: 22,
         alignItems: 'center',
@@ -1551,19 +1553,19 @@ const styles = StyleSheet.create({
     macroWarningTitle: {
         fontSize: 17,
         fontWeight: '700',
-        color: '#2F3A27',
+        color: Colors.theme.softWhite,
         marginBottom: 8,
         textAlign: 'center',
     },
     macroWarningBody: {
         fontSize: 14,
-        color: '#4A5D4E',
+        color: Colors.theme.dust,
         textAlign: 'center',
         lineHeight: 20,
         marginBottom: 16,
     },
     macroWarningDismiss: {
-        backgroundColor: '#4A5D4E',
+        backgroundColor: Colors.theme.oliveDrab,
         paddingVertical: 10,
         paddingHorizontal: 32,
         borderRadius: 20,

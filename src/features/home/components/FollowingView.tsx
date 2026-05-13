@@ -14,6 +14,7 @@ import { supabase } from '@/src/shared/services/supabase';
 import { useMealbookStore } from '@/src/store/useMealbookStore';
 import { USDAFoodItem } from '@/src/shared/services/USDAFoodService';
 import PostOptionsModal from '@/src/features/feed/components/PostOptionsModal';
+import TribeShareModal from '@/src/features/feed/components/TribeShareModal';
 import * as Haptics from 'expo-haptics';
 
 interface FollowingViewProps {
@@ -41,6 +42,8 @@ export default function FollowingView({ selectedDate }: FollowingViewProps) {
     const [selectedItems, setSelectedItems] = useState<string[]>([]);
     const [toastMessage, setToastMessage] = useState('');
     const [toastType, setToastType] = useState<'success' | 'error'>('success');
+    const [isShareModalVisible, setShareModalVisible] = useState(false);
+    const [shareTargetPost, setShareTargetPost] = useState<FeedPost | null>(null);
 
     const loadFeed = useCallback(async () => {
         if (!session?.user?.id) return;
@@ -280,6 +283,19 @@ export default function FollowingView({ selectedDate }: FollowingViewProps) {
                 isOwner={activePost?.user.id === session?.user.id}
                 onDelete={handleDeletePost}
                 onReport={() => setOptionsModalVisible(false)}
+                onShare={() => {
+                    if (activePost) {
+                        setShareTargetPost(activePost);
+                        setShareModalVisible(true);
+                    }
+                    setOptionsModalVisible(false);
+                }}
+            />
+
+            <TribeShareModal
+                visible={isShareModalVisible}
+                onClose={() => { setShareModalVisible(false); setShareTargetPost(null); }}
+                post={shareTargetPost}
             />
 
             {showDeleteToast && (
@@ -315,6 +331,10 @@ export default function FollowingView({ selectedDate }: FollowingViewProps) {
                         onPressComment={() => handleCommentPress(item)}
                         onPressLike={() => toggleLike(item.id)}
                         onPressSave={() => toggleSave(item.id)}
+                        onPressShare={() => {
+                            setShareTargetPost(item);
+                            setShareModalVisible(true);
+                        }}
                         onPressOptions={() => {
                             setActivePost(item);
                             setOptionsModalVisible(true);

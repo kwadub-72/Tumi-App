@@ -49,8 +49,17 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
 }
 
+import { useFonts } from 'expo-font';
+
 export default function RootLayout() {
     const colorScheme = useColorScheme();
+
+    // Pre-load custom font assets. Uncomment the BackoutPrint mapping once the .ttf/.otf file is placed in assets/fonts/
+    /*
+    const [fontsLoaded] = useFonts({
+        BackoutPrint: require('../assets/fonts/BackoutPrint.ttf'),
+    });
+    */
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>

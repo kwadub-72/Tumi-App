@@ -13,6 +13,7 @@ import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
 import { supabase } from '@/src/shared/services/supabase';
 import { useMealbookStore } from '@/src/store/useMealbookStore';
 import PostOptionsModal from '@/src/features/feed/components/PostOptionsModal';
+import TribeShareModal from '@/src/features/feed/components/TribeShareModal';
 import { USDAFoodItem } from '@/src/shared/services/USDAFoodService';
 import * as Haptics from 'expo-haptics';
 
@@ -41,6 +42,8 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
     const [selectedItems, setSelectedItems] = useState<string[]>([]);
     const [toastMessage, setToastMessage] = useState('');
     const [toastType, setToastType] = useState<'success' | 'error'>('success');
+    const [isShareModalVisible, setShareModalVisible] = useState(false);
+    const [shareTargetPost, setShareTargetPost] = useState<FeedPost | null>(null);
 
     const loadFeed = useCallback(async () => {
         if (!session?.user?.id) return;
@@ -267,7 +270,7 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
         try {
             if (isSelectMode && selectedItems.length > 0) {
                 for (const key of selectedItems) {
-                    let type: 'old' | 'new' | 'targets' | null = null;
+                    let type: 'old' | 'new' | 'targets' | 'delta' | null = null;
                     if (key === 'old' && activePost.macroUpdate) type = 'old';
                     else if (key === 'new' && activePost.macroUpdate) type = 'new';
                     else if (key === 'diff' && activePost.macroUpdate) type = 'delta';
@@ -353,6 +356,19 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
                 }}
                 onAddToMealBook={activePost?.meal ? handleAddToMealLog : undefined}
                 onAddToMacroBook={activePost?.macroUpdate || activePost?.snapshot ? handleAddToMacroBook : undefined}
+                onShare={() => {
+                    if (activePost) {
+                        setShareTargetPost(activePost);
+                        setShareModalVisible(true);
+                    }
+                    setOptionsModalVisible(false);
+                }}
+            />
+
+            <TribeShareModal
+                visible={isShareModalVisible}
+                onClose={() => { setShareModalVisible(false); setShareTargetPost(null); }}
+                post={shareTargetPost}
             />
 
             {showDeleteToast && (
@@ -395,6 +411,10 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
                         onPressComment={() => handleCommentPress(item)}
                         onPressLike={() => toggleLike(item.id)}
                         onPressSave={() => toggleSave(item.id)}
+                        onPressShare={() => {
+                            setShareTargetPost(item);
+                            setShareModalVisible(true);
+                        }}
                         onPressOptions={() => {
                             setActivePost(item);
                             setOptionsModalVisible(true);

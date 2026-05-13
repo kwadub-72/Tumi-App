@@ -77,6 +77,7 @@ export interface FeedPost {
     caption?: string;
     user: User;
     timeAgo: string;
+    createdAt?: string;
     meal?: Meal;
     workout?: Workout;
     stats: {

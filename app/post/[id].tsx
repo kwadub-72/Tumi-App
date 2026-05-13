@@ -12,6 +12,7 @@ import { generateFakePosts } from '@/src/shared/utils/FakeDataGenerator';
 import { useUserStore } from '@/store/UserStore';
 import HammerModal from '@/components/HammerModal';
 import PostOptionsModal from '@/src/features/feed/components/PostOptionsModal';
+import TribeShareModal from '@/src/features/feed/components/TribeShareModal';
 import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
 import * as Haptics from 'expo-haptics';
 import { useAuthStore } from '@/store/AuthStore';
@@ -52,6 +53,8 @@ export default function PostDetailScreen() {
     const [selectedDate, setSelectedDate] = useState(new Date());
 
     const [isOptionsModalVisible, setOptionsModalVisible] = useState(false);
+    const [isShareModalVisible, setShareModalVisible] = useState(false);
+    const [shareTargetPost, setShareTargetPost] = useState<FeedPost | null>(null);
     const [isSelectMode, setIsSelectMode] = useState(false);
     const [selectedItems, setSelectedItems] = useState<string[]>([]);
     const [showDeleteToast, setShowDeleteToast] = useState(false);
@@ -479,6 +482,12 @@ export default function PostDetailScreen() {
                     activityIcon={hammerData.icon}
                 />
 
+                <TribeShareModal
+                    visible={isShareModalVisible}
+                    onClose={() => { setShareModalVisible(false); setShareTargetPost(null); }}
+                    post={shareTargetPost}
+                />
+
                 <FlatList
                     ref={flatListRef}
                     data={comments}
@@ -498,6 +507,10 @@ export default function PostDetailScreen() {
                                     }}
                                     onPressLike={toggleLike}
                                     onPressComment={handlePressCommentIcon}
+                                    onPressShare={() => {
+                                        setShareTargetPost(post);
+                                        setShareModalVisible(true);
+                                    }}
                                     onPressHammer={() => {
                                         setHammerData({
                                             name: post.user.handle === userInfo.handle ? userInfo.activity : (post.user as any).activity || 'Bodybuilder (Bulk)',

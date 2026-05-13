@@ -140,7 +140,7 @@ export default function NetworkScreen() {
     if (loading) {
         return (
             <View style={[styles.container, styles.centered]}>
-                <ActivityIndicator size="large" color={Colors.primary} />
+                <ActivityIndicator size="large" color={Colors.theme.softWhite} />
             </View>
         );
     }
@@ -151,7 +151,7 @@ export default function NetworkScreen() {
                 {/* Header */}
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                        <Ionicons name="arrow-back" size={28} color={Colors.primary} />
+                        <Ionicons name="arrow-back" size={28} color={Colors.theme.softWhite} />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>{handle.replace('@', '')}</Text>
                     <View style={{ width: 28 }} />
@@ -178,16 +178,16 @@ export default function NetworkScreen() {
             {/* Search Bar */}
             <View style={styles.searchContainer}>
                 <View style={styles.searchBar}>
-                    <Ionicons name="search" size={20} color={Colors.primary} />
+                    <Ionicons name="search" size={20} color={Colors.theme.softWhite} />
                     <TextInput 
                         style={styles.searchInput}
                         placeholder={`Search ${activeTab}...`}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
-                        placeholderTextColor="rgba(0,0,0,0.4)"
+                        placeholderTextColor="rgba(255,255,255,0.4)"
                     />
                     <TouchableOpacity>
-                        <Ionicons name="arrow-forward" size={20} color={Colors.primary} />
+                        <Ionicons name="arrow-forward" size={20} color={Colors.theme.softWhite} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -219,7 +219,7 @@ export default function NetworkScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: Colors.background, // Beige
+        backgroundColor: Colors.theme.matteBlack, // Primary (Onyx)
     },
     centered: {
         justifyContent: 'center',
@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 32,
         fontWeight: '900',
-        color: Colors.primary,
+        color: Colors.theme.harvestGold, // Harvest Gold
         letterSpacing: 0.5,
     },
     tabContainer: {
@@ -247,8 +247,10 @@ const styles = StyleSheet.create({
     },
     tabBackground: {
         flexDirection: 'row',
-        backgroundColor: Colors.theme.sageLight,
+        backgroundColor: Colors.theme.matteBlack, // Dark background instead of dominant olive
         borderRadius: 20,
+        borderWidth: 1,
+        borderColor: Colors.theme.oliveDrab, // Subtle olive border
         padding: 2,
         width: '60%',
     },
@@ -259,7 +261,7 @@ const styles = StyleSheet.create({
         borderRadius: 18,
     },
     activeTabButton: {
-        backgroundColor: Colors.primary,
+        backgroundColor: Colors.theme.harvestGold, // Harvest Gold for active tab
     },
     tabText: {
         fontSize: 14,
@@ -267,7 +269,7 @@ const styles = StyleSheet.create({
         color: 'white',
     },
     activeTabText: {
-        color: 'white',
+        color: Colors.theme.matteBlack, // Matte Black for active text
     },
     searchContainer: {
         paddingHorizontal: 20,
@@ -278,7 +280,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: 'transparent',
         borderWidth: 1,
-        borderColor: Colors.primary,
+        borderColor: Colors.theme.softWhite,
         borderRadius: 25,
         paddingHorizontal: 15,
         height: 44,
@@ -287,7 +289,7 @@ const styles = StyleSheet.create({
         flex: 1,
         marginHorizontal: 10,
         fontSize: 16,
-        color: Colors.primary,
+        color: Colors.theme.softWhite,
         fontWeight: '600',
     },
     listContent: {
@@ -300,7 +302,7 @@ const styles = StyleSheet.create({
     },
     emptyText: {
         fontSize: 16,
-        color: '#888',
+        color: Colors.theme.dust, // Tertiary (Dust)
         fontWeight: '600',
     }
 });

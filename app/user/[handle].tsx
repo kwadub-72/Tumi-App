@@ -22,6 +22,7 @@ import VerifiedModal from '../../components/VerifiedModal';
 import HammerModal from '../../components/HammerModal';
 import CommentSheet from '@/components/CommentSheet';
 import FeedItem from '@/src/features/feed/components/FeedItem';
+import TribeShareModal from '@/src/features/feed/components/TribeShareModal';
 import { ActivityIcon } from '@/src/shared/components/ActivityIcon';
 import { supabase } from '@/src/shared/services/supabase';
 import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
@@ -57,6 +58,8 @@ export default function OtherUserProfileScreen() {
     const [isHammerModalVisible, setHammerModalVisible] = useState(false);
     const [isCommentSheetVisible, setCommentSheetVisible] = useState(false);
     const [activePost, setActivePost] = useState<FeedPost | null>(null);
+    const [isShareModalVisible, setShareModalVisible] = useState(false);
+    const [shareTargetPost, setShareTargetPost] = useState<FeedPost | null>(null);
 
     // Target User Data
     const [targetProfile, setTargetProfile] = useState<any>(null);
@@ -584,6 +587,12 @@ export default function OtherUserProfileScreen() {
                 comments={activePost?.comments || []}
             />
 
+            <TribeShareModal
+                visible={isShareModalVisible}
+                onClose={() => { setShareModalVisible(false); setShareTargetPost(null); }}
+                post={shareTargetPost}
+            />
+
             <Animated.ScrollView
                 ref={pagerRef as any}
                 horizontal
@@ -621,6 +630,10 @@ export default function OtherUserProfileScreen() {
                                         onPressLike={() => toggleLike(item)}
                                         onPressVerified={() => setVerifiedModalVisible(true)}
                                         onPressHammer={() => setHammerModalVisible(true)}
+                                        onPressShare={() => {
+                                            setShareTargetPost(item);
+                                            setShareModalVisible(true);
+                                        }}
                                         sharedTransitionTag={`post-${item.id}`}
                                     />
                                 </View>

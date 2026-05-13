@@ -50,7 +50,7 @@ const MacroUpdateRow = ({ icon, oldVal, value, onChange, diff }: any) => {
     const isNegative = diff < 0;
     const hasValue = value !== '';
     const diffText = !hasValue ? '...g' : (diff === 0 ? '0g' : `${Math.abs(diff)}g`);
-    const diffBg = !hasValue ? '#D3D3D3' : (diff === 0 ? 'rgba(164, 182, 157, 0.5)' : (isNegative ? '#825858' : '#A4B69D'));
+    const diffBg = !hasValue ? 'rgba(237, 232, 213, 0.3)' : (diff === 0 ? 'rgba(237, 232, 213, 0.5)' : (isNegative ? Colors.theme.burntSienna : Colors.theme.oliveDrab));
 
     return (
         <View style={styles.macroRow}>
@@ -456,7 +456,7 @@ export default function MacroUpdateScreen() {
                                                 <View style={styles.calBubbleMain}>
                                                     <Text style={styles.calValueMain}>{newCal} cals</Text>
                                                 </View>
-                                                <View style={[styles.calDiffBubble, { backgroundColor: (!pText && !cText && !fText) ? '#D3D3D3' : (diffCal < 0 ? '#825858' : '#A4B69D') }]}>
+                                                <View style={[styles.calDiffBubble, { backgroundColor: (!pText && !cText && !fText) ? 'rgba(237, 232, 213, 0.3)' : (diffCal < 0 ? Colors.theme.burntSienna : Colors.theme.oliveDrab) }]}>
                                                     <Text style={styles.calDiffText}>
                                                         {(!pText && !cText && !fText) ? '... cals' : (diffCal === 0 ? '0 cals' : `${Math.abs(diffCal)} cals`)}
                                                     </Text>

@@ -36,7 +36,7 @@ export const NetworkUserCard: React.FC<NetworkUserCardProps> = ({
         } else {
             return (
                 <TouchableOpacity style={[styles.followButton, styles.buttonUnfollowed]} onPress={onToggleFollow}>
-                    <Ionicons name="person-add" size={18} color={Colors.primary} />
+                    <Ionicons name="person-add" size={18} color={Colors.theme.matteBlack} />
                 </TouchableOpacity>
             );
         }
@@ -52,8 +52,8 @@ export const NetworkUserCard: React.FC<NetworkUserCardProps> = ({
             <View style={styles.infoContainer}>
                 <View style={styles.nameRow}>
                     <Text style={styles.name} numberOfLines={1}>{user.name}</Text>
-                    {user.status === 'natural' && <Ionicons name="leaf" size={16} color={Colors.success} style={styles.icon} />}
-                    {user.status === 'enhanced' && <MaterialCommunityIcons name="lightning-bolt" size={16} color="#FFD700" style={styles.icon} />}
+                    {user.status === 'natural' && <Ionicons name="leaf" size={16} color={Colors.theme.oliveDrab} style={styles.icon} />}
+                    {user.status === 'enhanced' && <MaterialCommunityIcons name="lightning-bolt" size={16} color={Colors.theme.harvestGold} style={styles.icon} />}
                     <ActivityIcon 
                         activity={user.activity || ''} 
                         icon={(user.activityIcon as any) || 'hammer'} 
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
     container: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: Colors.card, // Sage Green #A4B69D
+        backgroundColor: Colors.theme.matteBlack, // Dark card background for Onyx theme
         borderRadius: 40,
         padding: 10,
         paddingHorizontal: 15,
@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
     name: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: 'white',
+        color: Colors.theme.harvestGold, // Harvest Gold
         marginRight: 4,
     },
     icon: {
@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
     },
     handle: {
         fontSize: 12,
-        color: 'rgba(255,255,255,0.7)',
+        color: Colors.theme.burntSienna, // Burnt Sienna
         marginTop: -2,
     },
     metrics: {
@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
         position: 'relative',
     },
     buttonFollowing: {
-        backgroundColor: Colors.success, // Green
+        backgroundColor: Colors.theme.harvestGold, // Harvest Gold
     },
     buttonUnfollowed: {
         backgroundColor: 'white',
