@@ -213,7 +213,7 @@ export default function PostDetailScreen() {
                             item.user.status === 'enhanced' ? (
                                 <MaterialCommunityIcons name="lightning-bolt" size={12} color="#FFD700" style={{ marginLeft: 2 }} />
                             ) : (
-                                <Ionicons name="leaf" size={12} color={Colors.success} style={{ marginLeft: 2 }} />
+                                <Ionicons name="leaf" size={12} color={Colors.natural} style={{ marginLeft: 2 }} />
                             )
                         )}
                         {item.user.handle === '@kwadub' && <Ionicons name="hammer" size={12} color={Colors.primary} style={{ marginLeft: 2 }} />}

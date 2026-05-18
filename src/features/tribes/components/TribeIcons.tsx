@@ -4,7 +4,7 @@ import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { TribeType, TribePrivacy } from '@/src/shared/models/types';
 export const CalendarIcon = ({ onPress }: { onPress?: () => void }) => (
     <TouchableOpacity onPress={onPress}>
-        <MaterialCommunityIcons name="calendar" size={24} color="white" />
+        <MaterialCommunityIcons name="calendar" size={24} color="#EDE8D5" />
     </TouchableOpacity>
 );
 
@@ -12,7 +12,7 @@ export const CalendarIcon = ({ onPress }: { onPress?: () => void }) => (
 export const ShieldVSIcon = ({ onPress }: { onPress?: () => void }) => (
     <TouchableOpacity onPress={onPress}>
         <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-            <MaterialCommunityIcons name="trophy-outline" size={24} color="white" />
+            <MaterialCommunityIcons name="trophy-outline" size={24} color="#EDE8D5" />
         </View>
     </TouchableOpacity>
 );
@@ -21,12 +21,12 @@ export const ShieldVSIcon = ({ onPress }: { onPress?: () => void }) => (
 export const TrophyTribeIcon = ({ onPress }: { onPress?: () => void }) => (
     <TouchableOpacity onPress={onPress}>
         <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-            <MaterialCommunityIcons name="trophy-outline" size={24} color="white" />
+            <MaterialCommunityIcons name="trophy-outline" size={24} color="#EDE8D5" />
             <View style={{ flexDirection: 'row', position: 'absolute', bottom: -2, gap: 12 }}>
-                <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: 'white' }} />
-                <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: 'white' }} />
+                <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#EDE8D5' }} />
+                <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#EDE8D5' }} />
             </View>
-            <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: 'white', position: 'absolute', top: 8 }} />
+            <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#EDE8D5', position: 'absolute', top: 8 }} />
         </View>
     </TouchableOpacity>
 );
@@ -44,7 +44,7 @@ export const PrivacyIcon = ({ privacy }: { privacy: TribePrivacy }) => {
             <MaterialCommunityIcons
                 name={isPublic ? "earth" : "lock-outline"}
                 size={22}
-                color="white"
+                color="#EDE8D5"
             />
         </TouchableOpacity>
     );

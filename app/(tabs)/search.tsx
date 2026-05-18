@@ -1,10 +1,9 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import React, { useState, useEffect } from 'react';
-import { FlatList, Keyboard, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { FlatList, Keyboard, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/src/shared/theme/Colors';
 import { User } from '@/src/shared/models/types';
-import { generateFakeUsers, generateFakeTribes } from '@/src/shared/utils/FakeDataGenerator';
 import { ExploreService } from '@/src/features/explore/services/exploreService';
 import ExploreProfileCard from '@/src/features/explore/components/ExploreProfileCard';
 import TribeCard from '@/src/features/tribes/components/TribeCard';
@@ -13,13 +12,14 @@ import HammerModal from '@/components/HammerModal';
 import VerifiedModal from '@/components/VerifiedModal';
 import { useUserStore } from '@/store/UserStore';
 import { useRouter } from 'expo-router';
-import { Tribe } from '@/src/shared/models/types';
-import MemberCard from '@/src/features/tribes/components/MemberCard';
 import { useUserTribeStore } from '@/src/store/UserTribeStore';
 import { useExploreRankings } from '@/src/features/explore/hooks/useExploreRankings';
 import { RefreshControl } from 'react-native';
 import { useAuthStore } from '@/store/AuthStore';
 import { useNetworkStore } from '@/src/store/NetworkStore';
+import { DiscoveryTribe } from '@/src/features/explore/types';
+import { supabase } from '@/src/shared/services/supabase';
+import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
 
 
 // Helper to convert ft'in" or cm string to number (cm)
@@ -43,9 +43,16 @@ export default function ExploreScreen() {
     // Stored handle may or may not include the '@' prefix, so strip it for comparison.
     const currentUserHandle = userStore.handle?.replace('@', '').toLowerCase() ?? '';
     const currentUserId = session?.user?.id ?? '';
-
-    const { joinTribe, myTribes, pendingTribes } = useUserTribeStore(); // Store hooks
+    const { joinTribe, leaveTribe, myTribes, pendingTribes, isMember, isRequested, init: initTribes } = useUserTribeStore();
+    const { width } = useWindowDimensions();
+    const scrollViewRef = useRef<ScrollView>(null);
     
+    useEffect(() => {
+        if (currentUserId) {
+            initTribes(currentUserId);
+        }
+    }, [currentUserId]);
+
     // Filters
     const [activeFilters, setActiveFilters] = useState<any>(null);
 
@@ -98,13 +105,19 @@ export default function ExploreScreen() {
     const [searchQuery, setSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState('Users');
 
+    // Scroll to active tab
+    useEffect(() => {
+        scrollViewRef.current?.scrollTo({ x: activeTab === 'Users' ? 0 : width, animated: true });
+    }, [activeTab, width]);
+
     // Users State
     const [users, setUsers] = useState<User[]>([]);
     const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
 
-    // Tribes State (Fetched from fake generator, but joined status synced with store)
-    const [tribes, setTribes] = useState<Tribe[]>([]);
-    const [filteredTribes, setFilteredTribes] = useState<Tribe[]>([]);
+    // Tribes State
+    const [tribes, setTribes] = useState<DiscoveryTribe[]>([]);
+    const [isLoadingTribes, setIsLoadingTribes] = useState(false);
+    const [pendingTribesData, setPendingTribesData] = useState<DiscoveryTribe[]>([]);
 
     // Modals
     const [filterVisible, setFilterVisible] = useState(false);
@@ -112,134 +125,108 @@ export default function ExploreScreen() {
     const [verifiedVisible, setVerifiedVisible] = useState(false);
     const [selectedUserForModal, setSelectedUserForModal] = useState<User | null>(null);
 
+    // Fetch pending tribes details
     useEffect(() => {
-        const loadInitial = async () => {
-            const initialUsers = await ExploreService.searchUsers('');
-            setUsers(initialUsers);
-            setFilteredUsers(initialUsers);
-
-            const initialTribes = await ExploreService.searchTribes('');
-            // Map DB tribes to Tribe model
-            const mappedTribes = initialTribes.map(t => ({
-                id: t.id,
-                name: t.name,
-                image: t.avatar_url,
-                privacy: t.visibility || 'public',
-                type: t.tribe_type || 'hybrid',
-                memberCount: t.member_count || 1,
-                tags: t.tags || [],
-                description: t.description || '',
-            } as unknown as Tribe));
-            setTribes(mappedTribes);
-            setFilteredTribes(mappedTribes);
-        };
-        loadInitial();
-    }, []);
-
-    useEffect(() => {
-        // Sync tribe statuses with store AND merge created tribes
-        setTribes(prev => {
-            const updated = prev.map(t => {
-                const isJoined = myTribes.some(mt => mt.id === t.id);
-                const isPending = pendingTribes.includes(t.id);
-                return {
-                    ...t,
-                    joinStatus: isJoined ? 'joined' : (isPending ? 'requested' : 'none')
-                } as Tribe;
-            });
-
-            // Append myTribes that are not in the list
-            myTribes.forEach(mt => {
-                if (!updated.find(t => t.id === mt.id)) {
-                    updated.push({ ...mt, joinStatus: 'joined' });
-                }
-            });
-
-            return updated;
-        });
-    }, [myTribes, pendingTribes]);
-
-    useEffect(() => {
-        // Debounced Backend Search
-        const delayDebounceFn = setTimeout(async () => {
-            if (activeTab === 'Users') {
-                let formattedFilters: any = {};
+        if (pendingTribes.length === 0) {
+            setPendingTribesData([]);
+            return;
+        }
+        
+        const fetchPending = async () => {
+            const { data, error } = await supabase
+                .from('tribes')
+                .select('*')
+                .in('id', pendingTribes);
                 
-                if (activeFilters) {
-                    formattedFilters.status = activeFilters.status;
-                    formattedFilters.activity = activeFilters.activity;
-                    if (activeFilters.minMeals) formattedFilters.minMeals = activeFilters.minMeals;
-                    if (activeFilters.minWorkouts) formattedFilters.minWorkouts = activeFilters.minWorkouts;
-                    if (activeFilters.minUpdates) formattedFilters.minUpdates = activeFilters.minUpdates;
-
-                    if (activeFilters.height && activeFilters.height.val && !activeFilters.height.val.includes('..')) {
-                        const targetH = parseHeightToCm(activeFilters.height.val);
-                        if (targetH > 0) {
-                            const isMetric = !activeFilters.height.val.includes("'");
-                            const modeRange = activeFilters.height.mode === 'Range3' ? 3 : 1;
-                            const rangeInCm = isMetric ? modeRange : modeRange * 2.54;
-                            formattedFilters.heightTargetCm = targetH;
-                            formattedFilters.heightRangeCm = rangeInCm;
-                        }
-                    }
-
-                    if (activeFilters.weight && activeFilters.weight.val) {
-                        const targetW = parseInt(activeFilters.weight.val);
-                        if (!isNaN(targetW)) {
-                            formattedFilters.weightTarget = targetW;
-                            formattedFilters.weightRange = activeFilters.weight.mode === 'Range15' ? 15 : 5;
-                        }
-                    }
-
-                    if (activeFilters.bodyFat && activeFilters.bodyFat.val) {
-                        const targetBF = parseFloat(activeFilters.bodyFat.val);
-                        if (!isNaN(targetBF)) {
-                            formattedFilters.bfTarget = targetBF;
-                            formattedFilters.bfRange = activeFilters.bodyFat.mode === 'Range3' ? 3 : 1;
-                        }
-                    }
-                }
-
-                const results = await ExploreService.searchUsers(searchQuery, currentUserId, formattedFilters);
-                setFilteredUsers(results);
-                
-            } else {
-                let formattedFilters: any = {};
-                if (activeFilters) {
-                    formattedFilters.tribeFocus = activeFilters.tribeFocus;
-                    formattedFilters.visibility = activeFilters.visibility;
-                    formattedFilters.status = activeFilters.status;
-                }
-
-                const results = await ExploreService.searchTribes(searchQuery, formattedFilters);
-                let tResult = results.map(t => ({
-                    id: t.id,
-                    name: t.name,
-                    image: t.avatar_url,
-                    privacy: t.visibility || 'public',
-                    type: t.tribe_type || 'hybrid',
-                    memberCount: t.member_count || 1,
-                    tags: t.tags || [],
-                    description: t.description || '',
-                } as unknown as Tribe));
-                
-                // Merge join statuses
-                const withStatus = tResult.map(t => {
-                    const isJoined = myTribes.some(mt => mt.id === t.id);
-                    const isPending = pendingTribes.includes(t.id);
-                    return {
-                        ...t,
-                        joinStatus: isJoined ? 'joined' : (isPending ? 'requested' : 'none')
-                    } as Tribe;
-                });
-                
-                setFilteredTribes(withStatus);
+            if (error) {
+                console.error('[search.tsx] Error fetching pending tribes:', error.message);
+                return;
             }
+            
+            const mapped = (data || []).map((row: any): DiscoveryTribe => ({
+                id: row.id,
+                name: row.name,
+                avatarUrl: row.avatar_url ?? undefined,
+                themeColor: row.theme_color ?? '#DAA520',
+                tribeType: (row.tribe_type ?? 'accountability') as any,
+                privacy: (row.privacy ?? 'public') as 'public' | 'private',
+                description: row.description ?? '',
+                tags: row.tags ?? [],
+                memberCount: row.member_count ?? 0,
+                naturalStatus: row.natural_status ?? null,
+                activityType: row.activity_type ?? undefined,
+                activityIcon: row.activity_icon ?? undefined,
+                focusType: (row.focus_type ?? row.tribe_type ?? 'accountability') as any,
+                joinStatus: 'pending',
+            }));
+            
+            setPendingTribesData(mapped);
+        };
+        
+        fetchPending();
+    }, [pendingTribes]);
+
+    // Load initial users on mount
+    useEffect(() => {
+        if (!currentUserId) return;
+        ExploreService.searchUsers('', currentUserId, {}).then(results => {
+            setUsers(results);
+            setFilteredUsers(results);
+        });
+    }, [currentUserId]);
+
+    // Load tribes whenever query changes (debounced)
+    useEffect(() => {
+        if (!currentUserId) return;
+        const timer = setTimeout(async () => {
+            setIsLoadingTribes(true);
+            const results = await ExploreService.searchTribes(currentUserId, searchQuery);
+            setTribes(results);
+            setIsLoadingTribes(false);
         }, 300);
+        return () => clearTimeout(timer);
+    }, [currentUserId, searchQuery]);
 
-        return () => clearTimeout(delayDebounceFn);
-
-    }, [searchQuery, activeFilters, activeTab, myTribes, pendingTribes]);
+    // User search effect (debounced, only when Users tab active)
+    useEffect(() => {
+        if (activeTab !== 'Users') return;
+        const timer = setTimeout(async () => {
+            let formattedFilters: any = {};
+            if (activeFilters) {
+                formattedFilters.status = activeFilters.status;
+                formattedFilters.activity = activeFilters.activity;
+                if (activeFilters.minMeals) formattedFilters.minMeals = activeFilters.minMeals;
+                if (activeFilters.minWorkouts) formattedFilters.minWorkouts = activeFilters.minWorkouts;
+                if (activeFilters.minUpdates) formattedFilters.minUpdates = activeFilters.minUpdates;
+                if (activeFilters.height?.val && !activeFilters.height.val.includes('..')) {
+                    const targetH = parseHeightToCm(activeFilters.height.val);
+                    if (targetH > 0) {
+                        const isMetric = !activeFilters.height.val.includes("'");
+                        const modeRange = activeFilters.height.mode === 'Range3' ? 3 : 1;
+                        formattedFilters.heightTargetCm = targetH;
+                        formattedFilters.heightRangeCm = isMetric ? modeRange : modeRange * 2.54;
+                    }
+                }
+                if (activeFilters.weight?.val) {
+                    const targetW = parseInt(activeFilters.weight.val);
+                    if (!isNaN(targetW)) {
+                        formattedFilters.weightTarget = targetW;
+                        formattedFilters.weightRange = activeFilters.weight.mode === 'Range15' ? 15 : 5;
+                    }
+                }
+                if (activeFilters.bodyFat?.val) {
+                    const targetBF = parseFloat(activeFilters.bodyFat.val);
+                    if (!isNaN(targetBF)) {
+                        formattedFilters.bfTarget = targetBF;
+                        formattedFilters.bfRange = activeFilters.bodyFat.mode === 'Range3' ? 3 : 1;
+                    }
+                }
+            }
+            const results = await ExploreService.searchUsers(searchQuery, currentUserId, formattedFilters);
+            setFilteredUsers(results);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery, activeFilters, activeTab, currentUserId]);
 
     const handleToggleFollow = async (user: User) => {
         if (!session?.user?.id) return;
@@ -265,9 +252,24 @@ export default function ExploreScreen() {
 
     const handleJoinTribe = (tribeId: string) => {
         const tribe = tribes.find(t => t.id === tribeId);
-        if (tribe) {
-            joinTribe(tribe);
-        }
+        if (!tribe || !currentUserId) return;
+        joinTribe(currentUserId, {
+            id: tribe.id,
+            name: tribe.name,
+            avatar: tribe.avatarUrl,
+            themeColor: tribe.themeColor,
+            type: tribe.tribeType,
+            privacy: tribe.privacy,
+            memberCount: tribe.memberCount,
+            description: tribe.description,
+            joinStatus: tribe.joinStatus === 'member' ? 'joined' : tribe.joinStatus === 'pending' ? 'requested' : 'none',
+            chief: {} as any,
+            tags: tribe.tags,
+            activityType: tribe.activityType,
+            activityIcon: tribe.activityIcon,
+            naturalStatus: tribe.naturalStatus,
+            focusType: tribe.focusType,
+        });
     };
 
     const handleCardPress = (user: User & { id?: string }) => {
@@ -292,17 +294,77 @@ export default function ExploreScreen() {
         setFilterVisible(true);
     };
 
-    const renderContent = () => {
-        if (activeTab === 'Tribes') {
+    const renderTribesContent = () => {
+        const isSearching = searchQuery.length > 0;
+
+        // Pre-typing: show joined + pending tribes from store, sorted alphabetically
+        if (!isSearching) {
+            const joined = myTribes
+                .slice()
+                .sort((a, b) => a.name.localeCompare(b.name));
+            const pending = pendingTribes;
+
             return (
                 <FlatList
-                    data={filteredTribes}
+                    data={joined}
                     keyExtractor={item => item.id}
+                    ListEmptyComponent={
+                        <View style={styles.emptyState}>
+                            <TabonoLogo size={56} color="rgba(218,165,32,0.3)" />
+                            <Text style={styles.tribeEmptyText}>
+                                It's better together. Find a tribe
+                            </Text>
+                        </View>
+                    }
+                    ListHeaderComponent={
+                        joined.length > 0 ? (
+                            <Text style={styles.exploreSectionTitle}>My tribes</Text>
+                        ) : null
+                    }
+                    ListFooterComponent={
+                        <View style={{ marginBottom: 20 }}>
+                            <Text style={[styles.exploreSectionTitle, { marginTop: 16 }]}>Pending requests</Text>
+                            {pendingTribesData.length > 0 ? (
+                                pendingTribesData.map(tribe => (
+                                    <TribeCard
+                                        key={tribe.id}
+                                        tribe={tribe}
+                                        onPress={() => router.push(`/tribe/${tribe.id}` as any)}
+                                        onPressJoin={() => {
+                                            if (currentUserId) leaveTribe(currentUserId, tribe.id);
+                                        }}
+                                    />
+                                ))
+                            ) : (
+                                <View style={styles.pendingRow}>
+                                    <MaterialCommunityIcons name="clock-outline" size={18} color="#888" />
+                                    <Text style={styles.pendingText}>0 requests sent</Text>
+                                </View>
+                            )}
+                        </View>
+                    }
                     renderItem={({ item }) => (
                         <TribeCard
-                            tribe={item}
-                            onPress={() => router.push(`/tribe/${item.id}`)}
-                            onPressJoin={() => handleJoinTribe(item.id)}
+                            tribe={{
+                                id: item.id,
+                                name: item.name,
+                                avatarUrl: item.avatar,
+                                themeColor: item.themeColor ?? '#DAA520',
+                                tribeType: (item.type ?? 'accountability') as any,
+                                privacy: item.privacy as any,
+                                description: item.description ?? '',
+                                tags: item.tags ?? [],
+                                memberCount: item.memberCount ?? 0,
+                                naturalStatus: item.naturalStatus ?? null,
+                                activityType: item.activityType,
+                                activityIcon: item.activityIcon,
+                                focusType: (item.type ?? 'accountability') as any,
+                                joinStatus: 'member',
+                            }}
+                            onPress={() => router.push(`/tribe/${item.id}` as any)}
+                            onPressJoin={() => {
+                                if (currentUserId) leaveTribe(currentUserId, item.id);
+                            }}
                         />
                     )}
                     contentContainerStyle={styles.listContent}
@@ -312,6 +374,55 @@ export default function ExploreScreen() {
             );
         }
 
+        // While typing: show search results from DB, merged with store memberships
+        const mergedTribes = tribes.map(t => {
+            const joined = isMember(t.id);
+            const pending = isRequested(t.id);
+            return {
+                ...t,
+                joinStatus: joined ? 'member' : (pending ? 'pending' : t.joinStatus)
+            } as DiscoveryTribe;
+        });
+
+        return (
+            <FlatList
+                data={mergedTribes}
+                keyExtractor={item => item.id}
+                renderItem={({ item }) => (
+                    <TribeCard
+                        tribe={item}
+                        onPress={() => router.push(`/tribe/${item.id}` as any)}
+                        onPressJoin={() => {
+                            if (item.joinStatus === 'member' || item.joinStatus === 'pending') {
+                                if (currentUserId) leaveTribe(currentUserId, item.id);
+                            } else {
+                                const asTribe = {
+                                    ...item,
+                                    avatar: item.avatarUrl,
+                                    type: item.tribeType,
+                                    joinStatus: 'none' as any,
+                                    chief: {} as any,
+                                };
+                                if (currentUserId) joinTribe(currentUserId, asTribe as any);
+                            }
+                        }}
+                    />
+                )}
+                ListEmptyComponent={
+                    !isLoadingTribes ? (
+                        <View style={styles.emptyState}>
+                            <Text style={styles.emptyStateText}>No tribes found for "{searchQuery}".</Text>
+                        </View>
+                    ) : null
+                }
+                contentContainerStyle={styles.listContent}
+                showsVerticalScrollIndicator={false}
+                onScrollBeginDrag={Keyboard.dismiss}
+            />
+        );
+    };
+
+    const renderUsersContent = () => {
         // Users Tab
         const isSearching = searchQuery.length > 0;
         
@@ -473,34 +584,31 @@ export default function ExploreScreen() {
                         style={styles.createTribeBtn}
                         onPress={() => router.push('/create-tribe')}
                     >
-                        <MaterialCommunityIcons name="pencil-plus-outline" size={24} color="#4F6352" />
+                        <MaterialCommunityIcons name="pencil-plus-outline" size={24} color={Colors.theme.dust} />
                     </TouchableOpacity>
                 )}
                 <View style={styles.searchBar}>
-                    <Ionicons name="search" size={20} color="#4F6352" style={{ marginRight: 8 }} />
+                    <Ionicons name="search" size={20} color={Colors.theme.dust} style={{ marginRight: 8 }} />
                     <TextInput
                         style={styles.input}
-                        placeholder={activeTab === 'Tribes' ? "Search..." : "Search..."}
-                        placeholderTextColor="rgba(79, 99, 82, 0.5)"
+                        placeholder="Search..."
+                        placeholderTextColor="rgba(237, 232, 213, 0.5)"
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                         onSubmitEditing={Keyboard.dismiss}
                     />
                     <TouchableOpacity onPress={() => { Keyboard.dismiss(); }}>
-                        <Ionicons name="arrow-forward" size={20} color="#4F6352" />
+                        <Ionicons name="arrow-forward" size={20} color={Colors.theme.dust} />
                     </TouchableOpacity>
                 </View>
                 <TouchableOpacity 
-                    style={[
-                        styles.filterBtn,
-                        !activeFilters && styles.filterBtnInactive
-                    ]} 
+                    style={styles.filterBtn} 
                     onPress={handleFilterPress}
                 >
                     <MaterialCommunityIcons 
                         name="tune" 
                         size={24} 
-                        color={activeFilters ? "white" : "#4F6352"} 
+                        color={Colors.theme.dust} 
                     />
                 </TouchableOpacity>
             </View>
@@ -523,9 +631,29 @@ export default function ExploreScreen() {
                 </View>
             </View>
 
-            <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss} accessible={false}>
-                {renderContent()}
-            </Pressable>
+            <ScrollView
+                ref={scrollViewRef}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={(e) => {
+                    const offsetX = e.nativeEvent.contentOffset.x;
+                    const page = Math.round(offsetX / width);
+                    if (page === 0) {
+                        setActiveTab('Users');
+                    } else {
+                        setActiveTab('Tribes');
+                    }
+                }}
+                style={{ flex: 1 }}
+            >
+                <View style={{ width }}>
+                    {renderUsersContent()}
+                </View>
+                <View style={{ width }}>
+                    {renderTribesContent()}
+                </View>
+            </ScrollView>
 
             <FilterModal
                 visible={filterVisible}
@@ -553,7 +681,7 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: Colors.background, // Beige
+        backgroundColor: Colors.background,
     },
     header: {
         flexDirection: 'row',
@@ -565,31 +693,28 @@ const styles = StyleSheet.create({
     searchBar: {
         flex: 1,
         flexDirection: 'row',
-        backgroundColor: 'rgba(79, 99, 82, 0.1)', // Light sage
+        backgroundColor: 'rgba(237, 232, 213, 0.05)',
         borderRadius: 25,
         alignItems: 'center',
         paddingHorizontal: 15,
         height: 50,
-        borderWidth: 1,
-        borderColor: '#4F6352',
+        borderWidth: 1.5,
+        borderColor: Colors.theme.harvestGold,
     },
     input: {
         flex: 1,
         fontSize: 16,
-        color: '#4F6352',
+        color: Colors.theme.dust,
     },
     filterBtn: {
         width: 50,
         height: 50,
         borderRadius: 25,
-        backgroundColor: '#4F6352', // Active green
+        backgroundColor: Colors.theme.charcoal,
         justifyContent: 'center',
         alignItems: 'center',
-    },
-    filterBtnInactive: {
-        backgroundColor: '#F5F5DC', // Beige
-        borderWidth: 2,
-        borderColor: '#4F6352',
+        borderWidth: 1.5,
+        borderColor: Colors.theme.harvestGold,
     },
     tabContainer: {
         alignItems: 'center',
@@ -598,8 +723,10 @@ const styles = StyleSheet.create({
     },
     tabBackground: {
         flexDirection: 'row',
-        backgroundColor: 'rgba(79, 99, 82, 0.1)',
+        backgroundColor: Colors.theme.matteBlack,
         borderRadius: 20,
+        borderWidth: 1.5,
+        borderColor: Colors.theme.harvestGold,
         padding: 2,
         width: '60%',
     },
@@ -610,22 +737,22 @@ const styles = StyleSheet.create({
         borderRadius: 18,
     },
     activeTabButton: {
-        backgroundColor: '#4F6352',
+        backgroundColor: Colors.theme.harvestGold,
     },
     tabText: {
         fontSize: 14,
         fontWeight: '700',
-        color: '#4F6352',
+        color: 'white',
     },
     activeTabText: {
-        color: 'white',
+        color: Colors.theme.dust,
     },
     listContent: {
         paddingHorizontal: 20,
         paddingBottom: 20,
     },
     exploreSectionTitle: {
-        color: '#4F6352',
+        color: Colors.theme.burntSienna,
         fontSize: 18,
         fontWeight: '700',
         marginLeft: 20,
@@ -636,21 +763,43 @@ const styles = StyleSheet.create({
         width: 50,
         height: 50,
         borderRadius: 25,
-        backgroundColor: 'rgba(79, 99, 82, 0.1)',
+        backgroundColor: 'rgba(237, 232, 213, 0.05)',
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#4F6352',
+        borderWidth: 1.5,
+        borderColor: Colors.theme.harvestGold,
     },
     emptyState: {
         alignItems: 'center',
-        marginTop: 40,
+        marginTop: 60,
+        paddingHorizontal: 32,
     },
     emptyStateText: {
-        color: '#4F6352',
-        fontSize: 16,
+        color: '#888',
+        fontSize: 15,
         fontWeight: '500',
         marginBottom: 15,
+        textAlign: 'center',
+    },
+    tribeEmptyText: {
+        color: Colors.theme.harvestGold,
+        fontSize: 15,
+        fontWeight: '600',
+        textAlign: 'center',
+        marginTop: 16,
+        lineHeight: 22,
+        fontStyle: 'italic',
+    },
+    pendingRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+    },
+    pendingText: {
+        color: '#888',
+        fontSize: 14,
     },
     resetCTA: {
         backgroundColor: '#4F6352',

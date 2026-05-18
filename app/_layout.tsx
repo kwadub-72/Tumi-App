@@ -43,7 +43,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
             initNetwork(session.user.id);
         }
 
-        SplashScreen.hideAsync();
+        SplashScreen.hideAsync().catch(() => {});
     }, [session, loading]);
 
     return <>{children}</>;

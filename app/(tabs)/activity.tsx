@@ -281,7 +281,7 @@ export default function DashboardScreen() {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             <View style={styles.topHeader}>
                 <TouchableOpacity onPress={handleReset} style={styles.iconBtn}>
                     <Ionicons name="refresh" size={24} color={Colors.primary} />

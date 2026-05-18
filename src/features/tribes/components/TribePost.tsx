@@ -5,22 +5,21 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 interface TribePostProps {
     post: FeedPost;
-    cardColor: string; // The contrast color for the card
 }
 
-export default function TribePost({ post, cardColor }: TribePostProps) {
+export default function TribePost({ post }: TribePostProps) {
     // Render mainly Meal posts based on image, but handle others simply
     const isMeal = !!post.meal;
 
     return (
-        <View style={[styles.card, { backgroundColor: cardColor }]}>
+        <View style={styles.card}>
             <View style={styles.header}>
                 <Image source={typeof post.user.avatar === 'string' ? { uri: post.user.avatar } : post.user.avatar} style={styles.avatar} />
                 <View>
                     <View style={styles.nameRow}>
                         <Text style={styles.name}>{post.user.name}</Text>
                         {/* Icons: Leaf + Hammer (Hardcoded per user image style) */}
-                        <MaterialCommunityIcons name="leaf" size={14} color="#4ADE80" style={{ marginLeft: 4 }} />
+                        <MaterialCommunityIcons name="leaf" size={14} color="#1BB607" style={{ marginLeft: 4 }} />
                         <MaterialCommunityIcons name="hammer" size={14} color="#E6A8A8" style={{ marginLeft: 2 }} />
                     </View>
                     <Text style={styles.handle}>{post.user.handle}</Text>
@@ -45,20 +44,20 @@ export default function TribePost({ post, cardColor }: TribePostProps) {
                     <View style={[styles.tableRow, styles.tableHeader]}>
                         <Text style={[styles.cell, { flex: 2, textAlign: 'left' }]}>Meal</Text>
                         <View style={styles.headerCell}>
-                            <MaterialCommunityIcons name="fire" size={12} color="#E6A8A8" />
-                            <Text style={styles.headerText}> {Math.round((post.meal.macros.p || 0) * 4 + (post.meal.macros.c || 0) * 4 + (post.meal.macros.f || 0) * 9)} cals</Text>
+                            <MaterialCommunityIcons name="fire" size={12} color="#DAA520" />
+                            <Text style={styles.headerText}> {Math.round((post.meal.macros.p || 0) * 4 + (post.meal.macros.c || 0) * 4 + (post.meal.macros.f || 0) * 9)}<Text style={{color: '#787878'}}> cals</Text></Text>
                         </View>
                         <View style={styles.headerCell}>
-                            <MaterialCommunityIcons name="food-drumstick" size={12} color="white" />
-                            <Text style={styles.headerText}> {post.meal.macros.p}g</Text>
+                            <MaterialCommunityIcons name="food-drumstick" size={12} color="#DAA520" />
+                            <Text style={styles.headerText}> {post.meal.macros.p}<Text style={{color: '#787878'}}>g</Text></Text>
                         </View>
                         <View style={styles.headerCell}>
-                            <MaterialCommunityIcons name="barley" size={12} color="white" />
-                            <Text style={styles.headerText}> {post.meal.macros.c}g</Text>
+                            <MaterialCommunityIcons name="barley" size={12} color="#DAA520" />
+                            <Text style={styles.headerText}> {post.meal.macros.c}<Text style={{color: '#787878'}}>g</Text></Text>
                         </View>
                         <View style={styles.headerCell}>
-                            <MaterialCommunityIcons name="water" size={12} color="white" />
-                            <Text style={styles.headerText}> {post.meal.macros.f}g</Text>
+                            <MaterialCommunityIcons name="water" size={12} color="#DAA520" />
+                            <Text style={styles.headerText}> {post.meal.macros.f}<Text style={{color: '#787878'}}>g</Text></Text>
                         </View>
                     </View>
                     {post.meal.ingredients.map((ing, idx) => (
@@ -68,20 +67,20 @@ export default function TribePost({ post, cardColor }: TribePostProps) {
                                 <Text style={styles.subText}>{ing.amount}</Text>
                             </View>
                             <View style={styles.cellRow}>
-                                <MaterialCommunityIcons name="fire" size={12} color="#E6A8A8" />
-                                <Text style={styles.rowText}> {Math.round((ing.macros?.p || 0) * 4 + (ing.macros?.c || 0) * 4 + (ing.macros?.f || 0) * 9)} cals</Text>
+                                <MaterialCommunityIcons name="fire" size={12} color="#DAA520" />
+                                <Text style={styles.rowText}> {Math.round((ing.macros?.p || 0) * 4 + (ing.macros?.c || 0) * 4 + (ing.macros?.f || 0) * 9)}<Text style={{color: '#787878'}}> cals</Text></Text>
                             </View>
                             <View style={styles.cellRow}>
-                                <MaterialCommunityIcons name="food-drumstick" size={12} color="white" />
-                                <Text style={styles.rowText}> {ing.macros.p}g</Text>
+                                <MaterialCommunityIcons name="food-drumstick" size={12} color="#DAA520" />
+                                <Text style={styles.rowText}> {ing.macros.p}<Text style={{color: '#787878'}}>g</Text></Text>
                             </View>
                             <View style={styles.cellRow}>
-                                <MaterialCommunityIcons name="barley" size={12} color="white" />
-                                <Text style={styles.rowText}> {ing.macros.c}g</Text>
+                                <MaterialCommunityIcons name="barley" size={12} color="#DAA520" />
+                                <Text style={styles.rowText}> {ing.macros.c}<Text style={{color: '#787878'}}>g</Text></Text>
                             </View>
                             <View style={styles.cellRow}>
-                                <MaterialCommunityIcons name="water" size={12} color="white" />
-                                <Text style={styles.rowText}> {ing.macros.f}g</Text>
+                                <MaterialCommunityIcons name="water" size={12} color="#DAA520" />
+                                <Text style={styles.rowText}> {ing.macros.f}<Text style={{color: '#787878'}}>g</Text></Text>
                             </View>
                         </View>
                     ))}
@@ -104,6 +103,9 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         padding: 15,
         marginBottom: 15,
+        backgroundColor: '#262525',
+        borderWidth: 1,
+        borderColor: '#DAA520',
     },
     header: {
         flexDirection: 'row',
@@ -123,16 +125,16 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     name: {
-        color: 'white',
+        color: '#DAA520',
         fontWeight: 'bold',
         fontSize: 16,
     },
     handle: {
-        color: 'rgba(255,255,255,0.6)',
+        color: '#8B4513',
         fontSize: 12,
     },
     caption: {
-        color: 'white',
+        color: '#EDE8D5',
         fontSize: 18,
         fontWeight: 'bold',
         marginBottom: 15,
@@ -180,7 +182,7 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     subText: {
-        color: 'rgba(255,255,255,0.5)',
+        color: '#787878',
         fontSize: 10,
     }
 });

@@ -12,6 +12,7 @@ interface TribeInfoModalProps {
     iconName: keyof typeof MaterialCommunityIcons.glyphMap;
     iconColor?: string;
     pillColor?: string; // For the pill background
+    modifier?: string; // '+' or '-'
 }
 
 export default function TribeInfoModal({
@@ -22,7 +23,8 @@ export default function TribeInfoModal({
     type,
     iconName,
     iconColor = 'white',
-    pillColor = '#4F6352'
+    pillColor = '#4F6352',
+    modifier
 }: TribeInfoModalProps) {
     const [fadeAnim] = useState(new Animated.Value(0));
 
@@ -52,13 +54,16 @@ export default function TribeInfoModal({
                 onPress={onClose}
             >
                 <Animated.View style={[styles.contentContainer, { opacity: fadeAnim }]}>
-                    {type === 'icon-title' ? (
+                    {type !== 'pill' ? (
                         <View style={styles.alertBox}>
                             <View style={styles.alertHeader}>
                                 <Text style={styles.alertTitle}>{title}</Text>
-                                <MaterialCommunityIcons name={iconName} size={24} color="white" style={{ marginLeft: 8 }} />
+                                <MaterialCommunityIcons name={iconName} size={24} color="#DAA520" style={{ marginLeft: 8 }} />
+                                {modifier && (
+                                    <Text style={{ color: '#DAA520', fontSize: 18, fontWeight: 'bold', marginLeft: 2 }}>{modifier}</Text>
+                                )}
                             </View>
-                            <Text style={styles.alertDesc}>{description}</Text>
+                            {description ? <Text style={styles.alertDesc}>{description}</Text> : null}
                         </View>
                     ) : (
                         <View style={[styles.pillBox, { backgroundColor: pillColor }]}>
@@ -67,7 +72,7 @@ export default function TribeInfoModal({
                             </View>
                             <View style={styles.pillContent}>
                                 <Text style={styles.pillTitle}>{title}</Text>
-                                <Text style={styles.pillDesc}>{description}</Text>
+                                {description ? <Text style={styles.pillDesc}>{description}</Text> : null}
                             </View>
                         </View>
                     )}
@@ -90,7 +95,7 @@ const styles = StyleSheet.create({
     },
     // Image 1 Style: Alert Box
     alertBox: {
-        backgroundColor: '#4F6352', // Dark Green
+        backgroundColor: '#262525', // Deep Charcoal
         borderRadius: 30, // Large Radius
         paddingVertical: 25,
         paddingHorizontal: 30,
@@ -101,6 +106,8 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 5,
         elevation: 10,
+        borderWidth: 1.5,
+        borderColor: '#DAA520', // Harvest Gold Border
     },
     alertHeader: {
         flexDirection: 'row',
@@ -108,13 +115,13 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     alertTitle: {
-        color: 'white',
+        color: '#DAA520', // Harvest Gold
         fontSize: 24,
         fontWeight: 'bold',
         fontStyle: 'italic', // Matches Image 1
     },
     alertDesc: {
-        color: 'rgba(255,255,255,0.9)',
+        color: '#EDE8D5', // Dust
         fontSize: 14,
         textAlign: 'center',
         fontStyle: 'italic',
@@ -127,11 +134,14 @@ const styles = StyleSheet.create({
         padding: 15,
         alignItems: 'center',
         width: '90%',
+        backgroundColor: '#262525', // Default to Charcoal
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.2,
         shadowRadius: 4,
         elevation: 5,
+        borderWidth: 1,
+        borderColor: '#DAA520',
     },
     pillIconContainer: {
         marginRight: 15,
@@ -141,14 +151,14 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     pillTitle: {
-        color: 'white',
+        color: '#DAA520', // Harvest Gold
         fontSize: 22,
         fontWeight: 'bold',
         fontStyle: 'italic',
         marginBottom: 2,
     },
     pillDesc: {
-        color: 'white',
+        color: '#EDE8D5', // Dust
         fontSize: 14,
         fontStyle: 'italic',
     }

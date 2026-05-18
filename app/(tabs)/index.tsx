@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/src/shared/theme/Colors';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, router } from 'expo-router';
 
 // Views
 import DiaryView from '@/src/features/home/components/DiaryView';
@@ -12,24 +12,31 @@ import TribeView from '@/src/features/home/components/TribeView';
 
 // Components
 import TribeSelectionModal from '@/src/features/home/components/TribeSelectionModal';
+import TribeScoreboardModal from '@/src/features/tribes/components/TribeScoreboardModal';
 
 type NavTab = 'Following' | 'Diary' | 'Tribe';
 
 import { useUserTribeStore } from '@/src/store/UserTribeStore';
-// ... 
+import { useAuthStore } from '@/store/AuthStore';
 
 export default function HomeScreen() {
     const params = useLocalSearchParams();
-    const { init, selectedTribe } = useUserTribeStore();
+    const { init, selectedTribe, selectTribe } = useUserTribeStore();
+    const session = useAuthStore(state => state.session);
+    const userId = session?.user?.id;
+
     const [currentTab, setCurrentTab] = useState<NavTab>('Following');
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [viewDate, setViewDate] = useState(new Date());
     const [isCalendarVisible, setIsCalendarVisible] = useState(false);
     const [isTribeModalVisible, setIsTribeModalVisible] = useState(false);
+    const [isScoreboardVisible, setIsScoreboardVisible] = useState(false);
 
     useEffect(() => {
-        init();
-    }, []);
+        if (userId) {
+            init(userId);
+        }
+    }, [userId]);
 
     useEffect(() => {
         if (params.tab === 'Following') {
@@ -39,6 +46,16 @@ export default function HomeScreen() {
 
     // Format date for button (e.g., "Dec 29, 2025")
     const formattedDate = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+    const isTribeThemeActive = currentTab === 'Tribe' && selectedTribe;
+    const dynamicPrimaryColor = currentTab === 'Diary' ? '#DAA520' : '#262525';
+    const dateButtonTextColor = currentTab === 'Diary' ? '#262525' : '#EDE8D5';
+
+    useEffect(() => {
+        if (currentTab === 'Tribe' && !selectedTribe) {
+            setIsTribeModalVisible(true);
+        }
+    }, [currentTab, selectedTribe]);
 
     const handleTabPress = (tab: NavTab) => {
         if (tab === 'Tribe' && currentTab === 'Tribe') {
@@ -70,30 +87,25 @@ export default function HomeScreen() {
     const calendarHolders = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
     const monthName = viewDate.toLocaleString('default', { month: 'long' });
 
-    const isTribeThemeActive = currentTab === 'Tribe' && selectedTribe;
-    const dynamicPrimaryColor = isTribeThemeActive ? selectedTribe.themeColor : Colors.primary;
-
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             {/* Top Navigation */}
             <View style={styles.topNavWrapper}>
                 <View style={styles.tabsContainer}>
                     {(['Following', 'Diary', 'Tribe'] as NavTab[]).map((tab) => {
                         const isActive = currentTab === tab;
-                        const isTribeTabActive = isActive && tab === 'Tribe' && selectedTribe;
                         return (
                             <TouchableOpacity
                                 key={tab}
                                 style={[
                                     styles.tabButton,
-                                    isActive && styles.tabButtonActive,
-                                    isTribeTabActive && { backgroundColor: selectedTribe.themeColor }
+                                    isActive && { backgroundColor: '#DAA520' }
                                 ]}
                                 onPress={() => handleTabPress(tab)}
                             >
                                 <Text style={[
                                     styles.tabText,
-                                    isActive && styles.tabTextActive
+                                    isActive ? { color: '#262525' } : { color: '#EDE8D5' }
                                 ]}>
                                     {tab}
                                 </Text>
@@ -102,12 +114,29 @@ export default function HomeScreen() {
                     })}
                 </View>
 
-                <TouchableOpacity
-                    style={[styles.dateButton, { backgroundColor: dynamicPrimaryColor }]}
-                    onPress={() => setIsCalendarVisible(true)}
-                >
-                    <Text style={styles.dateButtonText}>{formattedDate}</Text>
-                </TouchableOpacity>
+                {currentTab === 'Diary' && (
+                    <TouchableOpacity
+                        style={[
+                            styles.dateButton, 
+                            { backgroundColor: dynamicPrimaryColor, borderWidth: currentTab === 'Diary' ? 0 : 1, borderColor: '#EDE8D5' }
+                        ]}
+                        onPress={() => setIsCalendarVisible(true)}
+                    >
+                        <Text style={[styles.dateButtonText, { color: dateButtonTextColor }]}>{formattedDate}</Text>
+                    </TouchableOpacity>
+                )}
+
+                {currentTab === 'Tribe' && selectedTribe && (
+                    <TouchableOpacity
+                        style={[
+                            styles.dateButton, 
+                            { backgroundColor: '#262525', borderWidth: 1, borderColor: '#DAA520' }
+                        ]}
+                        onPress={() => router.push(`/tribe/${selectedTribe.id}` as any)}
+                    >
+                        <Text style={[styles.dateButtonText, { color: '#DAA520' }]}>{selectedTribe.name}</Text>
+                    </TouchableOpacity>
+                )}
             </View>
 
             {/* Content View */}
@@ -118,6 +147,13 @@ export default function HomeScreen() {
             <TribeSelectionModal
                 visible={isTribeModalVisible}
                 onClose={() => setIsTribeModalVisible(false)}
+            />
+
+            <TribeScoreboardModal
+                visible={isScoreboardVisible}
+                onClose={() => setIsScoreboardVisible(false)}
+                tribeId={selectedTribe?.id}
+                tribeName={selectedTribe?.name}
             />
 
             {/* Calendar Modal */}
@@ -169,6 +205,16 @@ export default function HomeScreen() {
                     </Pressable>
                 </Pressable>
             </Modal>
+            {/* Scoreboard FAB floating at the bottom right */}
+            {currentTab === 'Tribe' && selectedTribe && (
+                <TouchableOpacity
+                    style={styles.scoreboardTriggerButton}
+                    onPress={() => setIsScoreboardVisible(true)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                    <Ionicons name="podium" size={24} color="white" />
+                </TouchableOpacity>
+            )}
         </SafeAreaView>
     );
 }
@@ -274,5 +320,23 @@ const styles = StyleSheet.create({
     dayTextActive: {
         color: Colors.primary,
         fontWeight: 'bold',
+    },
+    scoreboardTriggerButton: {
+        position: 'absolute',
+        right: 24,
+        bottom: 24, // Floating beautifully above the feed list!
+        width: 56, // Enforcing a larger, touch-friendly, standard FAB size
+        height: 56,
+        borderRadius: 28,
+        backgroundColor: '#262525', // Charcoal background matching requested #262525
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.45,
+        shadowRadius: 8,
+        elevation: 10,
+        borderWidth: 1.5,
+        borderColor: '#DAA520', // Harvest Gold outline
     },
 });

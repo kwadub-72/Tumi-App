@@ -1,7 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Tabs, usePathname, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Keyboard, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Keyboard, Modal, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { Colors } from '../../src/shared/theme/Colors';
 import { WeightStore } from '../../store/WeightStore';
@@ -154,10 +154,11 @@ export default function TabLayout() {
                     headerShown: false,
                     tabBarStyle: {
                         backgroundColor: Colors.tabBar,
-                        borderTopWidth: 0,
-                        height: 90,
-                        paddingBottom: 25,
-                        paddingTop: 10,
+                        borderTopWidth: 1.5,
+                        borderTopColor: '#DAA520', // Glowing Harvest Gold top border
+                        height: Platform.OS === 'ios' ? 88 : 68, // Shaved height while keeping full visibility on all screens
+                        paddingBottom: Platform.OS === 'ios' ? 24 : 10, // Move buttons up so they don't fall off the screen
+                        paddingTop: 8,
                         elevation: 0,
                     },
                     tabBarShowLabel: false,
@@ -185,20 +186,24 @@ export default function TabLayout() {
                     options={{
                         tabBarIcon: ({ color, focused }) => (
                             <View style={{
-                                width: 64,
-                                height: 64,
-                                borderRadius: 32,
+                                width: 60,
+                                height: 60,
+                                borderRadius: 30,
                                 backgroundColor: Colors.primary,
                                 justifyContent: 'center',
                                 alignItems: 'center',
-                                marginTop: -30,
+                                position: 'absolute',
+                                top: -30, // Aligns button center exactly on top gold border
+                                alignSelf: 'center',
                                 shadowColor: "#000",
                                 shadowOffset: { width: 0, height: 4 },
                                 shadowOpacity: 0.3,
                                 shadowRadius: 4,
                                 elevation: 5,
+                                borderWidth: 1.5,
+                                borderColor: '#DAA520', // Cohesive gold contour border
                             }}>
-                                <Ionicons name="add" size={40} color="white" />
+                                <Ionicons name="add" size={36} color="white" />
                             </View>
                         ),
                     }}

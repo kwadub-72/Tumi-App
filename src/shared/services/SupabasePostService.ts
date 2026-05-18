@@ -11,6 +11,8 @@ export interface GetFeedOptions {
     date?: Date;             // selected date (diary: any date; following/tribe: max 7d back)
     tribeId?: string;        // required for tribe feed
     limit?: number;
+    /** How many days back to load for tribe feeds. Defaults to 7. Callers increase this to paginate. */
+    daysBack?: number;
 }
 
 // ─── Mapper ───────────────────────────────────────────────────────────────────
@@ -76,7 +78,7 @@ export const SupabasePostService = {
      * - 'profile': all posts by the current user (unlimited date range)
      */
     async getFeed(opts: GetFeedOptions): Promise<FeedPost[]> {
-        const { userId, feedType, date = new Date(), tribeId, limit = 50 } = opts;
+        const { userId, feedType, date = new Date(), tribeId, limit = 50, daysBack } = opts;
 
         // Build date window
         const dayStart = new Date(date);
@@ -120,8 +122,9 @@ export const SupabasePostService = {
         } else if (feedType === 'tribe') {
             if (!tribeId) return [];
 
+            const windowDays = daysBack ?? 7;
             const weekBack = new Date(date);
-            weekBack.setDate(weekBack.getDate() - 7);
+            weekBack.setDate(weekBack.getDate() - windowDays);
 
             // Get tribe member IDs
             const { data: members } = await supabase
@@ -157,19 +160,22 @@ export const SupabasePostService = {
 
             const posts = (data ?? []).map((row: any) => rowToFeedPost(row, userId));
 
-            // Batch-fetch what the current user has liked / bookmarked
+            // Batch-fetch what the current user has liked / bookmarked / commented
             const postIds = posts.map(p => p.id);
             if (postIds.length > 0) {
                 try {
-                    const [likesRes, bookmarksRes] = await Promise.all([
+                    const [likesRes, bookmarksRes, commentsRes] = await Promise.all([
                         supabase.from('likes').select('post_id').eq('user_id', userId).in('post_id', postIds),
                         supabase.from('post_bookmarks').select('post_id').eq('user_id', userId).in('post_id', postIds),
+                        supabase.from('comments').select('post_id').eq('author_id', userId).in('post_id', postIds),
                     ]);
                     const likedSet = new Set((likesRes.data ?? []).map((l: any) => l.post_id));
                     const savedSet = new Set((bookmarksRes.data ?? []).map((b: any) => b.post_id));
+                    const commentedSet = new Set((commentsRes.data ?? []).map((c: any) => c.post_id));
                     posts.forEach(p => {
                         p.isLiked = likedSet.has(p.id);
                         p.isSaved = savedSet.has(p.id);
+                        p.hasCommented = commentedSet.has(p.id);
                     });
                 } catch (enrichErr) {
                     console.warn('[SupabasePostService.getFeed] Interaction enrichment failed:', enrichErr);
@@ -192,7 +198,7 @@ export const SupabasePostService = {
 
     async getPostDetails(postId: string, userId: string, commentOffset: number = 0, commentLimit: number = 20): Promise<{ post: FeedPost | null, comments: Comment[] }> {
         // Optimized parallel fetching to simulate a single complex query due to view limitations
-        const [postRes, commentsRes, likesRes, bookmarksRes] = await Promise.all([
+        const [postRes, commentsRes, likesRes, bookmarksRes, userCommentsRes] = await Promise.all([
             supabase.from('posts_with_counts').select('*').eq('id', postId).single(),
             supabase.from('comments')
                 .select(`
@@ -204,6 +210,7 @@ export const SupabasePostService = {
                 .range(commentOffset, commentOffset + commentLimit - 1),
             supabase.from('likes').select('post_id').eq('user_id', userId).eq('post_id', postId),
             supabase.from('post_bookmarks').select('post_id').eq('user_id', userId).eq('post_id', postId),
+            supabase.from('comments').select('post_id').eq('author_id', userId).eq('post_id', postId).limit(1),
         ]);
 
         if (postRes.error || !postRes.data) {
@@ -214,6 +221,7 @@ export const SupabasePostService = {
         const post = rowToFeedPost(postRes.data, userId);
         post.isLiked = (likesRes.data ?? []).length > 0;
         post.isSaved = (bookmarksRes.data ?? []).length > 0;
+        post.hasCommented = (userCommentsRes.data ?? []).length > 0;
 
         const commentsData = commentsRes.data ?? [];
         const comments = commentsData.map((row: any) => ({

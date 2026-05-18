@@ -76,7 +76,7 @@ export const H2HLeaderboardDashboard = () => {
                                     <TouchableOpacity onPress={() => setModalInfo({
                                         visible: true, title: 'Natural Athlete', description: 'This user is verified as a natural athlete by the tribe.', iconName: 'leaf'
                                     })}>
-                                        <MaterialCommunityIcons name="leaf" size={14} color="#4ADE80" style={styles.icon} />
+                                        <MaterialCommunityIcons name="leaf" size={14} color="#1BB607" style={styles.icon} />
                                     </TouchableOpacity>
                                 )}
                                 {user.activity && (

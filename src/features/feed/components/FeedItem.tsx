@@ -518,18 +518,26 @@ export default function FeedItem({
         return `${val}`;
     };
 
-    const renderMacroColumn = (icon: any, val: number, unit: string, width?: number, colorOverride?: string, scale: 'normal' | 'small' = 'normal') => (
-        <View style={[styles.macroValueItem, width ? { width, justifyContent: 'flex-start' } : {}]}>
-            <MaterialCommunityIcons name={icon} size={scale === 'small' ? 14 : 18} color={colorOverride || Colors.theme.softWhite} />
-            <Text style={[
-                styles.macroValueText, 
-                colorOverride && { color: colorOverride },
-                scale === 'small' && { fontSize: 13, fontWeight: '500' }
-            ]}>
-                {formatVal(val)}{unit}
-            </Text>
-        </View>
-    );
+    const isTribeFeed = !cardColor || cardColor === '#262525';
+
+    const renderMacroColumn = (icon: any, val: number, unit: string, width?: number, colorOverride?: string, scale: 'normal' | 'small' = 'normal', textColorOverride?: string) => {
+        const numColor = isTribeFeed ? '#FFFFFF' : (textColorOverride || colorOverride || 'white');
+        const unitColor = isTribeFeed ? '#FFFFFF' : (textColorOverride || colorOverride || 'white');
+        const iconColor = isTribeFeed ? '#DAA520' : (colorOverride || Colors.theme.softWhite);
+
+        return (
+            <View style={[styles.macroValueItem, width ? { width, justifyContent: 'flex-start' } : {}]}>
+                <MaterialCommunityIcons name={icon} size={scale === 'small' ? 14 : 18} color={iconColor} />
+                <Text style={[
+                    styles.macroValueText, 
+                    scale === 'small' && { fontSize: 13, fontWeight: '500' }
+                ]}>
+                    <Text style={{ color: numColor }}>{formatVal(val)}</Text>
+                    <Text style={{ color: unitColor }}>{unit}</Text>
+                </Text>
+            </View>
+        );
+    };
 
     const renderMacroValue = (icon: any, val: number, unit: string, colorOverride?: string, showPlus?: boolean, scale: 'normal' | 'small' = 'normal', width?: number) => {
         return renderMacroColumn(icon, Math.abs(val), unit, width, colorOverride, scale);
@@ -760,10 +768,10 @@ export default function FeedItem({
                     <View style={styles.mealMainStats}>
                         <Text style={styles.mealType}>{meal.type}</Text>
                         <View style={styles.mealMacrosFixed}>
-                            {renderMacroColumn('fire', computeCals(meal.macros?.p, meal.macros?.c, meal.macros?.f), ' cals', 85, undefined, 'normal')}
-                            {renderMacroColumn('food-drumstick', meal.macros?.p || 0, 'g', 55, undefined, 'normal')}
-                            {renderMacroColumn('barley', meal.macros?.c || 0, 'g', 55, undefined, 'normal')}
-                            {renderMacroColumn('water', meal.macros?.f || 0, 'g', 55, undefined, 'normal')}
+                            {renderMacroColumn('fire', computeCals(meal.macros?.p, meal.macros?.c, meal.macros?.f), ' cals', 85, Colors.theme.harvestGold, 'normal', Colors.theme.softWhite)}
+                            {renderMacroColumn('food-drumstick', meal.macros?.p || 0, 'g', 55, Colors.theme.harvestGold, 'normal', Colors.theme.softWhite)}
+                            {renderMacroColumn('barley', meal.macros?.c || 0, 'g', 55, Colors.theme.harvestGold, 'normal', Colors.theme.softWhite)}
+                            {renderMacroColumn('water', meal.macros?.f || 0, 'g', 55, Colors.theme.harvestGold, 'normal', Colors.theme.softWhite)}
                         </View>
                     </View>
                 )}
@@ -830,8 +838,21 @@ export default function FeedItem({
                         <Text style={styles.workoutHeaderTitle}>{workout.title}</Text>
                         {workout.duration > 0 && (
                             <View style={styles.workoutHeaderTimeBlock}>
-                                <MaterialCommunityIcons name="timer-outline" size={20} color={Colors.theme.softWhite} />
-                                <Text style={styles.workoutDurationText}>{formatDuration(workout.duration)}</Text>
+                                <MaterialCommunityIcons name="timer-outline" size={20} color={isTribeFeed ? '#DAA520' : Colors.theme.softWhite} />
+                                <Text style={[styles.workoutDurationText, isTribeFeed && { color: '#FFFFFF' }]}>
+                                    {isTribeFeed ? (
+                                        <>
+                                            <Text style={{ color: '#FFFFFF' }}>{workout.duration >= 60 ? Math.floor(workout.duration / 60) : workout.duration}</Text>
+                                            <Text style={{ color: '#FFFFFF' }}>{workout.duration >= 60 ? ' hr' : ' min'}</Text>
+                                            {workout.duration >= 60 && workout.duration % 60 > 0 && (
+                                                <>
+                                                    <Text style={{ color: '#FFFFFF' }}> {workout.duration % 60}</Text>
+                                                    <Text style={{ color: '#FFFFFF' }}> min</Text>
+                                                </>
+                                            )}
+                                        </>
+                                    ) : formatDuration(workout.duration)}
+                                </Text>
                             </View>
                         )}
                     </View>
@@ -879,11 +900,28 @@ export default function FeedItem({
                                             <MaterialCommunityIcons 
                                                 name={ex.type === 'Cardio' ? 'run' : 'dumbbell'} 
                                                 size={18} 
-                                                color="rgba(255,255,255,0.7)" 
+                                                color={isTribeFeed ? '#DAA520' : "rgba(255,255,255,0.7)"} 
                                                 style={{ marginRight: 8 }}
                                             />
                                             <Text style={styles.exerciseFeedDetails}>
-                                                {ex.type === 'Cardio' ? cardioStr : setsStr}
+                                                {ex.type === 'Cardio' ? (
+                                                    isTribeFeed ? (
+                                                        <>
+                                                            {ex.speed ? <><Text style={{ color: '#FFFFFF' }}>{ex.speed}</Text><Text style={{ color: '#FFFFFF' }}> speed</Text></> : null}
+                                                            {ex.incline ? <><Text style={{ color: '#FFFFFF' }}>, </Text><Text style={{ color: '#FFFFFF' }}>{ex.incline}</Text><Text style={{ color: '#FFFFFF' }}> incline</Text></> : null}
+                                                            {ex.duration ? <><Text style={{ color: '#FFFFFF' }}>, </Text><Text style={{ color: '#FFFFFF' }}>{ex.duration}</Text><Text style={{ color: '#FFFFFF' }}> min</Text></> : null}
+                                                        </>
+                                                    ) : cardioStr
+                                                ) : (
+                                                    isTribeFeed && ex.sets?.length ? (
+                                                        <>
+                                                            <Text style={{ color: '#FFFFFF' }}>{ex.sets.length}</Text>
+                                                            <Text style={{ color: '#FFFFFF' }}> sets x </Text>
+                                                            <Text style={{ color: '#FFFFFF' }}>{ex.sets[0]?.reps || 0}</Text>
+                                                            <Text style={{ color: '#FFFFFF' }}> reps</Text>
+                                                        </>
+                                                    ) : setsStr
+                                                )}
                                             </Text>
                                         </View>
                                     </TouchableOpacity>
@@ -938,7 +976,11 @@ export default function FeedItem({
 
     return (
         <Animated.View 
-            style={[styles.card, cardColor ? { backgroundColor: cardColor } : {}]}
+            style={[
+                styles.card, 
+                cardColor ? { backgroundColor: cardColor } : {},
+                isTribeFeed && { borderColor: '#DAA520', borderWidth: 1 }
+            ]}
             // @ts-ignore
             sharedTransitionTag={sharedTransitionTag}
         >
@@ -982,25 +1024,30 @@ export default function FeedItem({
                                 <MaterialCommunityIcons
                                     name={post.user.status === 'enhanced' ? "lightning-bolt" : "leaf"}
                                     size={16}
-                                    color={post.user.status === 'enhanced' ? Colors.theme.harvestGold : Colors.theme.oliveDrab}
+                                    color={post.user.status === 'enhanced' ? Colors.theme.harvestGold : Colors.natural}
                                 />
                             </TouchableOpacity>
                         )}
-                        {post.user.activityIcon && (
-                            <TouchableOpacity onPress={onPressHammer} style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-                                <MaterialCommunityIcons
-                                    name={post.user.activityIcon as any}
-                                    size={16}
-                                    color='white'
-                                />
-                                {(post.user as any).activity?.toLowerCase().includes('bulk') && (
-                                    <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold', marginLeft: 1, marginTop: -2 }}>+</Text>
-                                )}
-                                {(post.user as any).activity?.toLowerCase().includes('cut') && (
-                                    <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold', marginLeft: 1, marginTop: -2 }}>-</Text>
-                                )}
-                            </TouchableOpacity>
-                        )}
+                        {post.user.activityIcon && (() => {
+                            const activity = (post.user as any).activity || '';
+                            const isPositive = activity.toLowerCase().includes('bulk') || activity.toLowerCase().includes('increase');
+                            const isNegative = activity.toLowerCase().includes('cut') || activity.toLowerCase().includes('decrease');
+                            const mathIndicator = isPositive ? '+' : (isNegative ? '-' : '');
+                            const color = Colors.theme.dust;
+                            
+                            return (
+                                <TouchableOpacity onPress={onPressHammer} style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 6 }}>
+                                    <MaterialCommunityIcons
+                                        name={post.user.activityIcon as any}
+                                        size={16}
+                                        color={color}
+                                    />
+                                    {mathIndicator ? (
+                                        <Text style={{ color, fontSize: 10, fontWeight: 'bold', marginLeft: 1 }}>{mathIndicator}</Text>
+                                    ) : null}
+                                </TouchableOpacity>
+                            );
+                        })()}
                     </View>
                     <TouchableOpacity onPress={() => navigateToProfile(post.user)}>
                         <Text style={styles.handle}>{post.user.handle}</Text>
@@ -1017,7 +1064,7 @@ export default function FeedItem({
                 {!isDetailView && (
                     <TouchableOpacity onPress={toggleExpand} style={styles.expandLineTrigger}>
                         <View style={styles.dividerHalf} />
-                        <Ionicons name="ellipsis-horizontal" size={16} color="rgba(255,255,255,0.5)" />
+                        <Ionicons name="ellipsis-horizontal" size={16} color={Colors.theme.harvestGold} />
                         <View style={styles.dividerHalf} />
                     </TouchableOpacity>
                 )}
@@ -1027,7 +1074,7 @@ export default function FeedItem({
                 {(!isDetailView && !post.meal && !post.macroUpdate && !post.workout && !post.snapshot) && (
                     <TouchableOpacity onPress={toggleExpand} style={styles.expandLineTrigger}>
                         <View style={styles.dividerHalf} />
-                        <Ionicons name="ellipsis-horizontal" size={16} color="rgba(255,255,255,0.5)" />
+                        <Ionicons name="ellipsis-horizontal" size={16} color={Colors.theme.harvestGold} />
                         <View style={styles.dividerHalf} />
                     </TouchableOpacity>
                 )}
@@ -1082,7 +1129,11 @@ export default function FeedItem({
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actionItem} onPress={onPressComment}>
                         <View style={styles.iconBox}>
-                            <Ionicons name="chatbubble-ellipses" size={26} color={Colors.theme.dust} />
+                            <Ionicons 
+                                name={post.hasCommented ? "chatbubble-ellipses" : "chatbubble-ellipses-outline"} 
+                                size={26} 
+                                color={post.hasCommented ? Colors.theme.harvestGold : Colors.theme.dust} 
+                            />
                         </View>
                         <Text style={styles.actionCount}>{post.stats.comments}</Text>
                     </TouchableOpacity>
@@ -1101,12 +1152,12 @@ export default function FeedItem({
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: Colors.theme.matteBlack, // Dark Onyx Card
+        backgroundColor: '#262525', // Charcoal Card Background
         borderRadius: 45,
         padding: 20,
         marginBottom: 20,
         borderWidth: 1,
-        borderColor: `rgba(139, 69, 19, 0.3)`, // Low opacity Burnt Sienna border
+        borderColor: '#DAA520', // Harvest Gold border
     },
     header: {
         flexDirection: 'row',
@@ -1236,7 +1287,7 @@ const styles = StyleSheet.create({
         paddingLeft: 10,
     },
     mealType: {
-        color: 'white',
+        color: Colors.theme.harvestGold,
         fontSize: 20,
         fontWeight: 'bold',
         width: 85,
@@ -1333,7 +1384,7 @@ const styles = StyleSheet.create({
     dividerHalf: {
         flex: 1,
         height: 1,
-        backgroundColor: 'rgba(255,255,255,0.2)',
+        backgroundColor: Colors.theme.burntSienna,
         marginHorizontal: 10,
     },
     mediaFrame: {

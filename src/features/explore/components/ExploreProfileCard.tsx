@@ -72,7 +72,7 @@ export default function ExploreProfileCard({
                                 <MaterialCommunityIcons
                                     name={user.status === 'enhanced' ? "lightning-bolt" : "leaf"}
                                     size={20}
-                                    color={user.status === 'enhanced' ? "#FFD700" : "#4ADE80"}
+                                    color={user.status === 'enhanced' ? "#DAA520" : "#1BB607"}
                                     style={{ marginHorizontal: 4 }}
                                 />
                             </TouchableOpacity>

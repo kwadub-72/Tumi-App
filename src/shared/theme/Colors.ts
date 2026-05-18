@@ -1,8 +1,10 @@
 const Palette = {
     matteBlack: '#1A1A1A',
+    charcoal: '#262525',
     harvestGold: '#DAA520',
     burntSienna: '#8B4513',
     oliveDrab: '#556B2F',
+    naturalGreen: '#1BB607',
     dust: '#EDE8D5',
     softWhite: '#FFFFFF',
     transparent: 'transparent',
@@ -32,10 +34,12 @@ export const Colors = {
 
     // Status
     success: Palette.oliveDrab,
+    natural: Palette.naturalGreen,
     error: Palette.burntSienna,
 
     // Feature specific
     pillBackground: Palette.harvestGold,
     pillText: Palette.matteBlack,
     topNavBackground: Palette.matteBlack,
+    tribeCardBackground: Palette.charcoal,
 };

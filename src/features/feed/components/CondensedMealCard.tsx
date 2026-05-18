@@ -67,7 +67,7 @@ export function CondensedMealCard({
             <View style={[styles.centerColumn, { zIndex: 1 }]}>
                 <TouchableOpacity style={styles.headerRow} onPress={onPressProfile}>
                     <Text style={styles.authorName} numberOfLines={1}>{authorName}</Text>
-                    {authorStatus === 'natural' && <MaterialCommunityIcons name="leaf" size={14} color="#789370" />}
+                    {authorStatus === 'natural' && <MaterialCommunityIcons name="leaf" size={14} color="#1BB607" />}
                     {authorStatus === 'enhanced' && <MaterialCommunityIcons name="hammer" size={14} color="rgba(255,255,255,0.8)" />}
                     {authorActivityIcon && (
                         <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>

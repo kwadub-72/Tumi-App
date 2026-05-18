@@ -37,22 +37,22 @@ describe('NutritionService', () => {
     describe('calculateMacros', () => {
         it('should calculate macros correctly for 1 oz', () => {
             const result = NutritionService.calculateMacros(1);
-            expect(result.cals).toBe(300);
+            expect(result.cals).toBe(290);
             expect(result.macros).toEqual({ p: 25, c: 25, f: 10 });
         });
 
         it('should calculate macros correctly for 2 oz', () => {
             const result = NutritionService.calculateMacros(2);
-            expect(result.cals).toBe(600);
+            expect(result.cals).toBe(580);
             expect(result.macros).toEqual({ p: 50, c: 50, f: 20 });
         });
 
         it('should round values', () => {
             const result = NutritionService.calculateMacros(1.5);
-            // 300 * 1.5 = 450
+            // 38 * 4 + 38 * 4 + 15 * 9 = 152 + 152 + 135 = 439
             // 25 * 1.5 = 37.5 -> 38
             // 10 * 1.5 = 15
-            expect(result.cals).toBe(450);
+            expect(result.cals).toBe(439);
             expect(result.macros.p).toBe(38);
             expect(result.macros.c).toBe(38);
             expect(result.macros.f).toBe(15);
@@ -71,7 +71,7 @@ describe('NutritionService', () => {
                 { id: '2', name: 'B', amount: '1', cals: 200, macros: { p: 20, c: 10, f: 5 } },
             ];
             const result = NutritionService.sumMacros(items);
-            expect(result.cals).toBe(300);
+            expect(result.cals).toBe(243);
             expect(result.macros).toEqual({ p: 30, c: 15, f: 7 });
         });
     });

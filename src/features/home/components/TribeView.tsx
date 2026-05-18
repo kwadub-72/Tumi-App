@@ -175,13 +175,25 @@ export default function TribeView({ selectedDate }: TribeViewProps) {
         const comment = await SupabasePostService.addComment(activePost.id, session.user.id, text.trim());
         if (comment) {
             setCommentsForPost(prev => [...(prev ?? []), comment]);
-            setPosts(prev => prev.map(p => p.id === activePost.id ? { ...p, stats: { ...p.stats, comments: p.stats.comments + 1 } } : p));
+            setPosts(prev => prev.map(p => p.id === activePost.id ? { ...p, hasCommented: true, stats: { ...p.stats, comments: p.stats.comments + 1 } } : p));
         }
     };
 
     const handleCommentDeleted = async (commentId: string) => {
         await SupabasePostService.deleteComment(commentId);
-        setCommentsForPost(prev => (prev ?? []).filter(c => c.id !== commentId));
+        setCommentsForPost(prev => {
+            const nextComments = (prev ?? []).filter(c => c.id !== commentId);
+            const userStillHasComment = nextComments.some(c => c.user.id === session?.user?.id);
+            setPosts(prevPosts => prevPosts.map(p => p.id === activePost?.id
+                ? { 
+                    ...p, 
+                    hasCommented: userStillHasComment, 
+                    stats: { ...p.stats, comments: Math.max(0, p.stats.comments - 1) } 
+                  }
+                : p
+            ));
+            return nextComments;
+        });
     };
 
     const handleDeletePost = async () => {
@@ -242,26 +254,33 @@ export default function TribeView({ selectedDate }: TribeViewProps) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     };
 
+    const handleShareRecorded = (postId: string) => {
+        setPosts(prev => prev.map(p => p.id === postId
+            ? { ...p, stats: { ...p.stats, shares: p.stats.shares + 1 } }
+            : p
+        ));
+    };
+
     if (!selectedTribe) {
         return (
-            <View style={[styles.centered, { backgroundColor: Colors.background }]}>
-                <Ionicons name="people-outline" size={56} color={Colors.textDark + '44'} />
-                <Text style={styles.emptyTitle}>Tribe Activity</Text>
-                <Text style={styles.emptySubtitle}>Select a tribe to see updates from members.</Text>
+            <View style={[styles.centered, { backgroundColor: '#1A1A1A' }]}>
+                <Ionicons name="people-outline" size={56} color="rgba(237,232,213,0.3)" />
+                <Text style={[styles.emptyTitle, { color: '#DAA520' }]}>Tribe Activity</Text>
+                <Text style={[styles.emptySubtitle, { color: '#EDE8D5' }]}>Select a tribe to see updates from members.</Text>
             </View>
         );
     }
 
     if (loading) {
         return (
-            <View style={[styles.centered, { backgroundColor: selectedTribe.themeColor }]}>
-                <ActivityIndicator color={Colors.textDark} size="large" />
+            <View style={[styles.centered, { backgroundColor: '#1A1A1A' }]}>
+                <ActivityIndicator color="#DAA520" size="large" />
             </View>
         );
     }
 
     return (
-        <View style={[styles.container, { backgroundColor: selectedTribe.themeColor }]}>
+        <View style={[styles.container, { backgroundColor: '#1A1A1A' }]}>
             <VerifiedModal visible={isVerifiedModalVisible} onClose={() => setVerifiedModalVisible(false)} status={activeStatus} />
             <HammerModal
                 visible={isHammerModalVisible}
@@ -297,6 +316,7 @@ export default function TribeView({ selectedDate }: TribeViewProps) {
                 visible={isShareModalVisible}
                 onClose={() => { setShareModalVisible(false); setShareTargetPost(null); }}
                 post={shareTargetPost}
+                onShareRecorded={handleShareRecorded}
             />
 
             {showDeleteToast && (
@@ -318,6 +338,7 @@ export default function TribeView({ selectedDate }: TribeViewProps) {
                 renderItem={({ item }) => (
                     <FeedItem
                         post={item}
+                        cardColor="#262525"
                         onPressVerified={() => { setActiveStatus(item.user.status || 'none'); setVerifiedModalVisible(true); }}
                         onPressHammer={() => {
                             setHammerData({ name: (item.user as any).activity || 'Bodybuilder', icon: (item.user as any).activityIcon || 'hammer' });
@@ -348,13 +369,13 @@ export default function TribeView({ selectedDate }: TribeViewProps) {
                 )}
 
                 contentContainerStyle={styles.list}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.textDark} />}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#DAA520" />}
                 showsVerticalScrollIndicator={false}
                 ListEmptyComponent={
                     <View style={styles.emptyState}>
-                        <Ionicons name="chatbubbles-outline" size={50} color={Colors.textDark + '66'} />
-                        <Text style={styles.emptyTitle}>Quiet in here</Text>
-                        <Text style={styles.emptySubtitle}>No posts from {selectedTribe.name} members recently.</Text>
+                        <Ionicons name="chatbubbles-outline" size={50} color="rgba(237,232,213,0.3)" />
+                        <Text style={[styles.emptyTitle, { color: '#DAA520' }]}>Quiet in here</Text>
+                        <Text style={[styles.emptySubtitle, { color: '#EDE8D5' }]}>No posts from {selectedTribe.name} members recently.</Text>
                     </View>
                 }
             />
@@ -366,9 +387,9 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
     emptyState: { padding: 60, alignItems: 'center', justifyContent: 'center', marginTop: '20%' },
-    emptyTitle: { color: Colors.textDark, fontSize: 18, fontWeight: '700', marginTop: 16 },
-    emptySubtitle: { color: Colors.textDark + 'AA', fontSize: 13, marginTop: 6, textAlign: 'center' },
-    list: { paddingHorizontal: 8, paddingVertical: 16, paddingBottom: 100 },
+    emptyTitle: { color: '#DAA520', fontSize: 18, fontWeight: '700', marginTop: 16 },
+    emptySubtitle: { color: '#EDE8D5', fontSize: 13, marginTop: 6, textAlign: 'center' },
+    list: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 100 },
     toastContainer: {
         position: 'absolute',
         bottom: 120,

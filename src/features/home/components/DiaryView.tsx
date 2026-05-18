@@ -170,7 +170,7 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
         if (comment) {
             setCommentsForPost(prev => [...(prev ?? []), comment]);
             setPosts(prev => prev.map(p => p.id === activePost.id
-                ? { ...p, stats: { ...p.stats, comments: p.stats.comments + 1 } }
+                ? { ...p, hasCommented: true, stats: { ...p.stats, comments: p.stats.comments + 1 } }
                 : p
             ));
         }
@@ -178,7 +178,19 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
 
     const handleCommentDeleted = async (commentId: string) => {
         await SupabasePostService.deleteComment(commentId);
-        setCommentsForPost(prev => (prev ?? []).filter(c => c.id !== commentId));
+        setCommentsForPost(prev => {
+            const nextComments = (prev ?? []).filter(c => c.id !== commentId);
+            const userStillHasComment = nextComments.some(c => c.user.id === session?.user?.id);
+            setPosts(prevPosts => prevPosts.map(p => p.id === activePost?.id
+                ? { 
+                    ...p, 
+                    hasCommented: userStillHasComment, 
+                    stats: { ...p.stats, comments: Math.max(0, p.stats.comments - 1) } 
+                  }
+                : p
+            ));
+            return nextComments;
+        });
     };
 
     const handleDeletePost = async () => {
@@ -311,6 +323,13 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
         );
     };
 
+    const handleShareRecorded = (postId: string) => {
+        setPosts(prev => prev.map(p => p.id === postId
+            ? { ...p, stats: { ...p.stats, shares: p.stats.shares + 1 } }
+            : p
+        ));
+    };
+
     const renderHeader = () => (
         <View style={styles.header}>
             <Text style={styles.title}>My Diary</Text>
@@ -369,6 +388,7 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
                 visible={isShareModalVisible}
                 onClose={() => { setShareModalVisible(false); setShareTargetPost(null); }}
                 post={shareTargetPost}
+                onShareRecorded={handleShareRecorded}
             />
 
             {showDeleteToast && (

@@ -5,6 +5,9 @@ import { FlatList, Image, Modal, Pressable, StyleSheet, Text, TouchableOpacity, 
 import { Colors } from '@/src/shared/theme/Colors';
 import { useUserTribeStore } from '@/src/store/UserTribeStore';
 import { Tribe } from '@/src/shared/models/types';
+import { useAuthStore } from '@/store/AuthStore';
+import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
+import { resolveActivityIcon } from '@/src/shared/constants/Activities';
 
 interface TribeSelectionModalProps {
     visible: boolean;
@@ -13,7 +16,8 @@ interface TribeSelectionModalProps {
 
 export default function TribeSelectionModal({ visible, onClose }: TribeSelectionModalProps) {
     const { myTribes, selectTribe, leaveTribe, selectedTribe } = useUserTribeStore();
-
+    const session = useAuthStore(state => state.session);
+    const currentUserId = session?.user?.id ?? '';
     const router = useRouter();
 
     const handleSelect = (tribe: Tribe) => {
@@ -31,11 +35,8 @@ export default function TribeSelectionModal({ visible, onClose }: TribeSelection
                     text: "Leave Tribe",
                     style: "destructive",
                     onPress: () => {
-                        leaveTribe(tribe.id);
-                        if (myTribes.length <= 1) {
-                            // If they left the only tribe or last one
-                            onClose();
-                        }
+                        if (currentUserId) leaveTribe(currentUserId, tribe.id);
+                        if (myTribes.length <= 1) onClose();
                     }
                 }
             ]
@@ -44,20 +45,29 @@ export default function TribeSelectionModal({ visible, onClose }: TribeSelection
 
     const renderFooter = () => (
         <TouchableOpacity
-            style={[styles.tribeRow, { backgroundColor: '#5D735D', marginTop: 10 }]}
+            style={[
+                styles.tribeRow,
+                {
+                    backgroundColor: '#262525',
+                    borderColor: '#DAA520',
+                    borderWidth: 2,
+                    marginTop: 10,
+                    paddingHorizontal: 16,
+                }
+            ]}
             onPress={() => {
                 onClose();
                 router.push('/create-tribe');
             }}
         >
-            <View style={[styles.tribeAvatar, { backgroundColor: '#A8C0A8', alignItems: 'center', justifyContent: 'center', borderWidth: 0 }]}>
-                <Ionicons name="person" size={24} color="white" />
+            <View style={[styles.tribeAvatar, { backgroundColor: '#262525', borderColor: '#DAA520', borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' }]}>
+                <TabonoLogo size={24} color="#DAA520" />
             </View>
             <View style={styles.tribeInfo}>
-                <Text style={styles.tribeName}>Found a tribe</Text>
+                <Text style={[styles.tribeName, { color: '#DAA520' }]}>Create a tribe</Text>
             </View>
-            <View style={{ backgroundColor: '#F5F5DC', width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }}>
-                <MaterialCommunityIcons name="pencil-plus-outline" size={20} color="#4F6352" />
+            <View style={{ borderColor: '#DAA520', borderWidth: 1.5, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#262525' }}>
+                <MaterialCommunityIcons name="pencil-plus-outline" size={20} color="#DAA520" />
             </View>
         </TouchableOpacity>
     );
@@ -82,41 +92,75 @@ export default function TribeSelectionModal({ visible, onClose }: TribeSelection
                             <TouchableOpacity
                                 style={[
                                     styles.tribeRow,
-                                    { backgroundColor: item.themeColor }
+                                    { backgroundColor: '#262525', borderColor: '#DAA520', borderWidth: 1.5, paddingHorizontal: 16 }
                                 ]}
                                 onPress={() => handleSelect(item)}
                             >
-                                <Image source={{ uri: item.avatar }} style={styles.tribeAvatar} />
+                                {item.avatar ? (
+                                    <Image source={{ uri: item.avatar }} style={styles.tribeAvatar} />
+                                ) : (
+                                    <View style={[styles.tribeAvatar, { backgroundColor: '#262525', justifyContent: 'center', alignItems: 'center' }]}>
+                                        <TabonoLogo size={24} color="#8B6D25" />
+                                    </View>
+                                )}
                                 <View style={styles.tribeInfo}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                                         <Text style={styles.tribeName} numberOfLines={1}>{item.name}</Text>
                                     </View>
                                     <View style={styles.tribeMetaRow}>
-                                        {/* Icons reflecting 'Image 1' style metadata */}
-                                        <MaterialCommunityIcons name="leaf" size={14} color="#4ADE80" style={{ marginRight: 6 }} />
-                                        <MaterialCommunityIcons name="hammer" size={14} color="white" style={{ marginRight: 6 }} />
-                                        {item.type === 'accountability' && <MaterialCommunityIcons name="calendar" size={14} color="white" style={{ marginRight: 6 }} />}
-                                        {item.type === 'head-to-head' && <MaterialCommunityIcons name="trophy-outline" size={14} color="white" style={{ marginRight: 6 }} />}
-                                        {item.type === 'tribe-vs-tribe' && <MaterialCommunityIcons name="trophy-variant-outline" size={14} color="white" style={{ marginRight: 6 }} />}
-                                        <MaterialCommunityIcons name="earth" size={14} color="white" />
+                                        {item.naturalStatus !== null && item.naturalStatus !== undefined && (
+                                            <MaterialCommunityIcons
+                                                name={item.naturalStatus ? "leaf" : "lightning-bolt"}
+                                                size={14}
+                                                color={item.naturalStatus ? "#1BB607" : "#DAA520"}
+                                                style={{ marginRight: 6 }}
+                                            />
+                                        )}
+                                        {(() => {
+                                            const activityIconName = resolveActivityIcon(item.activityType, item.activityIcon);
+                                            const isPositive = item.activityType?.toLowerCase().includes('bulk') || item.activityType?.toLowerCase().includes('increase');
+                                            const isNegative = item.activityType?.toLowerCase().includes('cut') || item.activityType?.toLowerCase().includes('decrease');
+                                            const mathIndicator = isPositive ? '+' : (isNegative ? '–' : '');
+                                            const color = '#EDE8D5';
+                                            
+                                            return (
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 6 }}>
+                                                    <MaterialCommunityIcons name={activityIconName as any} size={14} color={color} />
+                                                    {mathIndicator ? (
+                                                        <Text style={{ color, fontSize: 10, fontWeight: 'bold', marginLeft: 1 }}>{mathIndicator}</Text>
+                                                    ) : null}
+                                                </View>
+                                            );
+                                        })()}
+                                        {item.type === 'accountability' && <MaterialCommunityIcons name="calendar" size={14} color="#EDE8D5" style={{ marginRight: 6 }} />}
+                                        {item.type === 'head-to-head' && <MaterialCommunityIcons name="trophy-outline" size={14} color="#EDE8D5" style={{ marginRight: 6 }} />}
+                                        {item.type === 'tribe-vs-tribe' && <MaterialCommunityIcons name="trophy-variant-outline" size={14} color="#EDE8D5" style={{ marginRight: 6 }} />}
+                                        <MaterialCommunityIcons name="earth" size={14} color="#EDE8D5" />
                                     </View>
                                 </View>
 
                                 {/* Right side button: Activity/Joined Indicator */}
                                 <TouchableOpacity
-                                    style={styles.leaveButtonArea}
+                                    style={{ padding: 6 }}
                                     onPress={() => handleLeavePress(item)}
                                 >
-                                    <View style={styles.activityCircle}>
-                                        <View style={styles.dotsContainer}>
-                                            <View style={[styles.dot, { marginTop: 2 }]} />
-                                            <View style={{ flexDirection: 'row', gap: 2 }}>
-                                                <View style={styles.dot} />
-                                                <View style={styles.dot} />
-                                            </View>
-                                        </View>
-                                        <View style={styles.checkBadge}>
-                                            <Ionicons name="checkmark" size={8} color="white" />
+                                    <View style={{
+                                        width: 32,
+                                        height: 32,
+                                        borderRadius: 16,
+                                        backgroundColor: '#DAA520',
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                    }}>
+                                        <View style={{
+                                            width: 18,
+                                            height: 18,
+                                            borderRadius: 9,
+                                            backgroundColor: '#1E1E1E',
+                                            justifyContent: 'center',
+                                            alignItems: 'center',
+                                        }}>
+                                            <Ionicons name="checkmark" size={13} color="#DAA520" />
                                         </View>
                                     </View>
                                 </TouchableOpacity>
@@ -145,7 +189,7 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     modalContent: {
-        backgroundColor: '#2D3A26', // Dark green background for modal
+        backgroundColor: '#262525', // Deep Charcoal
         borderTopLeftRadius: 30,
         borderTopRightRadius: 30,
         paddingTop: 10,
@@ -175,11 +219,13 @@ const styles = StyleSheet.create({
     tribeRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#5D735D', // Fallback, usually overridden by themeColor
+        backgroundColor: '#262525',
         borderRadius: 25,
         padding: 10,
         marginBottom: 12,
         height: 80,
+        borderWidth: 1.5,
+        borderColor: '#DAA520',
     },
     tribeAvatar: {
         width: 50,
@@ -187,15 +233,15 @@ const styles = StyleSheet.create({
         borderRadius: 25,
         backgroundColor: '#ccc',
         marginRight: 12,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.2)',
+        borderWidth: 2,
+        borderColor: '#DAA520',
     },
     tribeInfo: {
         flex: 1,
         justifyContent: 'center',
     },
     tribeName: {
-        color: 'white',
+        color: '#DAA520',
         fontSize: 18,
         fontWeight: 'bold',
         marginBottom: 4,

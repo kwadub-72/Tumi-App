@@ -534,7 +534,7 @@ export default function AddMealScreen() {
     // ─────────────────────────────────────────────────────────────────────────
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             {/* ── Header bar ── */}
             <View style={styles.header}>
                 <TouchableOpacity

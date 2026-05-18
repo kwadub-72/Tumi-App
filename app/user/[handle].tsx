@@ -363,7 +363,7 @@ export default function OtherUserProfileScreen() {
                                 {targetProfile.status === 'enhanced' ? (
                                     <MaterialCommunityIcons name="lightning-bolt" size={18} color="#FFD700" style={{ marginLeft: 4 }} />
                                 ) : (
-                                    <Ionicons name="leaf" size={18} color={Colors.success} style={{ marginLeft: 4 }} />
+                                    <Ionicons name="leaf" size={18} color={Colors.natural} style={{ marginLeft: 4 }} />
                                 )}
                             </TouchableOpacity>
                         )}

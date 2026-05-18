@@ -395,7 +395,7 @@ export default function NaturalStatusScreen() {
                     onPress={() => handleStatusUpdate('natural')}
                 >
                     <View style={styles.statusInfo}>
-                        <Ionicons name="leaf" size={32} color={Colors.success} />
+                        <Ionicons name="leaf" size={32} color={Colors.natural} />
                         <View>
                             <Text style={styles.statusTitle}>Natural</Text>
                             {status === 'natural-pending' ? (
@@ -429,7 +429,7 @@ export default function NaturalStatusScreen() {
                     onPress={() => router.push('/settings/natural-definition')}
                 >
                     <Text style={styles.definitionLabel}>What is Tribe natural?</Text>
-                    <Ionicons name="leaf" size={30} color={Colors.success} style={{ marginTop: 10 }} />
+                    <Ionicons name="leaf" size={30} color={Colors.natural} style={{ marginTop: 10 }} />
                 </TouchableOpacity>
             </View>
         </SafeAreaView>

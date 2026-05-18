@@ -27,6 +27,10 @@ export interface DbProfile {
     show_likes_to_public: boolean;
     instagram_link: string | null;
     tiktok_link: string | null;
+    current_streak?: number;
+    highest_streak?: number;
+    last_logged_date?: string | null;
+    timezone?: string;
 }
 
 interface AuthState {
@@ -112,6 +116,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
         if (!error && data) {
             set({ profile: data as DbProfile });
+
+            // Automatically check and sync timezone if it differs or is uninitialized
+            const currentTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+            if (data.timezone !== currentTimezone) {
+                supabase
+                    .from('profiles')
+                    .update({ timezone: currentTimezone })
+                    .eq('id', userId)
+                    .then(({ error: tzError }) => {
+                        if (!tzError) {
+                            set({ profile: { ...data, timezone: currentTimezone } as DbProfile });
+                        }
+                    });
+            }
         }
     },
 

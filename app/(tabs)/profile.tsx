@@ -281,7 +281,7 @@ export default function ProfileScreen() {
                                 {userInfo.status === 'enhanced' ? (
                                     <MaterialCommunityIcons name="lightning-bolt" size={18} color={TEST_COLORS.accent2} style={{ marginLeft: 4 }} />
                                 ) : (
-                                    <Ionicons name="leaf" size={18} color={Colors.success} style={{ marginLeft: 4 }} />
+                                    <Ionicons name="leaf" size={18} color={Colors.natural} style={{ marginLeft: 4 }} />
                                 )}
                             </TouchableOpacity>
                         )}

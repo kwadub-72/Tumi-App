@@ -196,13 +196,24 @@ export interface Tribe {
     chief: User;
     members?: User[];
     posts?: FeedPost[];
-    tags?: string[]; // 'natural', 'active'
-    activity?: string; // e.g. 'Bodybuilder (bulk)'
+    tags?: string[];
+    /** Display activity, e.g. 'Bodybuilder (Bulk)' */
+    activityType?: string;
+    /** MaterialCommunityIcons name for the activity */
     activityIcon?: string;
     visibility?: {
         meal: 'public' | 'private' | 'tribe';
         workout: 'public' | 'private' | 'tribe';
         macro: 'public' | 'private' | 'tribe';
     };
-    naturalStatus?: boolean; // natural/enhanced
+    /** null = not specified (hide icon), true = natural, false = enhanced */
+    naturalStatus?: boolean | null;
+    /** Canonical focus type from DB: accountability | head-to-head | tribe-vs-tribe */
+    focusType?: TribeType;
+    /** Total post counts per category */
+    stats?: {
+        meals: number;
+        workouts: number;
+        macros: number;
+    };
 }

@@ -1,5 +1,5 @@
 import { supabase } from '@/src/shared/services/supabase';
-import { SimilarUser, PopularUser } from '../types';
+import { SimilarUser, PopularUser, DiscoveryTribe } from '../types';
 import { User } from '@/src/shared/models/types';
 import { ACTIVITIES } from '@/src/shared/constants/Activities';
 
@@ -106,13 +106,11 @@ export const ExploreService = {
     }));
   },
 
-  async searchTribes(query: string, filters?: any): Promise<any[]> {
-    const { data, error } = await supabase.rpc('search_explore', {
-      search_query: query,
-      search_type: 'tribes',
-      result_limit: 25,
-      p_user_id: null,
-      p_filters: filters || {}
+  async searchTribes(userId: string, query: string = ''): Promise<DiscoveryTribe[]> {
+    const { data, error } = await supabase.rpc('search_tribes', {
+      p_user_id: userId,
+      p_query: query,
+      p_limit: 25,
     });
 
     if (error) {
@@ -120,7 +118,22 @@ export const ExploreService = {
       return [];
     }
 
-    return data || [];
+    return (data || []).map((row: any): DiscoveryTribe => ({
+      id: row.id,
+      name: row.name,
+      avatarUrl: row.avatar_url ?? undefined,
+      themeColor: row.theme_color ?? '#DAA520',
+      tribeType: (row.tribe_type ?? 'accountability') as any,
+      privacy: (row.privacy ?? 'public') as 'public' | 'private',
+      description: row.description ?? '',
+      tags: row.tags ?? [],
+      memberCount: row.member_count ?? 0,
+      naturalStatus: row.natural_status ?? null,   // null = not specified
+      activityType: row.activity_type ?? undefined,
+      activityIcon: row.activity_icon ?? undefined,
+      focusType: (row.focus_type ?? row.tribe_type ?? 'accountability') as any,
+      joinStatus: (row.join_status ?? 'none') as 'none' | 'member' | 'pending',
+    }));
   },
 
   mapDbProfileToUser(row: any): User {

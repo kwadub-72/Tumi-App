@@ -9,8 +9,8 @@ export const ACTIVITIES: ActivityOption[] = [
     { name: 'Bodybuilder (Bulk)', displayName: 'Bodybuilder (bulk)', icon: 'hammer', modifier: '+' },
     { name: 'Bodybuilder (Cut)', displayName: 'Bodybuilder (cut)', icon: 'hammer', modifier: '-' },
     { name: 'Powerlifting', icon: 'weight-lifter' },
-    { name: 'Bulk (General)', displayName: 'General bulk', icon: 'format-paint', modifier: '+' },
-    { name: 'Cut (General)', displayName: 'General cut', icon: 'format-paint', modifier: '-' },
+    { name: 'Bulk (General)', displayName: 'General bulk', icon: 'trending-up', modifier: '+' },
+    { name: 'Cut (General)', displayName: 'General cut', icon: 'trending-down', modifier: '-' },
     { name: 'Glute Growth', icon: 'cake-variant' },
     { name: 'Basketball', icon: 'basketball' },
     { name: 'Soccer', icon: 'soccer' },
@@ -25,7 +25,7 @@ export const ACTIVITIES: ActivityOption[] = [
     { name: 'Track – Throws', icon: 'run' },
     { name: 'Cycling', icon: 'bike' },
     { name: 'Swimmer', icon: 'swim' },
-    { name: 'Combat Athlete (MMA / Boxing / BJJ / Wrestling)', icon: 'karate' },
+    { name: 'Combat Athlete (MMA / Boxing / BJJ / Wrestling)', icon: 'boxing-glove' },
     { name: 'Tactical (Military / Law Enforcement / Fire)', icon: 'shield-account' },
     { name: 'Hybrid Athlete', icon: 'infinity' },
     { name: 'Functional', icon: 'kettlebell' },
@@ -39,3 +39,25 @@ export const ACTIVITIES: ActivityOption[] = [
     { name: 'Hiking', icon: 'summit' },
     { name: 'Skiing / Snowboarding', icon: 'ski' },
 ];
+
+export function resolveActivityIcon(
+    activityType?: string,
+    activityIcon?: string,
+): string {
+    if (activityIcon) return activityIcon;
+    if (!activityType) return 'hammer';
+    
+    // Try to find exact match in constants
+    const match = ACTIVITIES.find(a => a.name === activityType);
+    if (match) return match.icon;
+    
+    const a = activityType.toLowerCase();
+    if (a.includes('bodybuild')) return 'hammer';
+    if (a.includes('powerlift')) return 'weight-lifter';
+    if (a.includes('crossfit') || a.includes('functional')) return 'kettlebell';
+    if (a.includes('run') || a.includes('athlete')) return 'run';
+    if (a.includes('cycling') || a.includes('bike')) return 'bike';
+    if (a.includes('combat') || a.includes('mma') || a.includes('boxing') || a.includes('bjj')) return 'boxing-glove';
+    if (a.includes('yoga') || a.includes('pilates')) return 'yoga';
+    return 'hammer';
+}

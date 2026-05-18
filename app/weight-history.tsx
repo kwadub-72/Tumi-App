@@ -190,7 +190,7 @@ export default function WeightTrendsScreen() {
                             <Text style={styles.metricStatText}>{Math.round(item.averageProtein)}g</Text>
                         </View>
                         <View style={styles.metricStat}>
-                            <MaterialCommunityIcons name="leaf" size={14} color="#4F6352" />
+                            <MaterialCommunityIcons name="leaf" size={14} color="#1BB607" />
                             <Text style={styles.metricStatText}>{Math.round(item.averageCarbs)}g</Text>
                         </View>
                         <View style={styles.metricStat}>

@@ -21,6 +21,8 @@ import ViewShot from 'react-native-view-shot';
 import { Colors } from '@/src/shared/theme/Colors';
 import { FeedPost } from '@/src/shared/models/types';
 import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
+import { useAuthStore } from '@/store/AuthStore';
+import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PAGE_WIDTH = SCREEN_WIDTH - 40; // Full padding inside modal
@@ -29,12 +31,14 @@ interface TribeShareModalProps {
     visible: boolean;
     onClose: () => void;
     post: FeedPost | null;
+    onShareRecorded?: (postId: string) => void;
 }
 
 type DensityMode = 'detailed' | 'headline';
 type VisualStyle = 'floating' | 'canvas';
 
-export default function TribeShareModal({ visible, onClose, post }: TribeShareModalProps) {
+export default function TribeShareModal({ visible, onClose, post, onShareRecorded }: TribeShareModalProps) {
+    const { session } = useAuthStore();
     const [densityMode, setDensityMode] = useState<DensityMode>('detailed');
     const [activePageIndex, setActivePageIndex] = useState<number>(0);
     const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -124,29 +128,50 @@ export default function TribeShareModal({ visible, onClose, post }: TribeShareMo
             // High-resolution export config preserving raw PNG alpha channels
             const uri = await activeRef.current.capture();
 
+            let shared = false;
             if (targetPlatform === 'instagram') {
                 const igUrl = Platform.OS === 'ios' ? `instagram://library?AssetPath=${encodeURIComponent(uri)}` : 'instagram://camera';
                 const canOpen = await Linking.canOpenURL(igUrl);
                 if (canOpen) {
                     await Linking.openURL(igUrl);
+                    shared = true;
                 } else {
-                    await Share.share({ url: uri, message: `Check out this Tribe Mark overlay from ${post.user.handle}!` });
+                    const result = await Share.share({ url: uri, message: `Check out this Tribe Mark overlay from ${post.user.handle}!` });
+                    if (result.action === Share.sharedAction) {
+                        shared = true;
+                    }
                 }
             } else if (targetPlatform === 'tiktok') {
                 const ttUrl = 'tiktok://';
                 const canOpen = await Linking.canOpenURL(ttUrl);
                 if (canOpen) {
                     await Linking.openURL(ttUrl);
+                    shared = true;
                 } else {
-                    await Share.share({ url: uri, message: `Tribe Mark from ${post.user.handle}` });
+                    const result = await Share.share({ url: uri, message: `Tribe Mark from ${post.user.handle}` });
+                    if (result.action === Share.sharedAction) {
+                        shared = true;
+                    }
                 }
             } else {
                 // Default System Clipboard Buffer / Share Sheet integration
-                await Share.share({
+                const result = await Share.share({
                     url: uri,
                     title: 'Tribe Mark Overlay',
                     message: Platform.OS === 'android' ? `Tribe Mark from ${post.user.handle}` : undefined
                 });
+                if (result.action === Share.sharedAction) {
+                    shared = true;
+                }
+            }
+
+            if (shared && session?.user?.id) {
+                try {
+                    await SupabasePostService.recordCopy(post.id, session.user.id, 'standard');
+                    onShareRecorded?.(post.id);
+                } catch (copyErr) {
+                    console.error('Failed to record copy:', copyErr);
+                }
             }
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         } catch (error) {

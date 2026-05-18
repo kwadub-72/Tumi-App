@@ -20,7 +20,7 @@ export default function MemberCard({ item, cardColor = '#333', themeColor = '#2F
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Text style={styles.name}>{item.name}</Text>
                     {/* Icons - Mock logic based on user data if available*/}
-                    <MaterialCommunityIcons name="leaf" size={14} color="#4ADE80" style={{ marginLeft: 4 }} />
+                    <MaterialCommunityIcons name="leaf" size={14} color="#1BB607" style={{ marginLeft: 4 }} />
                     <MaterialCommunityIcons name="hammer" size={14} color="white" style={{ marginLeft: 2 }} />
                 </View>
                 <Text style={styles.handle}>{item.handle}</Text>

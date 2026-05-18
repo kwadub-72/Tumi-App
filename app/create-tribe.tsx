@@ -142,7 +142,7 @@ export default function CreateTribeScreen() {
             },
             tags: isNatural ? ['natural'] : [],
             activity: activity.name,
-            activityIcon: activity.icon,
+            activityIcon: activity.icon as any,
             naturalStatus: isNatural,
             visibility: {
                 meal: mealVis,
@@ -253,7 +253,7 @@ export default function CreateTribeScreen() {
                         >
                             <View style={styles.switchKnob}>
                                 {isNatural ? (
-                                    <MaterialCommunityIcons name="leaf" size={14} color={Colors.success} />
+                                    <MaterialCommunityIcons name="leaf" size={14} color={Colors.natural} />
                                 ) : (
                                     <MaterialCommunityIcons name="lightning-bolt" size={14} color="#FFD700" />
                                 )}

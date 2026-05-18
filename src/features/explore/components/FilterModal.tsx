@@ -19,7 +19,7 @@ const VISIBILITY_OPTIONS = [
 ];
 
 const STATUS_OPTIONS = [
-    { name: 'Natural', icon: 'leaf', color: '#4ADE80' },
+    { name: 'Natural', icon: 'leaf', color: '#1BB607' },
     { name: 'Enhanced', icon: 'lightning-bolt', color: '#FFD700' },
     { name: 'Undeclared', icon: 'help-circle-outline' }
 ];

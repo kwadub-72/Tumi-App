@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, View, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { TribeJoinStatus } from '@/src/shared/models/types';
+import { Colors } from '@/src/shared/theme/Colors';
 
 interface JoinTribeButtonProps {
     status: TribeJoinStatus;
@@ -13,9 +14,9 @@ export default function JoinTribeButton({ status, onPress }: JoinTribeButtonProp
     const isRequested = status === 'requested';
     const isJoined = status === 'joined';
 
-    const bgColor = isNone ? 'white' : (isRequested ? '#4A5A4A' : '#2F3A27');
-    const dotsColor = isNone ? '#8FA88F' : 'white';
-    const iconColor = isNone ? '#8FA88F' : 'white';
+    const bgColor = isNone ? Colors.theme.dust : (isRequested ? '#787878' : Colors.primary);
+    const dotsColor = isNone ? Colors.primary : (isRequested ? 'white' : Colors.theme.dust);
+    const iconColor = isNone ? Colors.primary : (isRequested ? 'white' : Colors.theme.dust);
 
     // ...
     // ...
