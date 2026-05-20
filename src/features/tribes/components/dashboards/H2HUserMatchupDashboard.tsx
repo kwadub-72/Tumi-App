@@ -1,192 +1,513 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, LayoutAnimation } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+    View,
+    Text,
+    StyleSheet,
+    Image,
+    TouchableOpacity,
+    Dimensions,
+    ScrollView,
+    Animated,
+    Modal,
+    Platform
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../../../shared/theme/Colors';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import TribeInfoModal from '../TribeInfoModal';
+import { resolveActivityIcon } from '@/src/shared/constants/Activities';
 
-const getCompetitionWeek = () => {
-    const START_DATE = new Date('2026-03-22T00:00:00Z');
-    const now = new Date();
-    const diffMs = now.getTime() - START_DATE.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    const weeks = Math.floor(diffDays / 7) + 1;
-    return Math.max(1, weeks);
-};
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_INNER_WIDTH = SCREEN_WIDTH - 80; // card has 20px padding left/right, activity has 20px margin left/right
 
-const mockMatchupData = {
-    leftUser: {
-        rank: 1,
-        name: 'Kwaku',
-        handle: '@kwadub',
-        avatar: 'https://i.pravatar.cc/100?img=33',
-        record: '7-1',
-        streak: 'L1',
-        score: 100,
-        leaf: true,
-        activity: 'hammer',
-        caloriesLoggedPct: 80,
-    },
-    rightUser: {
-        rank: 2,
-        name: 'Michael',
-        handle: '@MikeyMike123',
-        avatar: 'https://i.pravatar.cc/100?img=60',
-        record: '7-1',
-        streak: 'W1',
-        score: 100,
-        leaf: true,
-        activity: 'hammer',
-        caloriesLoggedPct: 50,
-    },
-    dailyHistory: [
-        { date: 'Sat - 3/29', leftScore: '+10', rightScore: '-10' },
-        { date: 'Fri - 3/28', leftScore: '+10', rightScore: '-10' },
-        { date: 'Thu - 3/27', leftScore: '+10', rightScore: '-10' },
-        { date: 'Wed - 3/26', leftScore: '+10', rightScore: '-10' },
-        { date: 'Tue - 3/25', leftScore: '+10', rightScore: '-10' },
-        { date: 'Mon - 3/24', leftScore: '+10', rightScore: '-10' },
-    ]
-};
+interface MacroRaw {
+    caloriesConsumed: number;
+    caloriesTarget: number;
+    proteinConsumed: number;
+    proteinTarget: number;
+    carbsConsumed: number;
+    carbsTarget: number;
+    fatsConsumed: number;
+    fatsTarget: number;
+}
 
-export const H2HUserMatchupDashboard = () => {
-    const [expanded, setExpanded] = useState(false);
-    const [modalInfo, setModalInfo] = useState<{ visible: boolean, title: string, description: string, iconName: any } | null>(null);
-    const week = getCompetitionWeek();
-
-    const toggleExpand = () => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setExpanded(!expanded);
+interface Competitor {
+    name: string;
+    handle: string;
+    avatar: string;
+    status: 'natural' | 'enhanced' | null;
+    activity: string;
+    activityIcon: string;
+    score: number;
+    macros: {
+        calories: number; // pct
+        protein: number;
+        carbs: number;
+        fats: number;
     };
+    macroRaw: MacroRaw;
+}
 
-    const renderIcons = (user: any) => (
+interface HistoricalEntry {
+    day: string;
+    leftPoints: number;
+    rightPoints: number;
+    description: string;
+}
+
+interface MatchupPairing {
+    id: string;
+    leftUser: Competitor;
+    rightUser: Competitor;
+    dailyLedger: HistoricalEntry[];
+}
+
+const mockMatchups: MatchupPairing[] = [
+    {
+        id: 'matchup-1',
+        leftUser: {
+            name: 'Riley Cooper',
+            handle: '@rcooper',
+            avatar: 'https://i.pravatar.cc/100?img=12',
+            status: 'natural',
+            activity: 'Bodybuilding',
+            activityIcon: 'weight',
+            score: 49,
+            macros: { calories: 90, protein: 95, carbs: 80, fats: 85 },
+            macroRaw: { caloriesConsumed: 2520, caloriesTarget: 2800, proteinConsumed: 190, proteinTarget: 200, carbsConsumed: 320, carbsTarget: 400, fatsConsumed: 72, fatsTarget: 85 }
+        },
+        rightUser: {
+            name: 'Peyton Reed',
+            handle: '@preed',
+            avatar: 'https://i.pravatar.cc/100?img=47',
+            status: 'natural',
+            activity: 'Powerlifting',
+            activityIcon: 'trophy-outline',
+            score: 35,
+            macros: { calories: 75, protein: 80, carbs: 65, fats: 70 },
+            macroRaw: { caloriesConsumed: 2100, caloriesTarget: 2800, proteinConsumed: 160, proteinTarget: 200, carbsConsumed: 260, carbsTarget: 400, fatsConsumed: 60, fatsTarget: 85 }
+        },
+        dailyLedger: [
+            { day: 'Saturday', leftPoints: 7, rightPoints: 5, description: 'Macros compliance met' },
+            { day: 'Friday', leftPoints: 7, rightPoints: 5, description: 'Macros compliance met' },
+            { day: 'Thursday', leftPoints: 7, rightPoints: 5, description: 'Macros compliance met' },
+            { day: 'Wednesday', leftPoints: 7, rightPoints: 5, description: 'Macros compliance met' },
+            { day: 'Tuesday', leftPoints: 7, rightPoints: 5, description: 'Macros compliance met' },
+            { day: 'Monday', leftPoints: 7, rightPoints: 5, description: 'Macros compliance met' },
+            { day: 'Sunday', leftPoints: 7, rightPoints: 5, description: 'Macros compliance met' }
+        ]
+    },
+    {
+        id: 'matchup-2',
+        leftUser: {
+            name: 'Kwaku',
+            handle: '@kwadub',
+            avatar: 'https://i.pravatar.cc/100?img=33',
+            status: 'natural',
+            activity: 'Powerlifting',
+            activityIcon: 'dumbbell',
+            score: 35,
+            macros: { calories: 80, protein: 85, carbs: 70, fats: 75 },
+            macroRaw: { caloriesConsumed: 2240, caloriesTarget: 2800, proteinConsumed: 170, proteinTarget: 200, carbsConsumed: 280, carbsTarget: 400, fatsConsumed: 64, fatsTarget: 85 }
+        },
+        rightUser: {
+            name: 'Michael',
+            handle: '@MikeyMike123',
+            avatar: 'https://i.pravatar.cc/100?img=60',
+            status: 'natural',
+            activity: 'Bodybuilding',
+            activityIcon: 'weight',
+            score: 42,
+            macros: { calories: 95, protein: 90, carbs: 85, fats: 80 },
+            macroRaw: { caloriesConsumed: 2660, caloriesTarget: 2800, proteinConsumed: 180, proteinTarget: 200, carbsConsumed: 340, carbsTarget: 400, fatsConsumed: 68, fatsTarget: 85 }
+        },
+        dailyLedger: [
+            { day: 'Saturday', leftPoints: 5, rightPoints: 6, description: 'Macro goals reached' },
+            { day: 'Friday', leftPoints: 5, rightPoints: 6, description: 'Macro goals reached' },
+            { day: 'Thursday', leftPoints: 5, rightPoints: 6, description: 'Macro goals reached' },
+            { day: 'Wednesday', leftPoints: 5, rightPoints: 6, description: 'Macro goals reached' },
+            { day: 'Tuesday', leftPoints: 5, rightPoints: 6, description: 'Macro goals reached' },
+            { day: 'Monday', leftPoints: 5, rightPoints: 6, description: 'Macro goals reached' },
+            { day: 'Sunday', leftPoints: 5, rightPoints: 6, description: 'Macro goals reached' }
+        ]
+    },
+    {
+        id: 'matchup-3',
+        leftUser: {
+            name: 'Avery Miller',
+            handle: '@amiller',
+            avatar: 'https://i.pravatar.cc/100?img=38',
+            status: 'enhanced',
+            activity: 'Weightlifting',
+            activityIcon: 'arm-flex',
+            score: 28,
+            macros: { calories: 60, protein: 70, carbs: 50, fats: 55 },
+            macroRaw: { caloriesConsumed: 1680, caloriesTarget: 2800, proteinConsumed: 140, proteinTarget: 200, carbsConsumed: 200, carbsTarget: 400, fatsConsumed: 47, fatsTarget: 85 }
+        },
+        rightUser: {
+            name: 'Sam White',
+            handle: '@swhite',
+            avatar: 'https://i.pravatar.cc/100?img=11',
+            status: 'natural',
+            activity: 'Crossfit',
+            activityIcon: 'lightning-bolt',
+            score: 28,
+            macros: { calories: 60, protein: 65, carbs: 55, fats: 60 },
+            macroRaw: { caloriesConsumed: 1680, caloriesTarget: 2800, proteinConsumed: 130, proteinTarget: 200, carbsConsumed: 220, carbsTarget: 400, fatsConsumed: 51, fatsTarget: 85 }
+        },
+        dailyLedger: [
+            { day: 'Saturday', leftPoints: 4, rightPoints: 4, description: 'Macros targets checked' },
+            { day: 'Friday', leftPoints: 4, rightPoints: 4, description: 'Macros targets checked' },
+            { day: 'Thursday', leftPoints: 4, rightPoints: 4, description: 'Macros targets checked' },
+            { day: 'Wednesday', leftPoints: 4, rightPoints: 4, description: 'Macros targets checked' },
+            { day: 'Tuesday', leftPoints: 4, rightPoints: 4, description: 'Macros targets checked' },
+            { day: 'Monday', leftPoints: 4, rightPoints: 4, description: 'Macros targets checked' },
+            { day: 'Sunday', leftPoints: 4, rightPoints: 4, description: 'Macros targets checked' }
+        ]
+    },
+    {
+        id: 'matchup-4',
+        leftUser: {
+            name: 'Empty Left',
+            handle: '@emptyleft',
+            avatar: 'https://i.pravatar.cc/100?img=1',
+            status: 'natural',
+            activity: 'Bodybuilding',
+            activityIcon: 'weight',
+            score: 0,
+            macros: { calories: 0, protein: 0, carbs: 0, fats: 0 },
+            macroRaw: { caloriesConsumed: 0, caloriesTarget: 2800, proteinConsumed: 0, proteinTarget: 200, carbsConsumed: 0, carbsTarget: 400, fatsConsumed: 0, fatsTarget: 85 }
+        },
+        rightUser: {
+            name: 'Empty Right',
+            handle: '@emptyright',
+            avatar: 'https://i.pravatar.cc/100?img=2',
+            status: 'natural',
+            activity: 'Bodybuilding',
+            activityIcon: 'weight',
+            score: 0,
+            macros: { calories: 0, protein: 0, carbs: 0, fats: 0 },
+            macroRaw: { caloriesConsumed: 0, caloriesTarget: 2800, proteinConsumed: 0, proteinTarget: 200, carbsConsumed: 0, carbsTarget: 400, fatsConsumed: 0, fatsTarget: 85 }
+        },
+        dailyLedger: []
+    }
+];
+
+interface H2HUserMatchupDashboardProps {
+    isEmbedded?: boolean;
+    containerWidth?: number;
+}
+
+export const H2HUserMatchupDashboard: React.FC<H2HUserMatchupDashboardProps> = ({ isEmbedded = false, containerWidth }) => {
+    const [selectedIdx, setSelectedIdx] = useState(0);
+    const [pickerVisible, setPickerVisible] = useState(false);
+    const [modalInfo, setModalInfo] = useState<{ visible: boolean; title: string; description: string; iconName: any } | null>(null);
+
+
+    const innerCarouselWidth = containerWidth !== undefined ? containerWidth - 40 : CARD_INNER_WIDTH;
+
+    const activeMatchup = mockMatchups[selectedIdx];
+
+    // Count up & scale pop animation state
+    const [leftScoreVal, setLeftScoreVal] = useState(0);
+    const [rightScoreVal, setRightScoreVal] = useState(0);
+    const scaleLeft = useRef(new Animated.Value(1)).current;
+    const scaleRight = useRef(new Animated.Value(1)).current;
+    const scaleHyphen = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+        let isMounted = true;
+        const triggerAnimations = async () => {
+            try {
+                const todayStr = new Date().toISOString().split('T')[0];
+                const key = `@TUMI_H2H_MATCHUP_LAST_ANIM_${activeMatchup.id}`;
+                const lastAnimDate = await AsyncStorage.getItem(key);
+
+                // Run animation (always run on manual dropdown select, or if it is the first open of the day)
+                const shouldAnimate = !lastAnimDate || lastAnimDate !== todayStr;
+                await AsyncStorage.setItem(key, todayStr);
+
+                if (shouldAnimate) {
+                    // Reset to 0 for count up
+                    setLeftScoreVal(0);
+                    setRightScoreVal(0);
+
+                    // Score scale pop animations
+                    scaleLeft.setValue(0);
+                    scaleRight.setValue(0);
+                    scaleHyphen.setValue(0);
+
+                    Animated.stagger(150, [
+                        Animated.spring(scaleLeft, { toValue: 1, friction: 5, useNativeDriver: true }),
+                        Animated.spring(scaleHyphen, { toValue: 1, friction: 6, useNativeDriver: true }),
+                        Animated.spring(scaleRight, { toValue: 1, friction: 5, useNativeDriver: true })
+                    ]).start();
+
+                    // Count up score logic
+                    const leftTarget = activeMatchup.leftUser.score;
+                    const rightTarget = activeMatchup.rightUser.score;
+                    const duration = 1200;
+                    const frameTime = 16; // ~60fps
+                    const steps = Math.ceil(duration / frameTime);
+                    let currentStep = 0;
+
+                    const timer = setInterval(() => {
+                        currentStep++;
+                        if (currentStep >= steps) {
+                            if (isMounted) {
+                                setLeftScoreVal(leftTarget);
+                                setRightScoreVal(rightTarget);
+                            }
+                            clearInterval(timer);
+                        } else {
+                            const progress = currentStep / steps;
+                            const easeOutQuad = progress * (2 - progress); // basic easeOut
+                            if (isMounted) {
+                                setLeftScoreVal(Math.round(leftTarget * easeOutQuad));
+                                setRightScoreVal(Math.round(rightTarget * easeOutQuad));
+                            }
+                        }
+                    }, frameTime);
+
+                    return () => clearInterval(timer);
+                } else {
+                    setLeftScoreVal(activeMatchup.leftUser.score);
+                    setRightScoreVal(activeMatchup.rightUser.score);
+                    scaleLeft.setValue(1);
+                    scaleRight.setValue(1);
+                    scaleHyphen.setValue(1);
+                }
+            } catch (err) {
+                console.warn('AsyncStorage error in matchup animation', err);
+                setLeftScoreVal(activeMatchup.leftUser.score);
+                setRightScoreVal(activeMatchup.rightUser.score);
+            }
+        };
+
+        triggerAnimations();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [selectedIdx, activeMatchup]);
+
+    const renderIcons = (user: Competitor) => (
         <>
-            {user.leaf && (
-                <TouchableOpacity onPress={() => setModalInfo({
-                    visible: true, title: 'Natural Athlete', description: 'This user is verified as a natural athlete by the tribe.', iconName: 'leaf'
-                })}>
-                    <MaterialCommunityIcons name="leaf" size={16} color="#4ADE80" style={styles.icon} />
+            {user.status === 'natural' && (
+                <TouchableOpacity
+                    onPress={() => setModalInfo({
+                        visible: true,
+                        title: 'Natural Athlete',
+                        description: `${user.name} is verified as a natural athlete.`,
+                        iconName: 'leaf'
+                    })}
+                >
+                    <MaterialCommunityIcons name="leaf" size={15} color={Colors.theme.naturalGreen} style={styles.statusIcon} />
                 </TouchableOpacity>
             )}
-            {user.activity && (
-                <TouchableOpacity onPress={() => setModalInfo({
-                    visible: true, title: 'Tribe Activity', description: 'This is the verified activity for the user.', iconName: user.activity
-                })}>
-                    <MaterialCommunityIcons name={user.activity as any} size={16} color={Colors.primary} style={styles.icon} />
+            {user.status === 'enhanced' && (
+                <TouchableOpacity
+                    onPress={() => setModalInfo({
+                        visible: true,
+                        title: 'Enhanced Athlete',
+                        description: `${user.name} is verified as an enhanced athlete.`,
+                        iconName: 'lightning-bolt'
+                    })}
+                >
+                    <MaterialCommunityIcons name="lightning-bolt" size={15} color={Colors.theme.harvestGold} style={styles.statusIcon} />
                 </TouchableOpacity>
             )}
+            <TouchableOpacity
+                onPress={() => setModalInfo({
+                    visible: true,
+                    title: user.activity,
+                    description: '',
+                    iconName: resolveActivityIcon(user.activity, user.activityIcon) as any
+                })}
+            >
+                <MaterialCommunityIcons name={resolveActivityIcon(user.activity, user.activityIcon) as any} size={14} color={Colors.theme.dust} style={styles.statusIcon} />
+            </TouchableOpacity>
         </>
     );
 
     return (
-        <View style={styles.container}>
-            <Text style={styles.dashboardType}>Traditional • Head-to-Head • Habits</Text>
-
-            <View style={styles.header}>
-                <Text style={styles.leagueName}>Team flex</Text>
-                <Image source={{ uri: 'https://i.pravatar.cc/100?img=26' }} style={styles.leagueImage} />
-            </View>
-            <Text style={styles.weekText}>Week {week}</Text>
-
-            <View style={styles.matchupContainer}>
-                {/* Left User */}
-                <View style={styles.playerCol}>
-                    <Text style={styles.rankNum}>#{mockMatchupData.leftUser.rank}</Text>
-                    <Image source={{ uri: mockMatchupData.leftUser.avatar }} style={styles.bigAvatar} />
-
-                    <View style={styles.nameRow}>
-                        <Text style={styles.userName}>{mockMatchupData.leftUser.name}</Text>
-                        {renderIcons(mockMatchupData.leftUser)}
-                    </View>
-                    <Text style={styles.userHandle}>{mockMatchupData.leftUser.handle}</Text>
-
-                    <Text style={styles.recordText}>
-                        {mockMatchupData.leftUser.record} <Text style={{ color: Colors.error }}>({mockMatchupData.leftUser.streak})</Text>
-                    </Text>
-
-                    <View style={styles.calorieBarContainer}>
-                        <MaterialCommunityIcons name="fire" size={24} color={Colors.primary} />
-                        <View style={styles.calorieBarBg}>
-                            <View style={[styles.calorieBarFill, { width: `${mockMatchupData.leftUser.caloriesLoggedPct}%` }]} />
-                        </View>
-                    </View>
-                </View>
-
-                {/* Score */}
-                <View style={styles.scoreCol}>
-                    <Text style={styles.bigScore}>{mockMatchupData.leftUser.score}-{mockMatchupData.rightUser.score}</Text>
-                </View>
-
-                {/* Right User */}
-                <View style={styles.playerCol}>
-                    <Text style={styles.rankNum}>#{mockMatchupData.rightUser.rank}</Text>
-                    <Image source={{ uri: mockMatchupData.rightUser.avatar }} style={styles.bigAvatarRight} />
-
-                    <View style={styles.nameRow}>
-                        <Text style={styles.userName}>{mockMatchupData.rightUser.name}</Text>
-                        {renderIcons(mockMatchupData.rightUser)}
-                    </View>
-                    <Text style={styles.userHandle}>{mockMatchupData.rightUser.handle}</Text>
-
-                    <Text style={styles.recordText}>
-                        {mockMatchupData.rightUser.record} <Text style={{ color: '#4ADE80' }}>({mockMatchupData.rightUser.streak})</Text>
-                    </Text>
-
-                    <View style={styles.calorieBarContainer}>
-                        <MaterialCommunityIcons name="fire" size={24} color={Colors.primary} />
-                        <View style={styles.calorieBarBg}>
-                            <View style={[styles.calorieBarFill, { width: `${mockMatchupData.rightUser.caloriesLoggedPct}%` }]} />
-                        </View>
-                    </View>
-                </View>
-            </View>
-
-            <TouchableOpacity style={styles.expandButton} onPress={toggleExpand}>
-                <MaterialCommunityIcons name="dots-horizontal" size={24} color="white" />
-            </TouchableOpacity>
-
-            {expanded && (
-                <View style={styles.expandedContent}>
-                    {mockMatchupData.dailyHistory.map((day, idx) => (
-                        <View key={idx} style={styles.historyRow}>
-                            <View style={styles.historyUserLeft}>
-                                <Image source={{ uri: mockMatchupData.leftUser.avatar }} style={styles.smallAvatar} />
-                                <View style={styles.historyNameCol}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Text style={styles.historyName}>{mockMatchupData.leftUser.name}</Text>
-                                        <MaterialCommunityIcons name="leaf" size={12} color="#4ADE80" style={{ marginLeft: 2 }} />
-                                        <MaterialCommunityIcons name="hammer" size={12} color={Colors.primary} style={{ marginLeft: 2 }} />
-                                    </View>
-                                    <Text style={styles.historyHandle}>{mockMatchupData.leftUser.handle}</Text>
-                                </View>
-                            </View>
-
-                            <View style={styles.historyScoreBox}>
-                                <Text style={styles.historyDate}>{day.date}</Text>
-                                <View style={styles.historyScoreRow}>
-                                    <Text style={[styles.historyScore, { color: Colors.primary }]}>{day.leftScore}</Text>
-                                    <View style={styles.historyDivider} />
-                                    <Text style={[styles.historyScore, { color: Colors.error }]}>{day.rightScore}</Text>
-                                </View>
-                            </View>
-
-                            <View style={styles.historyUserRight}>
-                                <View style={[styles.historyNameCol, { alignItems: 'flex-end' }]}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Text style={styles.historyName}>{mockMatchupData.rightUser.name}</Text>
-                                        <MaterialCommunityIcons name="leaf" size={12} color="#4ADE80" style={{ marginLeft: 2 }} />
-                                        <MaterialCommunityIcons name="hammer" size={12} color={Colors.primary} style={{ marginLeft: 2 }} />
-                                    </View>
-                                    <Text style={styles.historyHandle}>{mockMatchupData.rightUser.handle}</Text>
-                                </View>
-                                <Image source={{ uri: mockMatchupData.rightUser.avatar }} style={styles.smallAvatar} />
-                            </View>
-                        </View>
-                    ))}
+        <View style={[styles.cardContainer, isEmbedded && styles.embeddedCardContainer]}>
+            {/* Standardized Header System */}
+            {!isEmbedded && (
+                <View style={styles.headerContext}>
+                    <Text style={styles.headerLine1}>Head-to-Head · Faceoff · Habits</Text>
+                    <Text style={styles.headerLine2}>THE CUT SQUAD</Text>
+                    <Text style={styles.headerLine3}>Week 10 / 10</Text>
                 </View>
             )}
 
-            <Text style={styles.timestamp}>Just now</Text>
+            {/* Matchup Selector Dropdown */}
+            <TouchableOpacity
+                style={styles.dropdownBtn}
+                activeOpacity={0.8}
+                onPress={() => setPickerVisible(true)}
+            >
+                <Text style={styles.dropdownText} numberOfLines={1}>
+                    {activeMatchup.leftUser.name} vs. {activeMatchup.rightUser.name}
+                </Text>
+                <Ionicons name="chevron-down" size={16} color={Colors.theme.harvestGold} />
+            </TouchableOpacity>
 
+            {/* Fixed Upper Scorecard Component */}
+            <View style={styles.fixedUpperScorecard}>
+                {/* Top Row: Avatars and Scores vertically center-aligned */}
+                <View style={styles.avatarsRow}>
+                    {/* Left Avatar */}
+                    <View style={styles.avatarWrapper}>
+                        <Image source={{ uri: activeMatchup.leftUser.avatar }} style={styles.avatarImage} />
+                    </View>
+
+                    {/* Score Centered Comparison */}
+                    <View style={styles.centerScoreCol}>
+                        <View style={styles.scoreContainer}>
+                            <Animated.Text style={[styles.largeScoreText, { transform: [{ scale: scaleLeft }] }]}>
+                                {leftScoreVal}
+                            </Animated.Text>
+                            <Animated.Text style={[styles.largeScoreText, { transform: [{ scale: scaleHyphen }] }]}>
+                                {' - '}
+                            </Animated.Text>
+                            <Animated.Text style={[styles.largeScoreText, { transform: [{ scale: scaleRight }] }]}>
+                                {rightScoreVal}
+                            </Animated.Text>
+                        </View>
+                    </View>
+
+                    {/* Right Avatar */}
+                    <View style={styles.avatarWrapper}>
+                        <Image source={{ uri: activeMatchup.rightUser.avatar }} style={styles.avatarImage} />
+                    </View>
+                </View>
+
+                {/* Bottom Row: Names & Handles */}
+                <View style={styles.metadataRow}>
+                    {/* Left Competitor Metadata */}
+                    <View style={styles.leftMetaCol}>
+                        <View style={styles.nameRow}>
+                            <Text style={styles.displayName} numberOfLines={1}>
+                                {activeMatchup.leftUser.name}
+                            </Text>
+                            {renderIcons(activeMatchup.leftUser)}
+                        </View>
+                        <Text style={styles.handleText} numberOfLines={1}>
+                            {activeMatchup.leftUser.handle}
+                        </Text>
+                    </View>
+
+                    {/* Spacer to align metadata precisely underneath the avatars */}
+                    <View style={{ flex: 1 }} />
+
+                    {/* Right Competitor Metadata */}
+                    <View style={styles.rightMetaCol}>
+                        <View style={[styles.nameRow, { justifyContent: 'flex-end' }]}>
+                            {renderIcons(activeMatchup.rightUser)}
+                            <Text style={styles.displayName} numberOfLines={1}>
+                                {activeMatchup.rightUser.name}
+                            </Text>
+                        </View>
+                        <Text style={[styles.handleText, { textAlign: 'right' }]} numberOfLines={1}>
+                            {activeMatchup.rightUser.handle}
+                        </Text>
+                    </View>
+                </View>
+            </View>
+
+            {/* Macro Progress Section */}
+            <View style={[styles.macroSection, { width: innerCarouselWidth, alignSelf: 'center' }]}>
+                <Text style={styles.todayProgressHeader}>Today's progress</Text>
+                <View style={styles.slidersSplitGrid}>
+                    {/* Left User's Sliders */}
+                    <View style={styles.splitSliderColumn}>
+                        {renderSliders(activeMatchup.leftUser.macros, activeMatchup.leftUser.macroRaw, false)}
+                    </View>
+
+                    {/* Middle Icons Axis */}
+                    <View style={styles.sliderAxis}>
+                        <View style={styles.axisItem}>
+                            <MaterialCommunityIcons name="fire" size={28} color={Colors.theme.harvestGold} />
+                        </View>
+                        <View style={styles.axisItem}>
+                            <MaterialCommunityIcons name="food-drumstick" size={28} color={Colors.theme.harvestGold} />
+                        </View>
+                        <View style={styles.axisItem}>
+                            <MaterialCommunityIcons name="barley" size={28} color={Colors.theme.harvestGold} />
+                        </View>
+                        <View style={styles.axisItem}>
+                            <Ionicons name="water" size={28} color={Colors.theme.harvestGold} />
+                        </View>
+                    </View>
+
+                    {/* Right User's Sliders */}
+                    <View style={[styles.splitSliderColumn, { alignItems: 'flex-end' }]}>
+                        {renderSliders(activeMatchup.rightUser.macros, activeMatchup.rightUser.macroRaw, true)}
+                    </View>
+                </View>
+
+                {/* Legend */}
+                <View style={styles.sliderLegend}>
+                    <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: Colors.theme.harvestGold }]} />
+                        <Text style={styles.legendText}>Consumed</Text>
+                    </View>
+                    <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: 'rgba(218,165,32,0.3)' }]} />
+                        <Text style={styles.legendText}>Remaining</Text>
+                    </View>
+                </View>
+            </View>
+
+            {/* Custom Matchup Picker Modal */}
+            <Modal
+                visible={pickerVisible}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setPickerVisible(false)}
+            >
+                <TouchableOpacity
+                    style={styles.pickerBackdrop}
+                    activeOpacity={1}
+                    onPress={() => setPickerVisible(false)}
+                >
+                    <View style={styles.pickerCard}>
+                        <Text style={styles.pickerTitle}>SELECT MATCHUP</Text>
+                        <ScrollView showsVerticalScrollIndicator={false}>
+                            {mockMatchups.map((pairing, index) => (
+                                <TouchableOpacity
+                                    key={pairing.id}
+                                    style={[
+                                        styles.pickerRow,
+                                        selectedIdx === index && styles.pickerRowActive
+                                    ]}
+                                    onPress={() => {
+                                        setSelectedIdx(index);
+                                        setPickerVisible(false);
+                                    }}
+                                >
+                                    <View style={styles.pickerCompetitorBlock}>
+                                        <Image source={{ uri: pairing.leftUser.avatar }} style={styles.pickerAvatar} />
+                                        <Text style={[styles.pickerName, selectedIdx === index && { color: Colors.theme.harvestGold }]} numberOfLines={1}>
+                                            {pairing.leftUser.name}
+                                        </Text>
+                                    </View>
+                                    <Text style={styles.pickerVsLabel}>VS</Text>
+                                    <View style={[styles.pickerCompetitorBlock, { alignItems: 'flex-end' }]}>
+                                        <Text style={[styles.pickerName, selectedIdx === index && { color: Colors.theme.harvestGold }]} numberOfLines={1}>
+                                            {pairing.rightUser.name}
+                                        </Text>
+                                        <Image source={{ uri: pairing.rightUser.avatar }} style={styles.pickerAvatar} />
+                                    </View>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
+            {/* Info Modal */}
             {modalInfo && (
                 <TribeInfoModal
                     visible={modalInfo.visible}
@@ -201,216 +522,418 @@ export const H2HUserMatchupDashboard = () => {
     );
 };
 
+// Helper renderer for macro progression sliders with consumed/remaining labels
+const renderSliders = (macros: Competitor['macros'], raw: MacroRaw, isRightSide = false) => {
+    const rows: { key: keyof Competitor['macros']; consumed: number; target: number; unit: string }[] = [
+        { key: 'calories',  consumed: raw.caloriesConsumed,  target: raw.caloriesTarget,  unit: 'kcal' },
+        { key: 'protein',   consumed: raw.proteinConsumed,   target: raw.proteinTarget,   unit: 'g' },
+        { key: 'carbs',     consumed: raw.carbsConsumed,     target: raw.carbsTarget,     unit: 'g' },
+        { key: 'fats',      consumed: raw.fatsConsumed,      target: raw.fatsTarget,      unit: 'g' },
+    ];
+    return rows.map(({ key, consumed, target, unit }) => {
+        const pct = macros[key];
+        const remaining = Math.max(0, target - consumed);
+        return (
+            <View key={key} style={styles.sliderTrackWrapper}>
+                {/* Consumed / Remaining label row */}
+                <View style={[styles.sliderLabelRow, isRightSide && { flexDirection: 'row-reverse' }]}>
+                    <Text style={styles.sliderLabelConsumed}>{consumed}{unit}</Text>
+                    <Text style={styles.sliderLabelRemaining}>{remaining}{unit} left</Text>
+                </View>
+                <View style={styles.sliderTrackBg}>
+                    <View
+                        style={[
+                            styles.sliderTrackFill,
+                            { width: `${pct}%`, backgroundColor: Colors.theme.harvestGold },
+                            isRightSide && { alignSelf: 'flex-end' }
+                        ]}
+                    />
+                </View>
+            </View>
+        );
+    });
+};
+
 const styles = StyleSheet.create({
-    container: {
-        backgroundColor: Colors.card,
+    cardContainer: {
+        backgroundColor: '#262525', // Premium Charcoal
         borderRadius: 35,
         padding: 20,
-        paddingTop: 15,
-        borderWidth: 1,
-        borderColor: 'rgba(79, 99, 82, 0.4)',
-        position: 'relative',
+        paddingTop: 18,
+        borderWidth: 2,
+        borderColor: '#DAA520', // Glowing Harvest Gold framing borders
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.4,
+        shadowRadius: 12,
+        elevation: 10,
+        marginBottom: 20,
     },
-    dashboardType: {
-        textAlign: 'center',
-        color: Colors.primary,
+    embeddedCardContainer: {
+        backgroundColor: 'transparent',
+        borderRadius: 0,
+        padding: 0,
+        paddingTop: 0,
+        borderWidth: 0,
+        borderColor: 'transparent',
+        shadowOpacity: 0,
+        shadowRadius: 0,
+        elevation: 0,
+        marginBottom: 0,
+    },
+    headerContext: {
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    headerLine1: {
+        color: '#DAA520', // Harvest Gold
+        fontSize: 10.5,
         fontWeight: 'bold',
-        fontSize: 14,
-        marginBottom: 5,
+        letterSpacing: 1.8,
+        textTransform: 'uppercase',
     },
-    header: {
+    headerLine2: {
+        color: '#EDE8D5', // Dust
+        fontSize: 22,
+        fontWeight: '900',
+        letterSpacing: 1.2,
+        marginTop: 2,
+    },
+    headerLine3: {
+        color: '#FFFFFF', // Soft White
+        fontSize: 12,
+        fontWeight: '700',
+        opacity: 0.9,
+        marginTop: 2,
+    },
+    dropdownBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 10,
-    },
-    leagueName: {
-        fontSize: 26,
-        fontWeight: 'bold',
-        color: 'white',
-    },
-    leagueImage: {
-        width: 32,
-        height: 32,
+        backgroundColor: '#1A1A1A',
         borderRadius: 16,
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        alignSelf: 'center',
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(218, 165, 32, 0.3)',
+        gap: 6,
+        maxWidth: '85%',
     },
-    weekText: {
-        textAlign: 'center',
-        color: 'white',
-        fontStyle: 'italic',
-        fontSize: 12,
-        marginBottom: 15,
-        opacity: 0.8,
+    dropdownText: {
+        color: '#EDE8D5',
+        fontSize: 13,
+        fontWeight: '700',
+        letterSpacing: 0.5,
     },
-    matchupContainer: {
+    fixedUpperScorecard: {
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(237, 232, 213, 0.12)',
+        paddingBottom: 16,
+        marginBottom: 16,
+    },
+    avatarsRow: {
         flexDirection: 'row',
+        alignItems: 'center',
         justifyContent: 'space-between',
+        width: '100%',
+    },
+    competitorCol: {
+        flex: 1.2,
         alignItems: 'flex-start',
     },
-    playerCol: {
+    centerScoreCol: {
         flex: 1,
         alignItems: 'center',
-        position: 'relative',
+        justifyContent: 'center',
     },
-    scoreCol: {
-        width: 120,
-        alignItems: 'center',
-        paddingTop: 40,
+    metadataRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        width: '100%',
+        marginTop: 8,
     },
-    bigScore: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: 'rgba(255,255,255,0.8)',
+    leftMetaCol: {
+        flex: 1.2,
+        alignItems: 'flex-start',
     },
-    rankNum: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 16,
-        alignSelf: 'flex-start',
-        position: 'absolute',
-        top: -10,
-        left: 0,
-        zIndex: 1,
+    rightMetaCol: {
+        flex: 1.2,
+        alignItems: 'flex-end',
     },
-    bigAvatar: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        borderWidth: 3,
-        borderColor: Colors.primary,
-        marginBottom: 10,
+    avatarWrapper: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        borderWidth: 2,
+        borderColor: '#DAA520',
+        overflow: 'hidden',
+        backgroundColor: '#1A1A1A',
     },
-    bigAvatarRight: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        borderWidth: 3,
-        borderColor: '#FCA5A5',
-        marginBottom: 10,
+    avatarImage: {
+        width: '100%',
+        height: '100%',
+    },
+    metadataBlock: {
+        marginTop: 6,
+        width: '100%',
     },
     nameRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
+        gap: 4,
     },
-    userName: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 18,
-    },
-    userHandle: {
-        color: 'rgba(255,255,255,0.6)',
-        fontSize: 14,
-        marginTop: -2,
-    },
-    icon: {
-        marginLeft: 2,
-    },
-    recordText: {
-        color: Colors.primary,
+    displayName: {
+        color: '#FFFFFF',
         fontWeight: 'bold',
         fontSize: 14,
-        marginTop: 5,
-        marginBottom: 10,
     },
-    calorieBarContainer: {
+    handleText: {
+        color: '#787878',
+        fontSize: 11,
+        marginTop: 1,
+    },
+    statusIcon: {
+        marginHorizontal: 1,
+    },
+    scoreContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        width: '100%',
-        paddingHorizontal: 10,
-        gap: 5,
+        justifyContent: 'center',
     },
-    calorieBarBg: {
-        flex: 1,
-        height: 20,
-        backgroundColor: Colors.primary,
-        borderRadius: 10,
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.2)',
+    largeScoreText: {
+        fontSize: 48,
+        fontWeight: '900',
+        color: '#FFFFFF',
+        letterSpacing: 1,
     },
-    calorieBarFill: {
-        height: '100%',
-        backgroundColor: '#789370',
+    macroSection: {
+        marginTop: 4,
+        paddingTop: 12,
     },
-    expandButton: {
-        alignItems: 'center',
-        marginTop: 15,
-        padding: 5,
-        zIndex: 2,
+    todayProgressHeader: {
+        color: Colors.theme.burntSienna,
+        fontSize: 11,
+        fontWeight: 'bold',
+        letterSpacing: 2,
+        textTransform: 'uppercase',
+        textAlign: 'center',
+        marginBottom: 16,
     },
-    expandedContent: {
-        marginTop: 10,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(255,255,255,0.2)',
-        paddingTop: 15,
-        gap: 12,
-    },
-    historyRow: {
+    slidersSplitGrid: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
     },
-    historyUserLeft: {
-        flexDirection: 'row',
+    splitSliderColumn: {
+        width: '37%',
+        gap: 22,
+    },
+    sliderAxis: {
+        width: '22%',
         alignItems: 'center',
-        flex: 1,
-        gap: 6,
+        gap: 22,
     },
-    historyUserRight: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-        justifyContent: 'flex-end',
-        gap: 6,
-    },
-    smallAvatar: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-    },
-    historyNameCol: {
+    axisItem: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: '#1A1A1A',
         justifyContent: 'center',
-    },
-    historyName: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 12,
-    },
-    historyHandle: {
-        color: 'rgba(255,255,255,0.6)',
-        fontSize: 10,
-    },
-    historyScoreBox: {
         alignItems: 'center',
-        width: 100,
+        borderWidth: 1.5,
+        borderColor: 'rgba(218, 165, 32, 0.3)',
     },
-    historyDate: {
-        color: 'white',
+    sliderTrackWrapper: {
+        width: '100%',
+        height: 44,
+        justifyContent: 'center',
+        gap: 4,
+    },
+    sliderLabelRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    sliderLabelConsumed: {
+        color: Colors.theme.harvestGold,
         fontSize: 10,
-        fontWeight: 'bold',
-        marginBottom: 2,
+        fontWeight: '700',
     },
-    historyScoreRow: {
+    sliderLabelRemaining: {
+        color: 'rgba(237,232,213,0.45)',
+        fontSize: 10,
+        fontWeight: '500',
+    },
+    sliderTrackBg: {
+        width: '100%',
+        height: 20,
+        backgroundColor: '#1A1A1A',
+        borderRadius: 10,
+        overflow: 'hidden',
+    },
+    sliderTrackFill: {
+        height: '100%',
+        backgroundColor: '#DAA520',
+        borderRadius: 10,
+    },
+    sliderLegend: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 20,
+        marginTop: 14,
+    },
+    legendItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
+        gap: 6,
     },
-    historyScore: {
-        fontSize: 20,
+    legendDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+    },
+    legendText: {
+        color: 'rgba(237,232,213,0.55)',
+        fontSize: 10,
+        fontWeight: '600',
+        letterSpacing: 0.5,
+    },
+    ledgerScrollContent: {
+        paddingVertical: 4,
+    },
+    ledgerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginVertical: 4,
+    },
+    ledgerCardSide: {
+        width: '40%',
+    },
+    ledgerDayColumn: {
+        width: '16%',
+        alignItems: 'center',
+    },
+    ledgerDayLabel: {
+        color: '#DAA520',
+        fontSize: 11,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+    },
+    ledgerMiniCard: {
+        backgroundColor: '#1A1A1A',
+        borderRadius: 12,
+        paddingVertical: 6,
+        paddingHorizontal: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(237, 232, 213, 0.08)',
+    },
+    ledgerLeftCard: {
+        alignItems: 'flex-start',
+    },
+    ledgerRightCard: {
+        alignItems: 'flex-end',
+    },
+    ledgerPointsText: {
+        color: '#DAA520',
+        fontSize: 12,
+        fontWeight: '900',
+    },
+    ledgerDescText: {
+        color: '#787878',
+        fontSize: 9,
+        marginTop: 1,
+    },
+    zeroStateContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 30,
+        gap: 8,
+    },
+    zeroStateText: {
+        color: '#DAA520',
+        fontSize: 14,
         fontWeight: 'bold',
     },
-    historyDivider: {
-        width: 1,
-        height: 20,
-        backgroundColor: 'rgba(255,255,255,0.3)',
+    subPagerDots: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: 10,
     },
-    timestamp: {
-        position: 'absolute',
-        bottom: 15,
-        right: 20,
-        fontSize: 10,
-        color: Colors.primary,
-        opacity: 0.7,
+    subDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: 'rgba(237, 232, 213, 0.25)',
+    },
+    subDotActive: {
+        backgroundColor: '#DAA520',
+        width: 16,
+    },
+    pickerBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.75)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    pickerCard: {
+        width: '85%',
+        maxHeight: '60%',
+        backgroundColor: '#262525',
+        borderRadius: 24,
+        borderWidth: 2,
+        borderColor: '#DAA520',
+        padding: 20,
+    },
+    pickerTitle: {
+        color: '#DAA520',
+        fontSize: 16,
+        fontWeight: '900',
+        textAlign: 'center',
+        letterSpacing: 1.5,
+        marginBottom: 16,
+    },
+    pickerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 12,
+        paddingHorizontal: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(237, 232, 213, 0.08)',
+    },
+    pickerRowActive: {
+        backgroundColor: 'rgba(218, 165, 32, 0.1)',
+        borderRadius: 12,
+    },
+    pickerCompetitorBlock: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        width: '42%',
+    },
+    pickerAvatar: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        borderWidth: 1.5,
+        borderColor: '#DAA520',
+    },
+    pickerName: {
+        color: '#FFFFFF',
+        fontSize: 12,
+        fontWeight: 'bold',
+        flex: 1,
+    },
+    pickerVsLabel: {
+        color: '#787878',
+        fontSize: 11,
+        fontWeight: '900',
+        width: '12%',
+        textAlign: 'center',
     }
 });

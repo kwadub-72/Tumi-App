@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Image, TouchableOpacity, LayoutAnimation } from
 import { Colors } from '../../../../shared/theme/Colors';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TribeInfoModal from '../TribeInfoModal';
+import { resolveActivityIcon } from '@/src/shared/constants/Activities';
 
 const getCompetitionWeek = () => {
     const START_DATE = new Date('2026-03-22T00:00:00Z');
@@ -74,13 +75,16 @@ export const TradTribeBattleLeaderboard = () => {
                                         <MaterialCommunityIcons name="leaf" size={14} color="#1BB607" style={styles.icon} />
                                     </TouchableOpacity>
                                 )}
-                                {user.activity && (
-                                    <TouchableOpacity onPress={() => setModalInfo({
-                                        visible: true, title: 'Tribe Activity', description: 'This is the verified activity for the user.', iconName: user.activity
-                                    })}>
-                                        <MaterialCommunityIcons name={user.activity as any} size={14} color={Colors.primary} style={styles.icon} />
-                                    </TouchableOpacity>
-                                )}
+                                 {user.activity && (
+                                     <TouchableOpacity onPress={() => setModalInfo({
+                                         visible: true, 
+                                         title: user.activity === 'hammer' ? 'Bodybuilding' : (user.activity === 'weight-lifter' ? 'Powerlifting' : 'Activity'), 
+                                         description: '', 
+                                         iconName: user.activity as any
+                                     })}>
+                                         <MaterialCommunityIcons name={user.activity as any} size={14} color={Colors.primary} style={styles.icon} />
+                                     </TouchableOpacity>
+                                 )}
                             </View>
                             <Text style={styles.userHandle}>{user.handle}</Text>
                         </View>

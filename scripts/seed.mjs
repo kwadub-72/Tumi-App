@@ -495,7 +495,7 @@ async function main() {
         { name: 'Harvard Alum League', avatar_url: 'https://i.pravatar.cc/150?u=100', theme_color: '#9FB89F', tribe_type: 'accountability', privacy: 'public', description: 'For the alums and the grinders.', tags: ['natural', 'active'], chief_id: chiefId },
         { name: 'Iron Brotherhood', avatar_url: 'https://i.pravatar.cc/150?u=101', theme_color: '#3E2A4A', tribe_type: 'head-to-head', privacy: 'private', description: 'Strength athletes only.', tags: ['natural'], chief_id: profileIds['@arivera'] },
         { name: 'Team Flex', avatar_url: 'https://i.pravatar.cc/150?u=102', theme_color: '#E6A8A8', tribe_type: 'head-to-head', privacy: 'public', description: 'Getting big every day.', tags: ['active'], chief_id: profileIds['@swhite'] },
-        { name: 'The Cut Squad', avatar_url: 'https://i.pravatar.cc/150?u=103', theme_color: '#2D3A26', tribe_type: 'tribe-vs-tribe', privacy: 'public', description: 'Who can get the leanest?', tags: ['natural', 'active'], chief_id: profileIds['@qtaylor'] },
+        { name: 'The Cut Squad', avatar_url: 'https://i.pravatar.cc/150?u=103', theme_color: '#2D3A26', tribe_type: 'head-to-head', privacy: 'public', description: 'Who can get the leanest?', tags: ['natural', 'active'], chief_id: profileIds['@qtaylor'] },
     ];
 
     const tribeIds = {};
@@ -505,6 +505,18 @@ async function main() {
         tribeIds[t.name] = data.id;
         console.log(`  ✓ ${t.name} (${data.id})`);
     }
+
+    // Create competitions
+    console.log('🏆  Creating competitions...');
+    const competitions = [
+        { tribe_id: tribeIds['Team Flex'], style: 'premier', metric: 'habits', total_weeks: 10, start_date: daysAgo(14), status: 'active', pts_tier_1: 20, pts_tier_2: 10, pts_tier_3: 5, pts_exercise_bonus: 10, pts_penalty_miss: -15, pts_penalty_no_log: -60 },
+        { tribe_id: tribeIds['The Cut Squad'], style: 'faceoff', metric: 'habits', total_weeks: 10, start_date: daysAgo(14), status: 'active', pts_tier_1: 20, pts_tier_2: 10, pts_tier_3: 5, pts_exercise_bonus: 10, pts_penalty_miss: -15, pts_penalty_no_log: -60 }
+    ];
+    for (const c of competitions) {
+        const { error } = await supabase.from('competitions').insert(c);
+        if (error) console.error(`  ❌ Competition error: ${error.message}`);
+    }
+
 
     // 3. Add tribe members
     console.log('\n👥  Adding tribe members...');

@@ -67,7 +67,13 @@ INSERT INTO public.tribes (id, name, avatar_url, theme_color, tribe_type, privac
 ('b0000000-0000-0000-0000-000000000001', 'Harvard Alum League', 'https://i.pravatar.cc/150?u=100', '#9FB89F', 'accountability', 'public', 'For the alums and the grinders.', ARRAY['natural', 'active'], '00000000-0000-0000-0000-000000000002'),
 ('b0000000-0000-0000-0000-000000000002', 'Iron Brotherhood', 'https://i.pravatar.cc/150?u=101', '#3E2A4A', 'head-to-head', 'private', 'Strength athletes only.', ARRAY['natural'], '00000000-0000-0000-0000-000000000003'),
 ('b0000000-0000-0000-0000-000000000003', 'Team Flex', 'https://i.pravatar.cc/150?u=102', '#E6A8A8', 'head-to-head', 'public', 'Getting big every day.', ARRAY['active'], '00000000-0000-0000-0000-000000000008'),
-('b0000000-0000-0000-0000-000000000004', 'The Cut Squad', 'https://i.pravatar.cc/150?u=103', '#2D3A26', 'tribe-vs-tribe', 'public', 'Who can get the leanest?', ARRAY['natural', 'active'], '00000000-0000-0000-0000-000000000006');
+('b0000000-0000-0000-0000-000000000004', 'The Cut Squad', 'https://i.pravatar.cc/150?u=103', '#2D3A26', 'head-to-head', 'public', 'Who can get the leanest?', ARRAY['natural', 'active'], '00000000-0000-0000-0000-000000000006');
+
+-- Create competitions
+INSERT INTO public.competitions (id, tribe_id, style, metric, total_weeks, start_date, status, pts_tier_1, pts_tier_2, pts_tier_3, pts_exercise_bonus, pts_penalty_miss, pts_penalty_no_log) VALUES
+('c0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000003', 'premier', 'habits', 10, now() - interval '2 weeks', 'active', 20, 10, 5, 10, -15, -60),
+('c0000000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000004', 'faceoff', 'habits', 10, now() - interval '2 weeks', 'active', 20, 10, 5, 10, -15, -60);
+
 
 -- Add members to Team Flex (Everyone)
 INSERT INTO public.tribe_members (tribe_id, user_id, role)

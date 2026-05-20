@@ -1,31 +1,42 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, ScrollView, Dimensions, StyleSheet, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
+import { View, ScrollView, Dimensions, StyleSheet, NativeSyntheticEvent, NativeScrollEvent, StyleProp, ViewStyle } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface DashboardCarouselProps {
     children: React.ReactNode | React.ReactNode[];
+    initialIndex?: number;
+    itemWidth?: number;
+    containerStyle?: StyleProp<ViewStyle>;
+    scrollViewStyle?: StyleProp<ViewStyle>;
+    contentContainerStyle?: StyleProp<ViewStyle>;
 }
 
-export const DashboardCarousel: React.FC<DashboardCarouselProps> = ({ children }) => {
+export const DashboardCarousel: React.FC<DashboardCarouselProps> = ({ 
+    children, 
+    initialIndex = 0, 
+    itemWidth,
+    containerStyle,
+    scrollViewStyle,
+    contentContainerStyle
+}) => {
     const scrollViewRef = useRef<ScrollView>(null);
-    const [activeIndex, setActiveIndex] = useState(1);
-    const itemWidth = SCREEN_WIDTH - 40; // Assuming 20px padding on each side for the parent container in activity.tsx
-    // Actually, in activity.tsx the ScrollView wraps everything. The dashboard container has padding: 20.
-    // Let's just use the full container width. If we just assume the cards stretch, we can wrap them in a view of width SCREEN_WIDTH - 40.
+    const childrenArray = React.Children.toArray(children);
+    
+    const resolvedItemWidth = itemWidth !== undefined ? itemWidth : SCREEN_WIDTH - 40;
+    const initialScrollIndex = Math.min(Math.max(0, initialIndex), childrenArray.length - 1) + 1;
+    const [activeIndex, setActiveIndex] = useState(initialScrollIndex);
 
     // Jump to the first real item initially
     useEffect(() => {
         if (scrollViewRef.current) {
-            scrollViewRef.current.scrollTo({ x: itemWidth, animated: false });
+            scrollViewRef.current.scrollTo({ x: initialScrollIndex * resolvedItemWidth, animated: false });
         }
-    }, [itemWidth]);
-
-    const childrenArray = React.Children.toArray(children);
+    }, [resolvedItemWidth, initialScrollIndex]);
 
     // If only 1 child, no carousel needed.
     if (!childrenArray || childrenArray.length <= 1) {
-        return <View>{childrenArray}</View>;
+        return <View style={containerStyle}>{childrenArray}</View>;
     }
 
     // To simulate infinite scroll, prepend the last item and append the first item.
@@ -35,15 +46,15 @@ export const DashboardCarousel: React.FC<DashboardCarouselProps> = ({ children }
 
     const handleMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
         const xOffset = event.nativeEvent.contentOffset.x;
-        const newIndex = Math.round(xOffset / itemWidth);
+        const newIndex = Math.round(xOffset / resolvedItemWidth);
 
         if (newIndex === 0) {
             // Scrolled to the fake last item at the beginning, immediately jump to real last item
-            scrollViewRef.current?.scrollTo({ x: childrenArray.length * itemWidth, animated: false });
+            scrollViewRef.current?.scrollTo({ x: childrenArray.length * resolvedItemWidth, animated: false });
             setActiveIndex(childrenArray.length);
         } else if (newIndex === extendedChildren.length - 1) {
             // Scrolled to the fake first item at the end, immediately jump to real first item
-            scrollViewRef.current?.scrollTo({ x: itemWidth, animated: false });
+            scrollViewRef.current?.scrollTo({ x: resolvedItemWidth, animated: false });
             setActiveIndex(1);
         } else {
             setActiveIndex(newIndex);
@@ -51,7 +62,7 @@ export const DashboardCarousel: React.FC<DashboardCarouselProps> = ({ children }
     };
 
     return (
-        <View style={styles.carouselContainer}>
+        <View style={[styles.carouselContainer, containerStyle]}>
             <ScrollView
                 ref={scrollViewRef}
                 horizontal
@@ -60,12 +71,13 @@ export const DashboardCarousel: React.FC<DashboardCarouselProps> = ({ children }
                 onMomentumScrollEnd={handleMomentumScrollEnd}
                 // To prevent seeing the jump glitch, we might want to use scrollEventThrottle and intercept earlier,
                 // but for simple cases onMomentumScrollEnd is fine.
-                snapToInterval={itemWidth}
+                snapToInterval={resolvedItemWidth}
                 decelerationRate="fast"
-                style={{ width: itemWidth }}
+                style={[{ width: resolvedItemWidth }, scrollViewStyle]}
+                contentContainerStyle={contentContainerStyle}
             >
                 {extendedChildren.map((child, index) => (
-                    <View key={index} style={{ width: itemWidth }}>
+                    <View key={index} style={{ width: resolvedItemWidth, height: '100%' }}>
                         {child}
                     </View>
                 ))}

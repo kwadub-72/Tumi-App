@@ -68,8 +68,8 @@ export const AccountabilityDashboard = () => {
                                 {user.activity && (
                                     <TouchableOpacity onPress={() => setModalInfo({
                                         visible: true,
-                                        title: 'Tribe Activity',
-                                        description: 'This is the verified activity for the user.',
+                                        title: user.activity === 'hammer' ? 'Bodybuilding' : (user.activity === 'weight-lifter' ? 'Powerlifting' : 'Activity'),
+                                        description: '',
                                         iconName: user.activity
                                     })}>
                                         <MaterialCommunityIcons name={user.activity as any} size={14} color={Colors.primary} style={styles.icon} />

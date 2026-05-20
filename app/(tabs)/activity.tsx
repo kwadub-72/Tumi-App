@@ -507,7 +507,7 @@ export default function DashboardScreen() {
                 <View style={styles.dashboardsContainer}>
                     <AccountabilityDashboard />
 
-                    <DashboardCarousel>
+                    <DashboardCarousel initialIndex={1}>
                         <H2HUserMatchupDashboard />
                         <H2HLeaderboardDashboard />
                     </DashboardCarousel>

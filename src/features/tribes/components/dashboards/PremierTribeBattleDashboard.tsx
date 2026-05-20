@@ -56,7 +56,10 @@ export const PremierTribeBattleDashboard = () => {
             )}
             {user.activity && (
                 <TouchableOpacity onPress={() => setModalInfo({
-                    visible: true, title: 'Tribe Activity', description: 'This is the verified activity for the user.', iconName: user.activity
+                    visible: true, 
+                    title: user.activity === 'hammer' ? 'Bodybuilding' : (user.activity === 'weight-lifter' ? 'Powerlifting' : 'Activity'), 
+                    description: '', 
+                    iconName: user.activity as any
                 })}>
                     <MaterialCommunityIcons name={user.activity as any} size={14} color={Colors.primary} style={styles.icon} />
                 </TouchableOpacity>
@@ -122,7 +125,7 @@ export const PremierTribeBattleDashboard = () => {
                             </View>
 
                             <View style={styles.matchupUserRight}>
-                                <View style={[styles.historyNameCol, { alignItems: 'flex-start' }]}>
+                                <View style={[styles.historyNameCol, { alignItems: 'flex-end' }]}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                         <Text style={styles.historyName}>{row.rightUser.name}</Text>
                                         {renderIcons(row.rightUser)}
@@ -205,11 +208,12 @@ const styles = StyleSheet.create({
     },
     scoreCol: {
         width: 120,
+        height: 80,
         alignItems: 'center',
-        paddingTop: 20,
+        justifyContent: 'center',
     },
     bigScore: {
-        fontSize: 40,
+        fontSize: 60,
         fontWeight: 'bold',
         color: 'rgba(255,255,255,0.7)',
     },

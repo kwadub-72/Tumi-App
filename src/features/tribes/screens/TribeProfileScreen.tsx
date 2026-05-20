@@ -13,6 +13,8 @@ import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
 import FeedItem from '@/src/features/feed/components/FeedItem';
 import { CalendarIcon, ShieldVSIcon, TrophyTribeIcon, PrivacyIcon } from '../components/TribeIcons';
 import TribeInfoModal from '../components/TribeInfoModal';
+import CompetitionWinnerOverlay from '../components/CompetitionWinnerOverlay';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUserTribeStore } from '@/src/store/UserTribeStore';
 import { useAuthStore } from '@/store/AuthStore';
 import { resolveActivityIcon } from '@/src/shared/constants/Activities';
@@ -58,6 +60,19 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
     const session = useAuthStore(state => state.session);
     const currentUserId = session?.user?.id ?? '';
 
+    const resolvedTribeId = React.useMemo(() => {
+        if (tribeId && tribeId.startsWith('t')) {
+            const mockMap: Record<string, string> = {
+                't1': 'b0000000-0000-0000-0000-000000000001',
+                't2': 'b0000000-0000-0000-0000-000000000002',
+                't3': 'b0000000-0000-0000-0000-000000000003',
+                't4': 'b0000000-0000-0000-0000-000000000004'
+            };
+            return mockMap[tribeId] || tribeId;
+        }
+        return tribeId;
+    }, [tribeId]);
+
     const { isMember, isRequested, joinTribe, leaveTribe, refreshMyTribes } = useUserTribeStore();
 
     const [tribe, setTribe] = useState<Tribe | null>(null);
@@ -69,6 +84,8 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
 
     const [modalVisible, setModalVisible] = useState(false);
     const [modalConfig, setModalConfig] = useState<any>({});
+    const [winnerOverlayVisible, setWinnerOverlayVisible] = useState(false);
+    const [winnerData, setWinnerData] = useState<any>(null);
 
     // Horizontal pager
     const pagerRef = useRef<ScrollView>(null);
@@ -109,6 +126,173 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
     useEffect(() => {
         fetchPosts(daysBack);
     }, [fetchPosts, daysBack]);
+
+    // ── Check for Concluded Competition Winner Celebration ────────────────────
+    useEffect(() => {
+        if (!tribeId || !tribe) {
+            console.log("[WinnerCheck] Skip: tribeId or tribe is missing", { tribeId, tribe: !!tribe });
+            return;
+        }
+
+        const checkCompetitionWinner = async () => {
+            try {
+                console.log("[WinnerCheck] Querying completed competitions for tribeId:", resolvedTribeId);
+                // Fetch completed competition for this tribe
+                const { data: compData, error: compErr } = await supabase
+                    .from('competitions')
+                    .select('*')
+                    .eq('tribe_id', resolvedTribeId)
+                    .eq('status', 'completed')
+                    .order('created_at', { ascending: false })
+                    .limit(1);
+
+                if (compErr) {
+                    console.error("[WinnerCheck] Error querying completed competitions:", compErr);
+                    return;
+                }
+
+                if (!compData || compData.length === 0) {
+                    console.log("[WinnerCheck] No completed competitions found.");
+                    return;
+                }
+
+                const competition = compData[0];
+                console.log("[WinnerCheck] Found completed competition:", competition.id);
+
+                // Check if user has already dismissed this overlay
+                const cacheKey = `TUMI_TRIBES_WINNER_OVERLAY_DISMISSED_${resolvedTribeId}`;
+                const dismissed = await AsyncStorage.getItem(cacheKey);
+                console.log("[WinnerCheck] Dismissed cache key value:", dismissed);
+                if (dismissed === 'true') {
+                    console.log("[WinnerCheck] Overlay already dismissed for this competition. Skipping.");
+                    return;
+                }
+
+
+                // Fetch scoreboard cache to check latest live scores
+                let cachedPointsMap: Record<string, number> = {};
+                try {
+                    const cacheKeyScoreboard = `TUMI_TRIBES_SCOREBOARD_STATE_V2_${resolvedTribeId}`;
+                    const cachedStr = await AsyncStorage.getItem(cacheKeyScoreboard);
+                    if (cachedStr) {
+                        const parsed = JSON.parse(cachedStr);
+                        if (parsed && parsed.points) {
+                            cachedPointsMap = parsed.points;
+                        }
+                    }
+                } catch (cacheErr) {
+                    console.log("[WinnerCheck] Error reading cached points:", cacheErr);
+                }
+
+                // Call scoreboard RPCs to fetch and sort the winning champion member
+                console.log("[WinnerCheck] Fetching scoreboard members and tiebreakers...");
+                const { data: members, error: memErr } = await supabase
+                    .rpc('get_scoreboard_members', { target_tribe_id: resolvedTribeId });
+                const { data: tiebreakerRows, error: tieErr } = await supabase
+                    .rpc('get_competition_scoreboard_tiebreakers', { p_competition_id: competition.id });
+
+                if (memErr || tieErr) {
+                    console.error("[WinnerCheck] RPC Errors:", { memErr, tieErr });
+                }
+
+                if (members && members.length > 0) {
+                    const dbPointsMap: Record<string, number> = {};
+                    const tiebreakersMap: Record<string, any> = {};
+
+                    const FAKE_INITIAL_POINTS_BY_HANDLE: Record<string, number> = {
+                        'rcooper': 420,
+                        'swhite': 380,
+                        'preed': 310,
+                        'amiller': 290,
+                        'kwadub': 250,
+                        'cjones': 210,
+                        'qtaylor': 180,
+                        'arivera': 150,
+                        'hsolo': 120,
+                        'lorgana': 90,
+                        'lskywalker': 60,
+                        'mbailey': 40,
+                        'pscott': 10,
+                    };
+
+                    const normalizeHandle = (handle: string): string => {
+                        return handle.replace(/^@/, '').toLowerCase().trim();
+                    };
+
+                    // First populate with cached points or fake seed points to ensure we never have 0 pts
+                    console.log("[WinnerCheck] cachedPointsMap keys & values:", Object.keys(cachedPointsMap), cachedPointsMap);
+                    members.forEach((m: any) => {
+                        const normH = normalizeHandle(m.handle || '');
+                        const seedPts = FAKE_INITIAL_POINTS_BY_HANDLE[normH] ?? 0;
+                        const cachedPts = cachedPointsMap[m.id];
+                        dbPointsMap[m.id] = cachedPts ?? seedPts;
+                        console.log(`[WinnerCheck] Member: ${m.name} (${m.handle}) [ID: ${m.id}] | cachedPts: ${cachedPts} | seedPts: ${seedPts} | final: ${dbPointsMap[m.id]}`);
+                    });
+
+                    // Overwrite with actual DB ledger points if available
+                    if (tiebreakerRows && tiebreakerRows.length > 0) {
+                        tiebreakerRows.forEach((row: any) => {
+                            dbPointsMap[row.user_id] = Number(row.total_points);
+                            tiebreakersMap[row.user_id] = {
+                                max_streak: Number(row.max_streak),
+                                pct_2_5: Number(row.pct_2_5),
+                                pct_10: Number(row.pct_10),
+                                pct_15: Number(row.pct_15),
+                                pct_workout: Number(row.pct_workout)
+                            };
+                        });
+                    }
+
+                    // Sort exactly according to useTribeScoreboard high-fidelity tiebreaker rules
+                    const sorted = [...members].sort((a, b) => {
+                        const ptsA = dbPointsMap[a.id] || 0;
+                        const ptsB = dbPointsMap[b.id] || 0;
+                        if (ptsB !== ptsA) {
+                            return ptsB - ptsA;
+                        }
+
+                        const tbA = tiebreakersMap[a.id];
+                        const tbB = tiebreakersMap[b.id];
+
+                        if (tbA && tbB) {
+                            if (tbB.max_streak !== tbA.max_streak) return tbB.max_streak - tbA.max_streak;
+                            if (tbB.pct_2_5 !== tbA.pct_2_5) return tbB.pct_2_5 - tbA.pct_2_5;
+                            if (tbB.pct_10 !== tbA.pct_10) return tbB.pct_10 - tbA.pct_10;
+                            if (tbB.pct_15 !== tbA.pct_15) return tbB.pct_15 - tbA.pct_15;
+                            if (tbB.pct_workout !== tbA.pct_workout) return tbB.pct_workout - tbA.pct_workout;
+                        }
+
+                        return (a.name || '').localeCompare(b.name || '');
+                    });
+
+                    if (sorted.length > 0) {
+                        const champion = sorted[0];
+                        const score = dbPointsMap[champion.id] || 0;
+                        console.log("[WinnerCheck] Found champion:", champion.name, "with points:", score);
+                        
+                        const championData = {
+                            name: champion.name || 'Anonymous User',
+                            handle: champion.handle || '@anonymous',
+                            avatar: champion.avatar_url || null,
+                            points: score
+                        };
+
+
+                        setWinnerData(championData);
+                        setWinnerOverlayVisible(true);
+                    } else {
+                        console.log("[WinnerCheck] No sorted members found.");
+                    }
+                } else {
+                    console.log("[WinnerCheck] Members list is empty or null");
+                }
+            } catch (err) {
+                console.error('[WinnerCheck] Error checking competition winner:', err);
+            }
+        };
+
+        checkCompetitionWinner();
+    }, [tribeId, tribe, currentUserId]);
 
     // ── Realtime: keep like counts live for all tribe posts ───────────────────
     useEffect(() => {
@@ -583,6 +767,15 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
                 visible={modalVisible}
                 onClose={() => setModalVisible(false)}
                 {...modalConfig}
+            />
+
+            <CompetitionWinnerOverlay
+                visible={winnerOverlayVisible}
+                onClose={() => setWinnerOverlayVisible(false)}
+                tribeId={resolvedTribeId || tribeId}
+                tribeName={tribe?.name ?? ''}
+                winner={winnerData}
+                themeColor={tribe?.themeColor}
             />
         </SafeAreaView>
     );

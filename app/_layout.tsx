@@ -10,7 +10,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useAuthStore } from '../store/AuthStore';
 import { useNetworkStore } from '@/src/store/NetworkStore';
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function AuthGate({ children }: { children: React.ReactNode }) {
     const { session, loading, initialize } = useAuthStore();

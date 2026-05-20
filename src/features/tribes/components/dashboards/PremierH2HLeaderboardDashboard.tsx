@@ -81,7 +81,10 @@ export const PremierH2HLeaderboardDashboard = () => {
                                 )}
                                 {user.activity && (
                                     <TouchableOpacity onPress={() => setModalInfo({
-                                        visible: true, title: 'Tribe Activity', description: 'This is the verified activity for the user.', iconName: user.activity
+                                        visible: true, 
+                                        title: user.activity === 'hammer' ? 'Bodybuilding' : (user.activity === 'weight-lifter' ? 'Powerlifting' : 'Activity'), 
+                                        description: '', 
+                                        iconName: user.activity as any
                                     })}>
                                         <MaterialCommunityIcons name={user.activity as any} size={14} color={Colors.primary} style={styles.icon} />
                                     </TouchableOpacity>

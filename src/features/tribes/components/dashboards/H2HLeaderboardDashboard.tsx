@@ -1,8 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, LayoutAnimation } from 'react-native';
-import { Colors } from '../../../../shared/theme/Colors';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions, ActivityIndicator } from 'react-native';
+import { Colors } from '@/src/shared/theme/Colors';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import TribeInfoModal from '../TribeInfoModal';
+import { resolveActivityIcon } from '@/src/shared/constants/Activities';
+import { useTribeScoreboard, ScoreboardMember } from '../../hooks/useTribeScoreboard';
+import { useProfileNavigation } from '@/src/shared/hooks/useProfileNavigation';
+import Reanimated, { LinearTransition } from 'react-native-reanimated';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const getCompetitionWeek = () => {
     const START_DATE = new Date('2026-03-22T00:00:00Z');
@@ -13,123 +19,171 @@ const getCompetitionWeek = () => {
     return Math.max(1, weeks);
 };
 
-const generateDummyLeaderboard = () => [
-    { id: '1', rank: 1, name: 'Kwaku', handle: '@kwadub', avatar: 'https://i.pravatar.cc/100?img=33', logged: true, trend: 10, trendDir: 'up', record: '7-1', leaf: true, activity: 'hammer' },
-    { id: '2', rank: 2, name: 'Michael', handle: '@Michael123456', avatar: 'https://i.pravatar.cc/100?img=60', logged: false, trend: 5, trendDir: 'up', record: '7-1', leaf: true, activity: 'hammer' },
-    { id: '3', rank: 3, name: 'Peteyboy', handle: '@CheterMesservy1', avatar: 'https://i.pravatar.cc/100?img=59', logged: false, trend: 2, trendDir: 'down', record: '7-1', leaf: true, activity: 'hammer' },
-    { id: '4', rank: 4, name: 'Peteyboy', handle: '@CheterMesservy2', avatar: 'https://i.pravatar.cc/100?img=59', logged: false, trend: 2, trendDir: 'down', record: '6-2', leaf: true, activity: 'hammer' },
-    { id: '5', rank: 5, name: 'Peteyboy', handle: '@CheterMesservy3', avatar: 'https://i.pravatar.cc/100?img=59', logged: false, trend: 0, trendDir: 'none', record: '6-2', leaf: true, activity: 'hammer' },
-    { id: '6', rank: 6, name: 'Peteyboy', handle: '@CheterMesservy4', avatar: 'https://i.pravatar.cc/100?img=59', logged: false, trend: 0, trendDir: 'none', record: '6-2', leaf: true, activity: 'hammer' },
-    { id: '7', rank: 7, name: 'Peteyboy', handle: '@CheterMesservy5', avatar: 'https://i.pravatar.cc/100?img=59', logged: false, trend: 0, trendDir: 'none', record: '6-2', leaf: true, activity: 'hammer' },
-    { id: '8', rank: 8, name: 'Peteyboy', handle: '@CheterMesservy6', avatar: 'https://i.pravatar.cc/100?img=59', logged: false, trend: 0, trendDir: 'none', record: '6-2', leaf: true, activity: 'hammer' },
-    { id: '9', rank: 9, name: 'Peteyboy', handle: '@CheterMesservy7', avatar: 'https://i.pravatar.cc/100?img=59', logged: false, trend: 0, trendDir: 'none', record: '6-2', leaf: true, activity: 'hammer' },
-    { id: '10', rank: 10, name: 'Peteyboy', handle: '@CheterMesservy8', avatar: 'https://i.pravatar.cc/100?img=59', logged: false, trend: 0, trendDir: 'none', record: '6-2', leaf: true, activity: 'hammer' },
-    { id: '11', rank: 11, name: 'Peteyboy', handle: '@CheterMesservy9', avatar: 'https://i.pravatar.cc/100?img=59', logged: false, trend: 0, trendDir: 'none', record: '6-2', leaf: true, activity: 'hammer' },
-];
-
 export const H2HLeaderboardDashboard = () => {
+    const tribeId = 'b0000000-0000-0000-0000-000000000004'; // The Cut Squad ID
+    const { loading, data, header, competition, mutateRecord } = useTribeScoreboard(tribeId);
+    const { navigateToProfile } = useProfileNavigation();
+    
     const [expanded, setExpanded] = useState(false);
     const [modalInfo, setModalInfo] = useState<{ visible: boolean, title: string, description: string, iconName: any } | null>(null);
     const week = getCompetitionWeek();
-    const users = generateDummyLeaderboard();
 
-    const visibleUsers = expanded ? users : users.slice(0, 5);
+    const visibleUsers = expanded ? data : data.slice(0, 5);
 
     const toggleExpand = () => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setExpanded(!expanded);
+    };
+
+    const handleRowPress = (member: ScoreboardMember) => {
+        navigateToProfile({ id: member.id, handle: member.handle });
     };
 
     return (
         <View style={styles.container}>
-            <Text style={styles.dashboardType}>Traditional • Head-to-Head • Habits</Text>
+            {/* Line 1 (Context Metadata) */}
+            <Text style={styles.dashboardType}>Head-to-Head · Faceoff · Habits</Text>
 
+            {/* Line 2 (Tribe Identifier) */}
             <View style={styles.header}>
-                <Text style={styles.leagueName}>Team flex</Text>
+                <Text style={styles.leagueName}>THE CUT SQUAD</Text>
                 <Image source={{ uri: 'https://i.pravatar.cc/100?img=26' }} style={styles.leagueImage} />
             </View>
             <Text style={styles.weekText}>Week {week}</Text>
 
-            <View style={styles.tableHeader}>
-                <View style={[styles.headerCol, { flex: 2 }]} />
-                <View style={[styles.headerCol, { flex: 1, alignItems: 'center' }]}>
-                    <Text style={styles.headerText}>Logged</Text>
+            {loading ? (
+                <View style={styles.loaderContainer}>
+                    <ActivityIndicator size="small" color="#DAA520" />
                 </View>
-                <View style={[styles.headerCol, { flex: 1, alignItems: 'center' }]}>
-                    <Text style={styles.headerText}>Trend</Text>
-                </View>
-                <View style={[styles.headerCol, { flex: 1, alignItems: 'center' }]}>
-                    <Text style={styles.headerText}>Record</Text>
-                </View>
-            </View>
-
-            {visibleUsers.map((user) => (
-                <View key={user.id} style={styles.userRow}>
-                    <Text style={styles.rankNum}>#{user.rank}</Text>
-
-                    <View style={styles.userInfo}>
-                        <Image source={{ uri: user.avatar }} style={styles.avatar} />
-                        <View style={styles.nameContainer}>
-                            <View style={styles.nameRow}>
-                                <Text style={styles.userName}>{user.name}</Text>
-                                {user.leaf && (
-                                    <TouchableOpacity onPress={() => setModalInfo({
-                                        visible: true, title: 'Natural Athlete', description: 'This user is verified as a natural athlete by the tribe.', iconName: 'leaf'
-                                    })}>
-                                        <MaterialCommunityIcons name="leaf" size={14} color="#1BB607" style={styles.icon} />
-                                    </TouchableOpacity>
-                                )}
-                                {user.activity && (
-                                    <TouchableOpacity onPress={() => setModalInfo({
-                                        visible: true, title: 'Tribe Activity', description: 'This is the verified activity for the user.', iconName: user.activity
-                                    })}>
-                                        <MaterialCommunityIcons name={user.activity as any} size={14} color={Colors.primary} style={styles.icon} />
-                                    </TouchableOpacity>
-                                )}
-                            </View>
-                            <Text style={styles.userHandle}>{user.handle}</Text>
+            ) : (
+                <>
+                    <View style={styles.tableHeader}>
+                        <View style={{ flex: 2.2, paddingLeft: 22 }}>
+                            <Text style={styles.headerText}>MEMBER</Text>
+                        </View>
+                        <View style={{ width: '18%', alignItems: 'center' }}>
+                            <Text style={styles.headerText}>LOGGED</Text>
+                        </View>
+                        <View style={{ width: '18%', alignItems: 'center' }}>
+                            <Text style={styles.headerText}>TREND</Text>
+                        </View>
+                        <View style={{ width: '18%', alignItems: 'flex-end', paddingRight: 4, marginRight: -12 }}>
+                            <Text style={styles.headerText}>RECORD</Text>
                         </View>
                     </View>
 
-                    <View style={styles.iconCol}>
-                        {user.logged ? (
-                            <View style={styles.loggedCircle}>
-                                <MaterialCommunityIcons name="check" size={16} color="white" />
-                            </View>
-                        ) : (
-                            <View style={styles.unloggedCircle} />
-                        )}
+                    <View style={styles.rowsWrapper}>
+                        {visibleUsers.map((member) => (
+                            <Reanimated.View 
+                                key={member.id} 
+                                layout={LinearTransition.springify().damping(22).stiffness(130)}
+                            >
+                                <TouchableOpacity 
+                                    activeOpacity={0.7} 
+                                    onPress={() => handleRowPress(member)}
+                                    style={styles.userRow}
+                                >
+                                    <Text style={styles.rankNum}>#{member.rank}</Text>
+
+                                    <View style={styles.userInfo}>
+                                        <Image 
+                                            source={member.avatar ? { uri: member.avatar } : require('@/assets/images/react-logo.png')} 
+                                            style={styles.avatar} 
+                                        />
+                                        <View style={styles.nameContainer}>
+                                            <View style={styles.nameRow}>
+                                                <Text style={styles.userName} numberOfLines={1}>{member.name}</Text>
+                                                {member.status === 'natural' && (
+                                                    <TouchableOpacity onPress={() => setModalInfo({
+                                                        visible: true, title: 'Natural Athlete', description: 'This user is verified as a natural athlete by the tribe.', iconName: 'leaf'
+                                                    })}>
+                                                        <MaterialCommunityIcons name="leaf" size={13} color="#1BB607" style={styles.icon} />
+                                                    </TouchableOpacity>
+                                                )}
+                                                {member.activityIcon && (
+                                                    <TouchableOpacity onPress={() => setModalInfo({
+                                                        visible: true, title: member.activity || 'Activity', description: '', iconName: resolveActivityIcon(member.activity, member.activityIcon) as any
+                                                    })}>
+                                                        <MaterialCommunityIcons name={resolveActivityIcon(member.activity, member.activityIcon) as any} size={13} color="#DAA520" style={styles.icon} />
+                                                    </TouchableOpacity>
+                                                )}
+                                            </View>
+                                            <Text style={styles.userHandle} numberOfLines={1}>{member.handle}</Text>
+                                        </View>
+                                    </View>
+
+                                    {/* Column 2: Logged Status */}
+                                    <View style={styles.iconCol}>
+                                        {member.logged ? (
+                                            <Ionicons 
+                                                name="checkmark-circle" 
+                                                size={22} 
+                                                color="#DAA520" 
+                                            />
+                                        ) : (
+                                            <View style={styles.unloggedCircle} />
+                                        )}
+                                    </View>
+
+                                    {/* Column 3: Trend */}
+                                    <View style={styles.col}>
+                                        {member.rankChange > 0 ? (
+                                            <View style={styles.trendContainer}>
+                                                <Text style={styles.trendUpArrow}>▲</Text>
+                                                <Text style={styles.trendUpText}>{member.rankChange}</Text>
+                                            </View>
+                                        ) : member.rankChange < 0 ? (
+                                            <View style={styles.trendContainer}>
+                                                <Text style={styles.trendDownArrow}>▼</Text>
+                                                <Text style={styles.trendDownText}>{Math.abs(member.rankChange)}</Text>
+                                            </View>
+                                        ) : (
+                                            <Text style={styles.trendStagnant}>—</Text>
+                                        )}
+                                    </View>
+
+                                    {/* Column 4: Record */}
+                                    <View style={styles.recordCol}>
+                                        <Text style={styles.recordText}>
+                                            {`${member.wins ?? 0}-${member.losses ?? 0}`}
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+                            </Reanimated.View>
+                        ))}
                     </View>
 
-                    <View style={styles.col}>
-                        {user.trendDir === 'up' && (
-                            <View style={styles.trendContainer}>
-                                <MaterialCommunityIcons name="menu-up" size={24} color="#4ADE80" style={{ marginTop: 2 }} />
-                                <Text style={[styles.trendText, { color: '#4ADE80' }]}>{user.trend}</Text>
-                            </View>
-                        )}
-                        {user.trendDir === 'down' && (
-                            <View style={styles.trendContainer}>
-                                <MaterialCommunityIcons name="menu-down" size={24} color={Colors.error} style={{ marginTop: -2 }} />
-                                <Text style={[styles.trendText, { color: Colors.error }]}>{user.trend}</Text>
-                            </View>
-                        )}
-                        {user.trendDir === 'none' && (
-                            <Text style={[styles.trendText, { color: 'white', opacity: 0.8 }]}>-</Text>
-                        )}
+                    {data.length > 5 && (
+                        <TouchableOpacity style={styles.expandButton} onPress={toggleExpand}>
+                            <MaterialCommunityIcons 
+                                name={expanded ? "chevron-up" : "dots-horizontal"} 
+                                size={24} 
+                                color="#EDE8D5" 
+                            />
+                        </TouchableOpacity>
+                    )}
+
+                    {/* QA Engineering Synthetic Testing Rig */}
+                    <View style={styles.qaRigContainer}>
+                        <Text style={styles.qaRigLabel}>QA ANIMATION TESTING RIG</Text>
+                        <View style={styles.qaActionRow}>
+                            <TouchableOpacity
+                                style={styles.qaPlusButton}
+                                activeOpacity={0.7}
+                                onPress={() => {
+                                    if (data.length === 0) return;
+                                    // Select random member and mutate record
+                                    const randomMember = data[Math.floor(Math.random() * data.length)];
+                                    const isWin = Math.random() > 0.5;
+                                    mutateRecord(randomMember.id, isWin ? 1 : 0, isWin ? 0 : 1);
+                                }}
+                            >
+                                <Ionicons name="add" size={16} color="#DAA520" />
+                                <Text style={styles.qaPlusText}>Mutate record</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
-
-                    <View style={styles.col}>
-                        <Text style={styles.recordText}>{user.record}</Text>
-                    </View>
-                </View>
-            ))}
-
-            <TouchableOpacity style={styles.expandButton} onPress={toggleExpand}>
-                <MaterialCommunityIcons name="dots-horizontal" size={24} color="white" />
-            </TouchableOpacity>
-
-            <Text style={styles.timestamp}>Just now</Text>
+                </>
+            )}
 
             {modalInfo && (
                 <TribeInfoModal
@@ -147,88 +201,98 @@ export const H2HLeaderboardDashboard = () => {
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: Colors.card,
-        borderRadius: 35,
-        padding: 20,
-        paddingTop: 15,
-        borderWidth: 1,
-        borderColor: 'rgba(79, 99, 82, 0.4)',
-        position: 'relative',
+        backgroundColor: '#262525', // Signature deep Charcoal background
+        borderRadius: 32,
+        padding: 16,
+        paddingTop: 20,
+        borderWidth: 2,
+        borderColor: '#DAA520', // Glowing Harvest Gold border
+        marginVertical: 12,
     },
     dashboardType: {
         textAlign: 'center',
-        color: Colors.primary,
-        fontWeight: 'bold',
-        fontSize: 12,
-        marginBottom: 5,
+        color: '#DAA520', // Harvest Gold context metadata
+        fontWeight: '900',
+        fontSize: 10,
+        textTransform: 'uppercase',
+        letterSpacing: 1.5,
+        marginBottom: 8,
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 10,
+        gap: 8,
     },
     leagueName: {
-        fontSize: 26,
-        fontWeight: 'bold',
-        color: 'white',
+        fontSize: 22,
+        fontWeight: '900',
+        color: '#EDE8D5', // Uppercase Dust tribe name
+        letterSpacing: 1,
     },
     leagueImage: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#DAA520',
     },
     weekText: {
         textAlign: 'center',
-        color: 'white',
+        color: '#EDE8D5',
         fontStyle: 'italic',
-        fontSize: 12,
-        marginBottom: 15,
-        opacity: 0.8,
+        fontSize: 11,
+        marginBottom: 16,
+        opacity: 0.7,
+    },
+    loaderContainer: {
+        paddingVertical: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     tableHeader: {
         flexDirection: 'row',
-        marginBottom: 10,
-        paddingLeft: 20,
-    },
-    headerCol: {
-        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 12,
     },
     headerText: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 14,
+        color: '#787878',
+        fontWeight: '900',
+        fontSize: 10,
+        letterSpacing: 1.2,
+    },
+    rowsWrapper: {
+        gap: 2,
     },
     userRow: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingVertical: 10,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255,255,255,0.1)',
-        gap: 5,
+        borderBottomColor: 'rgba(237, 232, 213, 0.05)',
         position: 'relative',
     },
     rankNum: {
         position: 'absolute',
-        top: 15,
-        left: -5,
-        fontSize: 12,
-        fontWeight: 'bold',
-        color: 'white',
+        left: 0,
+        fontSize: 11,
+        fontWeight: '900',
+        color: '#EDE8D5',
+        opacity: 0.6,
     },
     userInfo: {
-        flex: 2,
+        flex: 2.2,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
-        paddingLeft: 18,
+        gap: 8,
+        paddingLeft: 22,
     },
     avatar: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        borderWidth: 2,
-        borderColor: Colors.primary,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        borderWidth: 1.5,
+        borderColor: '#DAA520', // Harvest Gold avatar border
     },
     nameContainer: {
         flex: 1,
@@ -236,73 +300,122 @@ const styles = StyleSheet.create({
     nameRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: 4,
     },
     userName: {
-        color: 'white',
+        color: '#EDE8D5',
         fontWeight: 'bold',
-        fontSize: 16,
+        fontSize: 14,
+        maxWidth: SCREEN_WIDTH * 0.28,
     },
     userHandle: {
-        color: 'rgba(255,255,255,0.6)',
-        fontSize: 12,
-        marginTop: -2,
+        color: '#8B4513', // Burnt Sienna username handles
+        fontSize: 11,
+        fontWeight: '600',
+        marginTop: 1,
     },
     icon: {
-        marginLeft: 2,
+        marginLeft: 1,
     },
     iconCol: {
-        flex: 1,
+        width: '18%',
         alignItems: 'center',
         justifyContent: 'center',
     },
     col: {
-        flex: 1,
+        width: '18%',
         alignItems: 'center',
         justifyContent: 'center',
     },
-    loggedCircle: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        backgroundColor: Colors.primary,
-        alignItems: 'center',
+    recordCol: {
+        width: '18%',
+        alignItems: 'flex-end',
         justifyContent: 'center',
+        paddingRight: 4,
     },
     unloggedCircle: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        borderWidth: 3,
-        borderColor: 'white',
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        borderWidth: 1.5,
+        borderColor: '#EDE8D5', // Empty Dust circle
         backgroundColor: 'transparent',
     },
     trendContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
+        gap: 2,
     },
-    trendText: {
+    trendUpArrow: {
+        color: '#AEDD63', // Green caret
+        fontSize: 11,
+        fontWeight: '900',
+    },
+    trendUpText: {
+        color: '#AEDD63',
+        fontSize: 11,
         fontWeight: 'bold',
-        fontSize: 18,
-        marginLeft: -2,
+    },
+    trendDownArrow: {
+        color: '#8B2613', // Crimson caret
+        fontSize: 11,
+        fontWeight: '900',
+    },
+    trendDownText: {
+        color: '#8B2613',
+        fontSize: 11,
+        fontWeight: 'bold',
+    },
+    trendStagnant: {
+        color: '#EDE8D5',
+        fontSize: 11,
+        fontWeight: 'bold',
     },
     recordText: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 16,
-        opacity: 0.8,
+        color: '#FFFFFF', // Bold Soft White records
+        fontWeight: '900',
+        fontSize: 14,
     },
     expandButton: {
         alignItems: 'center',
-        marginTop: 15,
-        padding: 5,
+        marginTop: 12,
+        padding: 4,
     },
-    timestamp: {
-        position: 'absolute',
-        bottom: 15,
-        right: 20,
-        fontSize: 10,
-        color: Colors.primary,
-        opacity: 0.7,
-    }
+    qaRigContainer: {
+        marginTop: 16,
+        paddingTop: 12,
+        borderTopWidth: 1.5,
+        borderTopColor: 'rgba(237, 232, 213, 0.08)',
+        alignItems: 'center',
+    },
+    qaRigLabel: {
+        color: '#DAA520',
+        fontSize: 9,
+        fontWeight: '900',
+        letterSpacing: 1.2,
+        marginBottom: 8,
+        opacity: 0.6,
+    },
+    qaActionRow: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+    },
+    qaPlusButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1.5,
+        borderColor: '#DAA520',
+        borderRadius: 100,
+        paddingHorizontal: 16,
+        paddingVertical: 6,
+        gap: 6,
+        backgroundColor: 'rgba(218, 165, 32, 0.05)',
+    },
+    qaPlusText: {
+        color: '#DAA520',
+        fontSize: 11,
+        fontWeight: 'bold',
+    },
 });

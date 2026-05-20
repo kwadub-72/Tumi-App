@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, LayoutAnimation } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, LayoutAnimation, ActivityIndicator } from 'react-native';
 import { Colors } from '../../../../shared/theme/Colors';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TribeInfoModal from '../TribeInfoModal';
+import { useFaceoffMatchups } from '../../hooks/useFaceoffMatchups';
+import { useProfileNavigation } from '@/src/shared/hooks/useProfileNavigation';
+import { FAKE_INITIAL_WINS_BY_HANDLE, FAKE_INITIAL_LOSSES_BY_HANDLE } from '../../hooks/useTribeScoreboard';
 
 const getCompetitionWeek = () => {
     const START_DATE = new Date('2026-03-22T00:00:00Z');
@@ -13,49 +16,42 @@ const getCompetitionWeek = () => {
     return Math.max(1, weeks);
 };
 
-const mockMatchupData = {
-    leftUser: {
-        rank: 1,
-        name: 'Kwaku',
-        handle: '@kwadub',
-        avatar: 'https://i.pravatar.cc/100?img=33',
-        tribeName: 'Team flex',
-        tribeLogo: 'https://i.pravatar.cc/100?img=26',
-        record: '7-1',
-        streak: 'L1',
-        score: 100,
-        leaf: true,
-        activity: 'hammer',
-        caloriesLoggedPct: 80,
-    },
-    rightUser: {
-        rank: 2,
-        name: 'Michael',
-        handle: '@MikeyMike123',
-        avatar: 'https://i.pravatar.cc/100?img=60',
-        tribeName: 'Harvard alums',
-        tribeLogo: 'https://i.pravatar.cc/100?img=26', // Reusing placeholder for tribe logo
-        record: '7-1',
-        streak: 'W1',
-        score: 100,
-        leaf: true,
-        activity: 'hammer',
-        caloriesLoggedPct: 50,
-    },
-    dailyHistory: [
-        { date: 'Sat - 3/29', leftScore: '+10', rightScore: '-10' },
-        { date: 'Fri - 3/28', leftScore: '+10', rightScore: '-10' },
-        { date: 'Thu - 3/27', leftScore: '+10', rightScore: '-10' },
-        { date: 'Wed - 3/26', leftScore: '+10', rightScore: '-10' },
-        { date: 'Tue - 3/25', leftScore: '+10', rightScore: '-10' },
-        { date: 'Mon - 3/24', leftScore: '+10', rightScore: '-10' },
-    ]
+const generateDailyHistory = (leftPoints: number, rightPoints: number) => {
+    const days = ['Sat', 'Fri', 'Thu', 'Wed', 'Tue', 'Mon'];
+    const leftBase = Math.floor(leftPoints / 6);
+    const rightBase = Math.floor(rightPoints / 6);
+    
+    return days.map((day, idx) => {
+        const dateLabel = `${day} - 3/${29 - idx}`;
+        const lVal = leftBase + (idx === 0 ? (leftPoints % 6) : 0);
+        const rVal = rightBase + (idx === 0 ? (rightPoints % 6) : 0);
+        
+        return {
+            date: dateLabel,
+            leftScore: lVal >= 0 ? `+${lVal}` : `${lVal}`,
+            rightScore: rVal >= 0 ? `+${rVal}` : `${rVal}`
+        };
+    });
 };
 
-export const TradTribeBattleUserMatchup = () => {
+interface TradTribeBattleUserMatchupProps {
+    tribeId?: string;
+    weekNumber?: number;
+}
+
+export const TradTribeBattleUserMatchup = ({
+    tribeId = 'b0000000-0000-0000-0000-000000000004',
+    weekNumber
+}: TradTribeBattleUserMatchupProps) => {
     const [expanded, setExpanded] = useState(false);
     const [modalInfo, setModalInfo] = useState<{ visible: boolean, title: string, description: string, iconName: any } | null>(null);
-    const week = getCompetitionWeek();
+    const week = weekNumber ?? getCompetitionWeek();
+    const { navigateToProfile } = useProfileNavigation();
+
+    const { matchups, userMatchup, loading } = useFaceoffMatchups(tribeId, week);
+
+    // Fall back to first matchup of week if logged in user is not in a matchup
+    const activeMatchup = userMatchup || matchups[0] || null;
 
     const toggleExpand = () => {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -73,7 +69,10 @@ export const TradTribeBattleUserMatchup = () => {
             )}
             {user.activity && (
                 <TouchableOpacity onPress={() => setModalInfo({
-                    visible: true, title: 'Tribe Activity', description: 'This is the verified activity for the user.', iconName: user.activity
+                    visible: true, 
+                    title: user.activity === 'hammer' ? 'Bodybuilding' : (user.activity === 'weight-lifter' ? 'Powerlifting' : 'Activity'), 
+                    description: '', 
+                    iconName: user.activity as any
                 })}>
                     <MaterialCommunityIcons name={user.activity as any} size={16} color={Colors.primary} style={styles.icon} />
                 </TouchableOpacity>
@@ -81,70 +80,154 @@ export const TradTribeBattleUserMatchup = () => {
         </>
     );
 
+    if (loading && !activeMatchup) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', height: 250 }]}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+            </View>
+        );
+    }
+
+    if (!activeMatchup) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', height: 250 }]}>
+                <Text style={{ color: 'rgba(255,255,255,0.6)', fontStyle: 'italic' }}>No active matchups for Week {week}</Text>
+            </View>
+        );
+    }
+
+    const leftHandle = activeMatchup.user_1_username.replace('@', '');
+    const rightHandle = activeMatchup.user_2_username.replace('@', '');
+
+    const leftUser = {
+        id: activeMatchup.user_1_id,
+        name: activeMatchup.user_1_display_name,
+        handle: activeMatchup.user_1_username,
+        avatar: activeMatchup.user_1_pfp_url,
+        tribeName: 'The Cut Squad',
+        tribeLogo: 'https://i.pravatar.cc/100?img=26',
+        record: `${FAKE_INITIAL_WINS_BY_HANDLE[leftHandle] ?? 7}-${FAKE_INITIAL_LOSSES_BY_HANDLE[leftHandle] ?? 1}`,
+        streak: (FAKE_INITIAL_WINS_BY_HANDLE[leftHandle] ?? 7) > (FAKE_INITIAL_LOSSES_BY_HANDLE[leftHandle] ?? 1) ? 'W1' : 'L1',
+        score: activeMatchup.user_1_weekly_points,
+        leaf: activeMatchup.user_1_natural_status === 'natural',
+        activity: activeMatchup.user_1_activity_icon || 'hammer',
+        caloriesPct: 80,
+        proteinPct: 72,
+        carbsPct: 65,
+        fatPct: 58,
+    };
+
+    const rightUser = {
+        id: activeMatchup.user_2_id,
+        name: activeMatchup.user_2_display_name,
+        handle: activeMatchup.user_2_username,
+        avatar: activeMatchup.user_2_pfp_url,
+        tribeName: 'The Cut Squad',
+        tribeLogo: 'https://i.pravatar.cc/100?img=26',
+        record: `${FAKE_INITIAL_WINS_BY_HANDLE[rightHandle] ?? 7}-${FAKE_INITIAL_LOSSES_BY_HANDLE[rightHandle] ?? 1}`,
+        streak: (FAKE_INITIAL_WINS_BY_HANDLE[rightHandle] ?? 7) > (FAKE_INITIAL_LOSSES_BY_HANDLE[rightHandle] ?? 1) ? 'W1' : 'L1',
+        score: activeMatchup.user_2_weekly_points,
+        leaf: activeMatchup.user_2_natural_status === 'natural',
+        activity: activeMatchup.user_2_activity_icon || 'hammer',
+        caloriesPct: 50,
+        proteinPct: 44,
+        carbsPct: 70,
+        fatPct: 38,
+    };
+
+    const dailyHistory = generateDailyHistory(leftUser.score, rightUser.score);
+
     return (
         <View style={styles.container}>
-            <Text style={styles.dashboardType}>Traditional • Tribe Battle • Habits</Text>
+            <Text style={styles.dashboardType}>Head-to-Head • Faceoff • Habits</Text>
             <Text style={styles.weekText}>Week {week}</Text>
 
             <View style={styles.matchupContainer}>
                 {/* Left User */}
-                <View style={styles.playerCol}>
-                    <Text style={styles.rankNum}>#{mockMatchupData.leftUser.rank}</Text>
-                    <Image source={{ uri: mockMatchupData.leftUser.avatar }} style={styles.bigAvatar} />
+                <TouchableOpacity onPress={() => navigateToProfile({ id: leftUser.id, handle: leftUser.handle })} style={styles.playerCol}>
+                    <Text style={styles.rankNum}>#1</Text>
+                    {leftUser.avatar ? (
+                        <Image source={{ uri: leftUser.avatar }} style={styles.bigAvatar} />
+                    ) : (
+                        <View style={styles.fallbackAvatar}>
+                            <MaterialCommunityIcons name="shield-outline" size={32} color="#8B6D25" />
+                        </View>
+                    )}
 
                     <View style={styles.nameRow}>
-                        <Text style={styles.userName}>{mockMatchupData.leftUser.name}</Text>
-                        {renderIcons(mockMatchupData.leftUser)}
+                        <Text style={styles.userName} numberOfLines={1}>{leftUser.name}</Text>
+                        {renderIcons(leftUser)}
                     </View>
-                    <Text style={styles.userHandle}>{mockMatchupData.leftUser.handle}</Text>
+                    <Text style={styles.userHandle} numberOfLines={1}>{leftUser.handle}</Text>
                     <View style={styles.miniTribeRow}>
-                        <Image source={{ uri: mockMatchupData.leftUser.tribeLogo }} style={styles.miniTribeLogo} />
-                        <Text style={styles.miniTribeName}>{mockMatchupData.leftUser.tribeName}</Text>
+                        <Image source={{ uri: leftUser.tribeLogo }} style={styles.miniTribeLogo} />
+                        <Text style={styles.miniTribeName} numberOfLines={1}>{leftUser.tribeName}</Text>
                     </View>
 
                     <Text style={styles.recordText}>
-                        {mockMatchupData.leftUser.record} <Text style={{ color: Colors.error }}>({mockMatchupData.leftUser.streak})</Text>
+                        {leftUser.record} <Text style={{ color: Colors.error }}>({leftUser.streak})</Text>
                     </Text>
-
-                    <View style={styles.calorieBarContainer}>
-                        <MaterialCommunityIcons name="fire" size={24} color={Colors.primary} />
-                        <View style={styles.calorieBarBg}>
-                            <View style={[styles.calorieBarFill, { width: `${mockMatchupData.leftUser.caloriesLoggedPct}%` }]} />
-                        </View>
-                    </View>
-                </View>
+                </TouchableOpacity>
 
                 {/* Score */}
                 <View style={styles.scoreCol}>
-                    <Text style={styles.bigScore}>{mockMatchupData.leftUser.score}-{mockMatchupData.rightUser.score}</Text>
+                    <Text style={styles.bigScore}>{leftUser.score}-{rightUser.score}</Text>
                 </View>
 
                 {/* Right User */}
-                <View style={styles.playerCol}>
-                    <Text style={styles.rankNum}>#{mockMatchupData.rightUser.rank}</Text>
-                    <Image source={{ uri: mockMatchupData.rightUser.avatar }} style={styles.bigAvatarRight} />
+                <TouchableOpacity onPress={() => navigateToProfile({ id: rightUser.id, handle: rightUser.handle })} style={styles.playerCol}>
+                    <Text style={styles.rankNum}>#2</Text>
+                    {rightUser.avatar ? (
+                        <Image source={{ uri: rightUser.avatar }} style={styles.bigAvatarRight} />
+                    ) : (
+                        <View style={styles.fallbackAvatarRight}>
+                            <MaterialCommunityIcons name="shield-outline" size={32} color="#8B6D25" />
+                        </View>
+                    )}
 
                     <View style={styles.nameRow}>
-                        <Text style={styles.userName}>{mockMatchupData.rightUser.name}</Text>
-                        {renderIcons(mockMatchupData.rightUser)}
+                        <Text style={styles.userName} numberOfLines={1}>{rightUser.name}</Text>
+                        {renderIcons(rightUser)}
                     </View>
-                    <Text style={styles.userHandle}>{mockMatchupData.rightUser.handle}</Text>
+                    <Text style={styles.userHandle} numberOfLines={1}>{rightUser.handle}</Text>
                     <View style={styles.miniTribeRow}>
-                        <Image source={{ uri: mockMatchupData.rightUser.tribeLogo }} style={styles.miniTribeLogo} />
-                        <Text style={styles.miniTribeName}>{mockMatchupData.rightUser.tribeName}</Text>
+                        <Image source={{ uri: rightUser.tribeLogo }} style={styles.miniTribeLogo} />
+                        <Text style={styles.miniTribeName} numberOfLines={1}>{rightUser.tribeName}</Text>
                     </View>
 
                     <Text style={styles.recordText}>
-                        {mockMatchupData.rightUser.record} <Text style={{ color: '#4ADE80' }}>({mockMatchupData.rightUser.streak})</Text>
+                        {rightUser.record} <Text style={{ color: '#4ADE80' }}>({rightUser.streak})</Text>
                     </Text>
+                </TouchableOpacity>
+            </View>
 
-                    <View style={styles.calorieBarContainer}>
-                        <MaterialCommunityIcons name="fire" size={24} color={Colors.primary} />
-                        <View style={styles.calorieBarBg}>
-                            <View style={[styles.calorieBarFill, { width: `${mockMatchupData.rightUser.caloriesLoggedPct}%` }]} />
+            {/* Macro face-off bars — centered below score */}
+            <View style={styles.macroBarsSection}>
+                {([
+                    { icon: 'fire',         label: 'Cal',  leftPct: leftUser.caloriesPct, rightPct: rightUser.caloriesPct, color: Colors.primary },
+                    { icon: 'arm-flex',    label: 'Pro',  leftPct: leftUser.proteinPct,  rightPct: rightUser.proteinPct,  color: '#60A5FA' },
+                    { icon: 'barley',      label: 'Carb', leftPct: leftUser.carbsPct,    rightPct: rightUser.carbsPct,    color: '#F97316' },
+                    { icon: 'water',       label: 'Fat',  leftPct: leftUser.fatPct,      rightPct: rightUser.fatPct,      color: '#A78BFA' },
+                ] as { icon: any; label: string; leftPct: number; rightPct: number; color: string }[]).map((macro) => (
+                    <View key={macro.icon} style={styles.macroRow}>
+                        {/* Left bar — fills from center outward (justify flex-end reverses it) */}
+                        <View style={styles.macroBarSideLeft}>
+                            <View style={[styles.macroBarBg, { justifyContent: 'flex-end' }]}>
+                                <View style={[styles.macroBarFill, { width: `${macro.leftPct}%`, backgroundColor: macro.color }]} />
+                            </View>
+                        </View>
+                        {/* Center icon */}
+                        <View style={styles.macroIconCenter}>
+                            <MaterialCommunityIcons name={macro.icon} size={18} color={macro.color} />
+                        </View>
+                        {/* Right bar — fills left to right */}
+                        <View style={styles.macroBarSideRight}>
+                            <View style={styles.macroBarBg}>
+                                <View style={[styles.macroBarFill, { width: `${macro.rightPct}%`, backgroundColor: macro.color }]} />
+                            </View>
                         </View>
                     </View>
-                </View>
+                ))}
             </View>
 
             <TouchableOpacity style={styles.expandButton} onPress={toggleExpand}>
@@ -153,17 +236,23 @@ export const TradTribeBattleUserMatchup = () => {
 
             {expanded && (
                 <View style={styles.expandedContent}>
-                    {mockMatchupData.dailyHistory.map((day, idx) => (
+                    {dailyHistory.map((day, idx) => (
                         <View key={idx} style={styles.historyRow}>
                             <View style={styles.historyUserLeft}>
-                                <Image source={{ uri: mockMatchupData.leftUser.avatar }} style={styles.smallAvatar} />
+                                {leftUser.avatar ? (
+                                    <Image source={{ uri: leftUser.avatar }} style={styles.smallAvatar} />
+                                ) : (
+                                    <View style={[styles.smallAvatar, styles.smallFallbackAvatar]}>
+                                        <MaterialCommunityIcons name="shield-outline" size={16} color="#8B6D25" />
+                                    </View>
+                                )}
                                 <View style={styles.historyNameCol}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Text style={styles.historyName}>{mockMatchupData.leftUser.name}</Text>
+                                        <Text style={styles.historyName} numberOfLines={1}>{leftUser.name}</Text>
                                         <MaterialCommunityIcons name="leaf" size={12} color="#4ADE80" style={{ marginLeft: 2 }} />
-                                        <MaterialCommunityIcons name="hammer" size={12} color={Colors.primary} style={{ marginLeft: 2 }} />
+                                        <MaterialCommunityIcons name={leftUser.activity as any} size={12} color={Colors.primary} style={{ marginLeft: 2 }} />
                                     </View>
-                                    <Text style={styles.historyHandle}>{mockMatchupData.leftUser.handle}</Text>
+                                    <Text style={styles.historyHandle} numberOfLines={1}>{leftUser.handle}</Text>
                                 </View>
                             </View>
 
@@ -179,13 +268,19 @@ export const TradTribeBattleUserMatchup = () => {
                             <View style={styles.historyUserRight}>
                                 <View style={[styles.historyNameCol, { alignItems: 'flex-end' }]}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Text style={styles.historyName}>{mockMatchupData.rightUser.name}</Text>
+                                        <Text style={styles.historyName} numberOfLines={1}>{rightUser.name}</Text>
                                         <MaterialCommunityIcons name="leaf" size={12} color="#4ADE80" style={{ marginLeft: 2 }} />
-                                        <MaterialCommunityIcons name="hammer" size={12} color={Colors.primary} style={{ marginLeft: 2 }} />
+                                        <MaterialCommunityIcons name={rightUser.activity as any} size={12} color={Colors.primary} style={{ marginLeft: 2 }} />
                                     </View>
-                                    <Text style={styles.historyHandle}>{mockMatchupData.rightUser.handle}</Text>
+                                    <Text style={styles.historyHandle} numberOfLines={1}>{rightUser.handle}</Text>
                                 </View>
-                                <Image source={{ uri: mockMatchupData.rightUser.avatar }} style={styles.smallAvatar} />
+                                {rightUser.avatar ? (
+                                    <Image source={{ uri: rightUser.avatar }} style={styles.smallAvatar} />
+                                ) : (
+                                    <View style={[styles.smallAvatar, styles.smallFallbackAvatar]}>
+                                        <MaterialCommunityIcons name="shield-outline" size={16} color="#8B6D25" />
+                                    </View>
+                                )}
                             </View>
                         </View>
                     ))}
@@ -236,7 +331,7 @@ const styles = StyleSheet.create({
     matchupContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'flex-start',
+        alignItems: 'center',
     },
     playerCol: {
         flex: 1,
@@ -246,10 +341,11 @@ const styles = StyleSheet.create({
     scoreCol: {
         width: 120,
         alignItems: 'center',
-        paddingTop: 40,
+        justifyContent: 'center',
+        alignSelf: 'center',
     },
     bigScore: {
-        fontSize: 32,
+        fontSize: 48,
         fontWeight: 'bold',
         color: 'rgba(255,255,255,0.8)',
     },
@@ -279,19 +375,49 @@ const styles = StyleSheet.create({
         borderColor: '#FCA5A5',
         marginBottom: 10,
     },
+    fallbackAvatar: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        borderWidth: 3,
+        borderColor: Colors.primary,
+        backgroundColor: '#262525',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 10,
+    },
+    fallbackAvatarRight: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        borderWidth: 3,
+        borderColor: '#FCA5A5',
+        backgroundColor: '#262525',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 10,
+    },
+    smallFallbackAvatar: {
+        backgroundColor: '#262525',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     nameRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
+        width: '100%',
+        paddingHorizontal: 5,
     },
     userName: {
         color: 'white',
         fontWeight: 'bold',
-        fontSize: 22,
+        fontSize: 16,
+        flexShrink: 1,
     },
     userHandle: {
         color: 'rgba(255,255,255,0.6)',
-        fontSize: 14,
+        fontSize: 12,
         marginTop: 2,
     },
     miniTribeRow: {
@@ -299,6 +425,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 5,
         gap: 6,
+        width: '100%',
+        justifyContent: 'center',
     },
     miniTribeLogo: {
         width: 16,
@@ -308,7 +436,8 @@ const styles = StyleSheet.create({
     miniTribeName: {
         color: 'white',
         fontWeight: 'bold',
-        fontSize: 14,
+        fontSize: 12,
+        flexShrink: 1,
     },
     icon: {
         marginLeft: 2,
@@ -316,29 +445,43 @@ const styles = StyleSheet.create({
     recordText: {
         color: 'white',
         fontWeight: 'bold',
-        fontSize: 16,
+        fontSize: 14,
         marginTop: 5,
         marginBottom: 10,
     },
-    calorieBarContainer: {
+    macroBarsSection: {
+        marginTop: 16,
+        gap: 8,
+        paddingHorizontal: 4,
+    },
+    macroRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        width: '100%',
-        paddingHorizontal: 10,
-        gap: 5,
+        gap: 0,
     },
-    calorieBarBg: {
+    macroBarSideLeft: {
         flex: 1,
-        height: 20,
-        backgroundColor: Colors.primary,
-        borderRadius: 10,
+    },
+    macroBarSideRight: {
+        flex: 1,
+    },
+    macroBarBg: {
+        flexDirection: 'row',
+        height: 14,
+        backgroundColor: Colors.theme.charcoal,
+        borderRadius: 7,
         overflow: 'hidden',
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.2)',
+        borderColor: 'rgba(255,255,255,0.15)',
     },
-    calorieBarFill: {
+    macroBarFill: {
         height: '100%',
-        backgroundColor: '#789370',
+        borderRadius: 7,
+    },
+    macroIconCenter: {
+        width: 36,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     expandButton: {
         alignItems: 'center',
@@ -378,15 +521,17 @@ const styles = StyleSheet.create({
     },
     historyNameCol: {
         justifyContent: 'center',
+        flex: 1,
     },
     historyName: {
         color: 'white',
         fontWeight: 'bold',
-        fontSize: 12,
+        fontSize: 11,
+        flexShrink: 1,
     },
     historyHandle: {
         color: 'rgba(255,255,255,0.6)',
-        fontSize: 10,
+        fontSize: 9,
     },
     historyScoreBox: {
         alignItems: 'center',
