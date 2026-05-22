@@ -499,13 +499,13 @@ const styles = StyleSheet.create({
         flex: 1,
         minHeight: 48,
         borderRadius: 24,
-        backgroundColor: Colors.theme.beigeLight,
+        backgroundColor: Colors.theme.charcoal,
         paddingHorizontal: 16,
         paddingVertical: 10,
         justifyContent: 'center',
     },
     captionInput: {
-        color: Colors.textDark,
+        color: Colors.white,
         minHeight: 24,
     },
     publishBtn: {

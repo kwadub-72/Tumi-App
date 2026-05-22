@@ -402,14 +402,17 @@ export function useTribeScoreboard(tribeId?: string) {
         }));
 
         mapped.sort((a, b) => {
-            // Faceoff style sorts first by Wins count descending
+            // Faceoff style sorts first by Wins count descending, then Losses count ascending
             if (compStyle === 'faceoff') {
                 if (b.wins !== a.wins) {
                     return b.wins - a.wins;
                 }
+                if (a.losses !== b.losses) {
+                    return a.losses - b.losses;
+                }
             }
 
-            // Priority 0: Points descending
+            // Priority 1 / Tier 1: Aggregate Cumulative Points
             if (b.points !== a.points) {
                 return b.points - a.points;
             }
@@ -418,29 +421,29 @@ export function useTribeScoreboard(tribeId?: string) {
             const tbB = tiebreakersRef.current[b.id];
 
             if (tbA && tbB) {
-                // Priority 1: Longer amount of days logged consecutively since competition began
-                if (tbB.max_streak !== tbA.max_streak) {
-                    return tbB.max_streak - tbA.max_streak;
-                }
-                // Priority 2: Higher % of completed daily macros within 2.5g of target
-                if (tbB.pct_2_5 !== tbA.pct_2_5) {
-                    return tbB.pct_2_5 - tbA.pct_2_5;
-                }
-                // Priority 3: Higher % of completed daily macros within 10g of target
-                if (tbB.pct_10 !== tbA.pct_10) {
-                    return tbB.pct_10 - tbA.pct_10;
-                }
-                // Priority 4: Higher % of completed daily macros within 15g of target
-                if (tbB.pct_15 !== tbA.pct_15) {
-                    return tbB.pct_15 - tbA.pct_15;
-                }
-                // Priority 5: Higher % of days with an exercise bonus
+                // Priority 2 / Tier 2: Total Daily Exercise Bonuses (pct_workout)
                 if (tbB.pct_workout !== tbA.pct_workout) {
                     return tbB.pct_workout - tbA.pct_workout;
                 }
+                // Priority 3 / Tier 3: Longest In-Season Logging Streak (max_streak)
+                if (tbB.max_streak !== tbA.max_streak) {
+                    return tbB.max_streak - tbA.max_streak;
+                }
+                // Priority 4: Higher % of completed daily macros within 2.5g of target
+                if (tbB.pct_2_5 !== tbA.pct_2_5) {
+                    return tbB.pct_2_5 - tbA.pct_2_5;
+                }
+                // Priority 5: Higher % of completed daily macros within 10g of target
+                if (tbB.pct_10 !== tbA.pct_10) {
+                    return tbB.pct_10 - tbA.pct_10;
+                }
+                // Priority 6: Higher % of completed daily macros within 15g of target
+                if (tbB.pct_15 !== tbA.pct_15) {
+                    return tbB.pct_15 - tbA.pct_15;
+                }
             }
 
-            // Priority 6: Alphabetical A-Z
+            // Priority 7: Alphabetical A-Z
             return a.name.localeCompare(b.name);
         });
 
@@ -681,12 +684,100 @@ export function useTribeScoreboard(tribeId?: string) {
         }
     }, [targetTribeId, cacheKey, data]);
 
+    // Simulate Triple Tie competitive standing resolved by logging streak (Tier 3)
+    const simulateTripleTie = useCallback(() => {
+        const mockTiebreakers: Record<string, {
+            max_streak: number;
+            pct_2_5: number;
+            pct_10: number;
+            pct_15: number;
+            pct_workout: number;
+        }> = {
+            'user-a': { max_streak: 12, pct_2_5: 90, pct_10: 95, pct_15: 98, pct_workout: 80 },
+            'user-b': { max_streak: 5,  pct_2_5: 90, pct_10: 95, pct_15: 98, pct_workout: 80 },
+            'user-c': { max_streak: 15, pct_2_5: 90, pct_10: 95, pct_15: 98, pct_workout: 80 }
+        };
+        
+        tiebreakersRef.current = mockTiebreakers;
+        
+        const mockedMembers: ScoreboardMember[] = [
+            {
+                id: 'user-b',
+                name: 'Peyton Reed (B)',
+                handle: '@preed',
+                avatar: 'https://i.pravatar.cc/100?img=47',
+                status: 'natural',
+                activity: 'Powerlifting',
+                logged: true,
+                streak: 5,
+                targetType: 'Protein',
+                progress: { percentage: 0.8, label: '160g / 200g' },
+                points: 500,
+                wins: 8,
+                losses: 1,
+                rank: 1,
+                previousRank: 1,
+                rankChange: 0
+            },
+            {
+                id: 'user-c',
+                name: 'Sam White (C)',
+                handle: '@swhite',
+                avatar: 'https://i.pravatar.cc/100?img=11',
+                status: 'natural',
+                activity: 'Crossfit',
+                logged: true,
+                streak: 15,
+                targetType: 'Protein',
+                progress: { percentage: 0.8, label: '160g / 200g' },
+                points: 500,
+                wins: 8,
+                losses: 1,
+                rank: 1,
+                previousRank: 1,
+                rankChange: 0
+            },
+            {
+                id: 'user-a',
+                name: 'Riley Cooper (A)',
+                handle: '@rcooper',
+                avatar: 'https://i.pravatar.cc/100?img=12',
+                status: 'natural',
+                activity: 'Bodybuilding',
+                logged: true,
+                streak: 12,
+                targetType: 'Protein',
+                progress: { percentage: 0.8, label: '160g / 200g' },
+                points: 500,
+                wins: 8,
+                losses: 1,
+                rank: 1,
+                previousRank: 1,
+                rankChange: 0
+            }
+        ];
+        
+        // Sort using the tier rules:
+        const sorted = sortAndRankList(
+            mockedMembers,
+            { 'user-a': 500, 'user-b': 500, 'user-c': 500 },
+            { 'user-a': 8, 'user-b': 8, 'user-c': 8 },
+            { 'user-a': 1, 'user-b': 1, 'user-c': 1 },
+            {},
+            'faceoff'
+        );
+        
+        setData(sorted);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }, [targetTribeId, sortAndRankList]);
+
     // Realtime Postgres Sync (combines database modifications with local points logic)
     useEffect(() => {
         if (!targetTribeId) return;
 
+        const channelId = Math.random().toString(36).substring(7);
         const channel = supabase
-            .channel(`tribe-scoreboard-realtime-competitive-${targetTribeId}`)
+            .channel(`tribe-scoreboard-realtime-competitive-${targetTribeId}-${channelId}`)
             .on(
                 'postgres_changes',
                 {
@@ -753,6 +844,7 @@ export function useTribeScoreboard(tribeId?: string) {
         mutatePoints,
         mutateRecord,
         simulateDailyReset,
+        simulateTripleTie,
         refresh: fetchScoreboard
     };
 }

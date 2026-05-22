@@ -118,13 +118,14 @@ const PointsColumnCell = React.memo(({ points }: { points: number }) => {
         </View>
     );
 });
+PointsColumnCell.displayName = 'PointsColumnCell';
 
 export default function TribeScoreboardModal({ visible, onClose, tribeId, tribeName = "Tribe Scoreboard" }: TribeScoreboardModalProps) {
     const { session } = useAuthStore();
     const { navigateToProfile } = useProfileNavigation();
     
     // Connect points management state hook
-    const { loading, data, header, competition, mutatePoints, simulateDailyReset } = useTribeScoreboard(tribeId);
+    const { loading, data, header, competition, mutatePoints, simulateDailyReset, simulateTripleTie } = useTribeScoreboard(tribeId);
     
     const [infoModalVisible, setInfoModalVisible] = useState(false);
     const [infoModalConfig, setInfoModalConfig] = useState<any>({});
@@ -514,7 +515,11 @@ export default function TribeScoreboardModal({ visible, onClose, tribeId, tribeN
 
                             {/* Slide 2: 1-on-1 Matchup View */}
                             <View style={{ width: Dimensions.get('window').width - 32, flex: 1 }}>
-                                <H2HUserMatchupDashboard isEmbedded={true} containerWidth={Dimensions.get('window').width - 32} />
+                                <H2HUserMatchupDashboard 
+                                    isEmbedded={true} 
+                                    containerWidth={Dimensions.get('window').width - 32} 
+                                    onSimulateTripleTie={simulateTripleTie}
+                                />
                             </View>
                         </DashboardCarousel>
                     ) : (

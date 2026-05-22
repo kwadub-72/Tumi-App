@@ -73,7 +73,7 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
         return tribeId;
     }, [tribeId]);
 
-    const { isMember, isRequested, joinTribe, leaveTribe, refreshMyTribes } = useUserTribeStore();
+    const { isMember, isRequested, isChief, joinTribe, leaveTribe } = useUserTribeStore();
 
     const [tribe, setTribe] = useState<Tribe | null>(null);
     const [posts, setPosts] = useState<FeedPost[]>([]);
@@ -298,20 +298,22 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
     useEffect(() => {
         if (!tribeId) return;
 
+        // Use a unique channel ID to avoid name collisions during updates/navigation re-runs
+        const uniqueChannelId = `tribe-likes-${tribeId}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
         const channel = supabase
-            .channel(`tribe-likes-${tribeId}`)
+            .channel(uniqueChannelId)
             .on(
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'likes' },
                 async () => {
                     // Re-fetch posts to get updated like counts
-                    // In production this could be an atomic increment, but a targeted
-                    // re-fetch keeps the code simple and correct.
                     const fresh = await SupabaseTribeService.getTribeFeed(currentUserId, tribeId, daysBack);
                     setPosts(fresh);
                 }
-            )
-            .subscribe();
+            );
+
+        // Strictly invoke subscribe() after registering the listener
+        channel.subscribe();
 
         return () => {
             supabase.removeChannel(channel);
@@ -328,10 +330,11 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
         setIsLoadingMore(false);
     }, [isLoadingMore, daysBack, fetchPosts]);
 
-    const isUserMember   = tribe ? isMember(tribe.id) : false;
+    const isUserChief     = tribe ? (isChief(tribe.id) || currentUserId === tribe.chief?.id) : false;
+    const isUserMember    = tribe ? isMember(tribe.id) : false;
     const isUserRequested = tribe ? isRequested(tribe.id) : false;
-    const isPrivate      = tribe ? tribe.privacy === 'private' : false;
-    const canView        = !isPrivate || isUserMember;
+    const isPrivate       = tribe ? tribe.privacy === 'private' : false;
+    const canView         = !isPrivate || isUserMember || isUserChief;
 
     // ── Interaction handlers ──────────────────────────────────────────────────
     const handleLike = useCallback(async (post: FeedPost) => {
@@ -381,6 +384,8 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
         await fetchTribe();
         if (isPrivate) Alert.alert('Requested', 'Your join request has been sent.');
     }, [currentUserId, isUserMember, isUserRequested, isPrivate, tribe, joinTribe, leaveTribe, fetchTribe]);
+
+
 
     if (!tribe) {
         return (
@@ -471,6 +476,17 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
     };
 
     const renderMemberButton = () => {
+        if (isUserChief) {
+            return (
+                <TouchableOpacity
+                    style={styles.goldButton}
+                    onPress={() => router.push({ pathname: '/create-tribe', params: { mode: 'edit', tribeId: tribe.id } } as any)}
+                >
+                    <Ionicons name="pencil" size={14} color={C.dust} style={{ marginRight: 4 }} />
+                    <Text style={styles.goldButtonText} numberOfLines={1}>Edit</Text>
+                </TouchableOpacity>
+            );
+        }
         if (isUserMember) {
             return (
                 <TouchableOpacity style={styles.goldButton} onPress={handleJoinPress}>

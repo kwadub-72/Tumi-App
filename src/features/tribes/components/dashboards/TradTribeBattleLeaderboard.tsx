@@ -38,7 +38,7 @@ export const TradTribeBattleLeaderboard = () => {
 
     return (
         <View style={styles.container}>
-            <Text style={styles.dashboardType}>Traditional • Tribe Battle • Habits</Text>
+            <Text style={styles.dashboardType}>Face-off • Tribe Battle • Habits</Text>
 
             <View style={styles.header}>
                 <Text style={styles.leagueName}>Team flex</Text>

@@ -128,15 +128,15 @@ const MacroProgressBar = ({ icon, target, consumed }: any) => {
 
     return (
         <View style={styles.progressRow}>
-            <MaterialCommunityIcons name={icon} size={32} color={Colors.theme.sageDark} style={styles.progressIcon} />
+            <MaterialCommunityIcons name={icon} size={32} color={Colors.primary} style={styles.progressIcon} />
             <View style={styles.progressTrackWrapper}>
                 <View style={styles.progressTrack}>
-                    {renderSegment(logged, Colors.theme.sageDark, 'white')}
+                    {renderSegment(logged, Colors.primary, 'white')}
                     {renderSegment(rem, '#8E8E8E', 'white')}
                     {renderSegment(over, '#825858', 'white')}
                 </View>
                 <View style={{ flexDirection: 'row', height: 25, position: 'relative' }}>
-                    {renderCarrot(logged, Colors.theme.sageDark, 'center')}
+                    {renderCarrot(logged, Colors.primary, 'center')}
                     {renderCarrot(rem, '#8E8E8E', 'left')}
                     {renderCarrot(over, '#825858', 'right')}
                 </View>
@@ -393,7 +393,7 @@ export default function MacroUpdateScreen() {
                 <View style={{ flex: 1 }}>
                         <View style={styles.header}>
                             <TouchableOpacity onPress={() => router.back()} style={styles.backBtnRow}>
-                                <Ionicons name="arrow-back" size={28} color={Colors.theme.sageDark} />
+                                <Ionicons name="arrow-back" size={28} color={Colors.primary} />
                             </TouchableOpacity>
                             
                             <View style={styles.modeToggleContainer}>
@@ -527,7 +527,7 @@ export default function MacroUpdateScreen() {
                                                 
                                                 <View style={styles.legendRow}>
                                                     <View style={styles.legendItem}>
-                                                        <View style={[styles.legendDot, { backgroundColor: Colors.theme.sageDark }]} />
+                                                        <View style={[styles.legendDot, { backgroundColor: Colors.primary }]} />
                                                         <Text style={styles.legendText}>Logged</Text>
                                                     </View>
                                                     <View style={styles.legendItem}>
@@ -548,7 +548,7 @@ export default function MacroUpdateScreen() {
                                                 <RefreshControl
                                                     refreshing={refreshingBook}
                                                     onRefresh={onRefreshBook}
-                                                    tintColor={Colors.theme.sageDark}
+                                                    tintColor={Colors.primary}
                                                 />
                                             }
                                         >
@@ -559,7 +559,7 @@ export default function MacroUpdateScreen() {
                                                 <ActivityIndicator color={Colors.primary} style={{ marginTop: 50 }} />
                                             ) : macroBookEntries.length === 0 ? (
                                                 <View style={styles.emptyState}>
-                                                    <MaterialCommunityIcons name="book-open-variant" size={60} color={Colors.theme.sageDark + '44'} />
+                                                    <MaterialCommunityIcons name="book-open-variant" size={60} color={Colors.theme.dust + '44'} />
                                                     <Text style={styles.emptyText}>No saved macros yet.</Text>
                                                 </View>
                                             ) : (
@@ -711,7 +711,7 @@ const styles = StyleSheet.create({
     },
     modeToggle: {
         flexDirection: 'row',
-        backgroundColor: Colors.theme.beigeLight,
+        backgroundColor: Colors.theme.charcoal,
         borderRadius: 25,
         padding: 5,
         width: '100%',
@@ -724,11 +724,11 @@ const styles = StyleSheet.create({
         borderRadius: 20,
     },
     modeBtnActive: {
-        backgroundColor: Colors.theme.sageDark,
+        backgroundColor: Colors.primary,
     },
     modeText: {
         fontSize: 14,
-        color: Colors.theme.sageDark,
+        color: Colors.theme.dust,
         fontWeight: 'bold',
     },
     modeTextActive: {
@@ -745,14 +745,14 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 42,
         fontWeight: 'bold',
-        color: Colors.theme.sageDark,
+        color: Colors.primary,
         textAlign: 'center',
         marginVertical: 15,
     },
     titleSmall: {
         fontSize: 32,
         fontWeight: 'bold',
-        color: Colors.theme.sageDark,
+        color: Colors.primary,
         textAlign: 'center',
         marginVertical: 10,
     },
@@ -763,7 +763,7 @@ const styles = StyleSheet.create({
     },
     enterNewText: {
         fontSize: 16,
-        color: Colors.theme.sageDark,
+        color: Colors.theme.dust,
         fontWeight: '600',
     },
     calSection: {
@@ -779,7 +779,7 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
     calBubbleMain: {
-        backgroundColor: Colors.theme.sageDark,
+        backgroundColor: Colors.theme.charcoal,
         paddingHorizontal: 30,
         paddingVertical: 12,
         borderRadius: 25,
@@ -818,7 +818,7 @@ const styles = StyleSheet.create({
     },
     oldValContainer: {
         borderWidth: 1.5,
-        borderColor: Colors.theme.sageDark,
+        borderColor: Colors.theme.charcoal,
         borderRadius: 15,
         paddingHorizontal: 10,
         paddingVertical: 6,
@@ -826,7 +826,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     oldValText: {
-        color: Colors.theme.sageDark,
+        color: Colors.theme.dust,
         fontWeight: 'bold',
         fontSize: 14,
     },
@@ -852,7 +852,7 @@ const styles = StyleSheet.create({
     macroInput: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: Colors.theme.sageDark,
+        color: Colors.theme.charcoal,
         textAlign: 'right',
         minWidth: 40,
         padding: 0,
@@ -860,7 +860,7 @@ const styles = StyleSheet.create({
     suffixText: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: Colors.theme.sageDark,
+        color: Colors.theme.charcoal,
     },
     diffBubble: {
         paddingHorizontal: 14,
@@ -889,12 +889,12 @@ const styles = StyleSheet.create({
     newTargetsLabelPart: {
         fontSize: 14,
         fontWeight: 'bold',
-        color: Colors.theme.sageDark,
+        color: Colors.theme.dust,
         textTransform: 'uppercase',
     },
     historyDate: {
         fontSize: 12,
-        color: Colors.theme.sageDark,
+        color: Colors.theme.dust,
         opacity: 0.6,
         marginTop: 4,
     },
@@ -910,12 +910,12 @@ const styles = StyleSheet.create({
     targetVal: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: Colors.theme.sageDark,
+        color: Colors.primary,
         marginTop: 2,
     },
     targetUnit: {
         fontSize: 10,
-        color: Colors.theme.sageDark,
+        color: Colors.theme.dust,
         fontWeight: '600',
     },
     snapshotContainer: {
@@ -979,7 +979,7 @@ const styles = StyleSheet.create({
     },
     legendText: {
         fontSize: 14,
-        color: Colors.theme.sageDark,
+        color: Colors.theme.dust,
         fontWeight: '600',
     },
     emptyState: {
@@ -990,7 +990,7 @@ const styles = StyleSheet.create({
     emptyText: {
         marginTop: 20,
         fontSize: 16,
-        color: Colors.theme.sageDark,
+        color: Colors.theme.dust,
         opacity: 0.6,
     },
     macroBookEntryContainer: {
@@ -1016,7 +1016,7 @@ const styles = StyleSheet.create({
     entryLabel: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: Colors.theme.sageDark,
+        color: Colors.theme.charcoal,
         marginBottom: 5,
     },
     entryValues: {
@@ -1025,7 +1025,7 @@ const styles = StyleSheet.create({
     },
     entryValue: {
         fontSize: 14,
-        color: Colors.theme.sageDark,
+        color: Colors.theme.charcoal,
         opacity: 0.7,
     },
     loggerSheet: {
@@ -1068,11 +1068,11 @@ const styles = StyleSheet.create({
     },
     loggerInput: {
         flex: 1,
-        backgroundColor: Colors.theme.beigeLight,
+        backgroundColor: Colors.theme.charcoal,
         borderRadius: 24,
         paddingHorizontal: 16,
         paddingVertical: 10,
-        color: Colors.textDark,
+        color: Colors.white,
         fontSize: 15,
         minHeight: 48,
     },

@@ -13,7 +13,7 @@ const getCompetitionWeek = () => {
     return Math.max(1, weeks);
 };
 
-// Same structure as Traditional TribeBattle extended view, but ranks and points instead of logging active matches
+// Same structure as Face-off TribeBattle extended view, but ranks and points instead of logging active matches
 const mockMatchupData = {
     leftTribe: {
         name: 'Team Flex',

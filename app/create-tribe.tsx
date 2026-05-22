@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -6,17 +6,17 @@ import {
     TextInput,
     ScrollView,
     TouchableOpacity,
-    Switch,
     Image,
     Alert,
     Modal,
     FlatList,
     Keyboard,
-    TouchableWithoutFeedback
+    TouchableWithoutFeedback,
+    ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '@/src/shared/theme/Colors';
 import { useUserStore } from '@/store/UserStore';
@@ -24,18 +24,8 @@ import { useUserTribeStore } from '@/src/store/UserTribeStore';
 import { ACTIVITIES } from '@/src/shared/constants/Activities';
 import { Tribe, TribeType } from '@/src/shared/models/types';
 import EditCompetitionModal, { CompetitionConfig } from '@/src/features/tribes/components/EditCompetitionModal';
-
-// Constants
-const COLORS = [
-    '#9FB89F', // Light Sage
-    '#3E0000', // Dark Brown
-    '#E6A8A8', // Pink
-    '#007AFF', // Blue
-    '#F5DEB3', // Wheat
-    '#D2691E', // Chocolate
-    '#556B2F', // Olive
-    '#800080', // Purple
-];
+import { SupabaseTribeService } from '@/src/shared/services/SupabaseTribeService';
+import { useAuthStore } from '@/store/AuthStore';
 
 const FOCUS_OPTIONS: { label: string; value: TribeType; icon: string }[] = [
     { label: 'Accountability', value: 'accountability', icon: 'calendar' },
@@ -45,25 +35,22 @@ const FOCUS_OPTIONS: { label: string; value: TribeType; icon: string }[] = [
 
 export default function CreateTribeScreen() {
     const router = useRouter();
-    const user = useUserStore();
-    const { createTribe } = useUserTribeStore();
+    const { mode, tribeId } = useLocalSearchParams();
+    const isEditMode = mode === 'edit';
 
-    // Form Stats
+    const user = useUserStore();
+    const { session } = useAuthStore();
+    const { refreshMyTribes } = useUserTribeStore();
+
+    // Form State
     const [name, setName] = useState('');
-    const [color, setColor] = useState('');
     const [avatar, setAvatar] = useState<string | null>(null);
     const [isPrivate, setIsPrivate] = useState(false); // Default public
-    const [isNatural, setIsNatural] = useState(true);
+    const [naturalStatus, setNaturalStatus] = useState<boolean | null>(true); // true = Natural, false = Enhanced, null = No Restriction
     const [activity, setActivity] = useState(ACTIVITIES[0]); // Default first
     const [focus, setFocus] = useState(FOCUS_OPTIONS[0]); // Default Accountability
 
-    // Visibilities
-    const [mealVis, setMealVis] = useState<'public' | 'private' | 'tribe'>('public');
-    const [workoutVis, setWorkoutVis] = useState<'public' | 'private' | 'tribe'>('public');
-    const [macroVis, setMacroVis] = useState<'public' | 'private' | 'tribe'>('public');
-
     // Modals
-    const [colorModalVisible, setColorModalVisible] = useState(false);
     const [activityModalVisible, setActivityModalVisible] = useState(false);
     const [focusModalVisible, setFocusModalVisible] = useState(false);
 
@@ -72,21 +59,113 @@ export default function CreateTribeScreen() {
     const [compConfigs, setCompConfigs] = useState<Record<string, CompetitionConfig>>({});
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [editingComp, setEditingComp] = useState<{ id: string, title: string, subtitle: string } | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Fetch Tribe data if in Edit Mode
+    useEffect(() => {
+        if (isEditMode && tribeId) {
+            const loadTribe = async () => {
+                setIsLoading(true);
+                try {
+                    const data = await SupabaseTribeService.getTribe(tribeId as string);
+                    if (data) {
+                        setName(data.name);
+                        setAvatar(data.avatar);
+                        setIsPrivate(data.privacy === 'private');
+                        setNaturalStatus(data.naturalStatus ?? null);
+                        
+                        if (data.activityType) {
+                            const act = ACTIVITIES.find(a => a.name === data.activityType);
+                            if (act) setActivity(act);
+                        }
+                        
+                        const typeVal = data.type ?? data.focusType;
+                        if (typeVal) {
+                            const foc = FOCUS_OPTIONS.find(f => f.value === typeVal);
+                            if (foc) setFocus(foc);
+                        }
+
+                        // Load active competition if it exists
+                        const activeComp = await SupabaseTribeService.getActiveCompetition(tribeId as string);
+                        if (activeComp) {
+                            const styleKey = activeComp.style === 'faceoff' ? 'trad' : 'prem';
+                            const metricKey = activeComp.metric === 'weight_change' ? 'weight' : 'habits';
+                            const compId = `${styleKey}_${metricKey}`;
+                            setSelectedCompId(compId);
+                            setCompConfigs(prev => ({
+                                ...prev,
+                                [compId]: {
+                                    length: activeComp.total_weeks,
+                                    points2_5g: activeComp.pts_tier_1,
+                                    points10g: activeComp.pts_tier_2,
+                                    points15g: activeComp.pts_tier_3,
+                                    exerciseBonus: activeComp.pts_exercise_bonus,
+                                    penalty20g: activeComp.pts_penalty_miss,
+                                    scoringStyle: null,
+                                }
+                            }));
+                        }
+                    }
+                } catch (err) {
+                    console.error('[CreateTribe.loadTribe]', err);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+            loadTribe();
+        }
+    }, [isEditMode, tribeId]);
 
     const openCompEdit = (id: string, type: string, subtype: string) => {
+        if (id.endsWith('_weight') || subtype === 'Weight change') {
+            Alert.alert('Under Development', "'Weight change' competition style in development. Check back soon!");
+            return;
+        }
         setSelectedCompId(id);
         const config = compConfigs[id];
         setEditingComp({ id, title: `${type} · Head-to-Head`, subtitle: subtype });
         setEditModalVisible(true);
     };
 
+    const handleLeaveTribe = async () => {
+        const userId = session?.user?.id;
+        if (!userId || !tribeId) return;
+
+        Alert.alert(
+            'Leave Tribe & Resign',
+            'Are you sure you want to leave this tribe? If other members exist, leadership will be auto-assigned to the longest-tenured member. If no other members exist, this tribe will be permanently deleted.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Leave & Resign',
+                    style: 'destructive',
+                    onPress: async () => {
+                        setIsSubmitting(true);
+                        try {
+                            await SupabaseTribeService.leaveTribe(userId, tribeId as string);
+                            await refreshMyTribes(userId);
+                            Alert.alert('Left Tribe', 'You have successfully resigned and left the tribe.', [
+                                {
+                                    text: 'OK',
+                                    onPress: () => router.replace('/(tabs)')
+                                }
+                            ]);
+                        } catch (err: any) {
+                            Alert.alert('Error', err.message || 'Failed to leave tribe.');
+                        } finally {
+                            setIsSubmitting(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const saveCompConfig = (cfg: CompetitionConfig) => {
         if (editingComp) {
             setCompConfigs(prev => ({ ...prev, [editingComp.id]: cfg }));
         }
-        // Modal handles closing via separate prop if needed, or we close here?
-        // EditCompetitionModal calls onSave then onClose.
-        // But onClose prop needs to set visible false.
         setEditModalVisible(false);
     };
 
@@ -104,335 +183,423 @@ export default function CreateTribeScreen() {
         }
     };
 
-    const handleCreate = () => {
+    // Strict validation trigger for Natural Status Switch/Segment
+    const selectNaturalStatus = async (status: boolean | null) => {
+        if (status === true) {
+            // Condition A: Chief Verification Rule
+            if (user.status !== 'natural') {
+                Alert.alert(
+                    'Verification Blocked',
+                    'Only athletes with verified Natural status can establish or manage a Natural Tribe.'
+                );
+                return;
+            }
+
+            // Condition B: Active Membership Integrity Sweep (For Edit Modality)
+            if (isEditMode && tribeId) {
+                const eligible = await SupabaseTribeService.checkTribeNaturalEligibility(tribeId as string);
+                if (!eligible) {
+                    Alert.alert(
+                        'Roster Violation',
+                        'Cannot convert to a Natural Tribe while non-natural or unverified members belong to the roster.'
+                    );
+                    return;
+                }
+            }
+        }
+        setNaturalStatus(status);
+    };
+
+    const handleSubmit = async () => {
         if (!name.trim()) {
             Alert.alert('Missing Information', 'Please enter a tribe name.');
             return;
         }
-        if (!color) {
-            Alert.alert('Missing Information', 'Please select a tribe color.');
+
+        const userId = session?.user?.id;
+        if (!userId) {
+            Alert.alert('Not signed in', 'Please sign in to continue.');
             return;
         }
 
-        const newTribe: Tribe = {
-            id: `t_${Date.now()}`,
-            name,
-            avatar: avatar || 'https://i.pravatar.cc/150?u=999', // Fallback
-            themeColor: color,
-            type: focus.value,
-            privacy: isPrivate ? 'private' : 'public',
-            memberCount: 1,
-            description: `A ${focus.label} tribe for ${activity.name}.`,
-            joinStatus: 'joined',
-            chief: {
-                id: user.handle,
-                name: user.name,
-                handle: user.handle,
-                avatar: user.avatar,
-                verified: user.status !== 'none',
-                status: user.status,
-                activity: user.activity,
-                activityIcon: user.activityIcon,
-                height: user.height,
-                weight: user.weight,
-                bfs: user.bfs,
-                tribe: user.tribe,
-                tribeAvatar: user.tribeAvatar,
-                stats: { meals: 0, workouts: 0, updates: 0 }
-            },
-            tags: isNatural ? ['natural'] : [],
-            activity: activity.name,
-            activityIcon: activity.icon as any,
-            naturalStatus: isNatural,
-            visibility: {
-                meal: mealVis,
-                workout: workoutVis,
-                macro: macroVis
-            }
-        };
+        setIsSubmitting(true);
+        try {
+            if (isEditMode && tribeId) {
+                // Secondary check for security on final submit
+                if (naturalStatus === true) {
+                    if (user.status !== 'natural') {
+                        Alert.alert('Verification Blocked', 'Only athletes with verified Natural status can establish or manage a Natural Tribe.');
+                        setIsSubmitting(false);
+                        return;
+                    }
+                    const eligible = await SupabaseTribeService.checkTribeNaturalEligibility(tribeId as string);
+                    if (!eligible) {
+                        Alert.alert('Roster Violation', 'Cannot convert to a Natural Tribe while non-natural or unverified members belong to the roster.');
+                        setIsSubmitting(false);
+                        return;
+                    }
+                }
 
-        createTribe(newTribe);
-        router.back(); // Return to previous screen (Explore or Home? Prompt says "returned to the feed screen with the newly created tribe's feed selected")
-        // My createTribe action updates 'selectedTribe', so if I go to Home ('/'), it should show the tribe feed.
-        // But if I came from Explore tab, router.back() goes to Explore.
-        // Prompt: "After pressing, this they should be returned to the feed screen with the newly created tribe’s feed selected."
-        // So I should navigate to Home and ensure Tribe tab is active.
-        // I'll use router.navigate('/(tabs)') which goes to index.
-        // And I need to ensure the Tribe tab is selected on Home screen.
-        // The Home screen uses local state for tab. I might need to pass a param or update store to trigger tab switch.
-        // But for now, I'll just go back. Wait, "returned to the feed screen".
-        // I'll try router.replace('/(tabs)') or similar.
-        // But router.dismissAll() might be better if stack is deep.
-        // I'll use router.push('/(tabs)') to be safe and force Home.
-        router.push('/(tabs)');
+                let competition: any = undefined;
+                if ((focus.value === 'head-to-head' || focus.value === 'tribe-vs-tribe') && selectedCompId) {
+                    const cfg = compConfigs[selectedCompId];
+                    const isFaceoff = selectedCompId.startsWith('trad_');
+                    competition = {
+                        style: isFaceoff ? 'faceoff' : 'premier',
+                        metric: selectedCompId.endsWith('habits') ? 'habits' : 'weight_change',
+                        totalWeeks: cfg?.length ?? 10,
+                        ptsTier1: cfg?.points2_5g ?? 20,
+                        ptsTier2: cfg?.points10g ?? 10,
+                        ptsTier3: cfg?.points15g ?? 5,
+                        ptsExerciseBonus: cfg?.exerciseBonus ?? 10,
+                        ptsPenaltyMiss: cfg?.penalty20g ?? -15,
+                        ptsPenaltyNoLog: -60,
+                    };
+                }
+
+                const updated = await SupabaseTribeService.updateTribe({
+                    tribeId: tribeId as string,
+                    name: name.trim(),
+                    avatarUrl: avatar,
+                    privacy: isPrivate ? 'private' : 'public',
+                    activityType: activity.name,
+                    activityIcon: activity.icon as string,
+                    naturalStatus: naturalStatus ?? undefined,
+                    tribeType: focus.value,
+                    competition,
+                });
+
+                if (!updated) {
+                    Alert.alert('Error', 'Failed to update tribe. Please try again.');
+                    return;
+                }
+
+                await refreshMyTribes(userId);
+                Alert.alert('Success', 'Tribe updated successfully!', [
+                    { text: 'OK', onPress: () => router.push(`/tribe/${tribeId}`) }
+                ]);
+            } else {
+                // Create Mode Condition A check
+                if (naturalStatus === true && user.status !== 'natural') {
+                    Alert.alert('Verification Blocked', 'Only athletes with verified Natural status can establish or manage a Natural Tribe.');
+                    setIsSubmitting(false);
+                    return;
+                }
+
+                let competition: Parameters<typeof SupabaseTribeService.createAndPersistTribe>[0]['competition'];
+                if ((focus.value === 'head-to-head' || focus.value === 'tribe-vs-tribe') && selectedCompId) {
+                    const cfg = compConfigs[selectedCompId];
+                    const isFaceoff = selectedCompId.startsWith('trad_');
+                    competition = {
+                        style: isFaceoff ? 'faceoff' : 'premier',
+                        metric: selectedCompId.endsWith('habits') ? 'habits' : 'weight_change',
+                        totalWeeks: cfg?.length ?? 10,
+                        ptsTier1: cfg?.points2_5g ?? 20,
+                        ptsTier2: cfg?.points10g ?? 10,
+                        ptsTier3: cfg?.points15g ?? 5,
+                        ptsExerciseBonus: cfg?.exerciseBonus ?? 10,
+                        ptsPenaltyMiss: cfg?.penalty20g ?? -15,
+                        ptsPenaltyNoLog: -60,
+                    };
+                }
+
+                const created = await SupabaseTribeService.createAndPersistTribe({
+                    userId,
+                    name: name.trim(),
+                    avatarUrl: avatar,
+                    tribeType: focus.value,
+                    privacy: isPrivate ? 'private' : 'public',
+                    description: `A ${focus.label} tribe for ${activity.name}.`,
+                    activityType: activity.name,
+                    activityIcon: activity.icon as string,
+                    naturalStatus: naturalStatus ?? undefined,
+                    competition,
+                });
+
+                if (!created) {
+                    Alert.alert('Error', 'Failed to create tribe. Please try again.');
+                    return;
+                }
+
+                await refreshMyTribes(userId);
+                router.push('/(tabs)');
+            }
+        } catch (err: any) {
+            console.error('[CreateTribe.handleSubmit]', err);
+            Alert.alert('Error', err?.message ?? 'Something went wrong.');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
-    // Modals related state already defined above.
+    if (isLoading) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={Colors.theme.harvestGold} />
+            </View>
+        );
+    }
 
     return (
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
             <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={28} color={Colors.primary} />
-                </TouchableOpacity>
-            </View>
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={() => router.back()}>
+                        <Ionicons name="arrow-back" size={28} color={Colors.theme.harvestGold} />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>
+                        {isEditMode ? 'Edit Tribe' : 'Create a Tribe'}
+                    </Text>
+                    <View style={{ width: 28 }} />
+                </View>
 
                 <ScrollView 
                     contentContainerStyle={styles.content}
                     keyboardShouldPersistTaps="handled"
                     keyboardDismissMode="on-drag"
+                    showsVerticalScrollIndicator={false}
                 >
-                {/* Edit Symbol */}
-                <View style={styles.symbolSection}>
-                    <TouchableOpacity style={styles.symbolCircle} onPress={pickImage}>
-                        {avatar ? (
-                            <Image source={{ uri: avatar }} style={styles.symbolImage} />
-                        ) : (
-                            <Ionicons name="person" size={40} color="rgba(79, 99, 82, 0.5)" />
+                    {/* Edit Symbol */}
+                    <View style={styles.symbolSection}>
+                        <TouchableOpacity style={styles.symbolCircle} onPress={pickImage}>
+                            {avatar ? (
+                                <Image source={{ uri: avatar }} style={styles.symbolImage} />
+                            ) : (
+                                <Ionicons name="people" size={40} color="rgba(237, 232, 213, 0.4)" />
+                            )}
+                            <View style={styles.editIconBadge}>
+                                <MaterialCommunityIcons name="pencil" size={12} color="white" />
+                            </View>
+                        </TouchableOpacity>
+                        <Text style={styles.symbolText}>Edit tribe symbol</Text>
+                    </View>
+
+                    <View style={styles.form}>
+                        {/* Tribe Name */}
+                        <View style={styles.fieldColumn}>
+                            <Text style={styles.label}>Tribe name</Text>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Enter tribe name..."
+                                placeholderTextColor="rgba(237, 232, 213, 0.3)"
+                                maxLength={20}
+                                value={name}
+                                onChangeText={setName}
+                            />
+                        </View>
+
+                        {/* Privacy Toggle */}
+                        <View style={styles.fieldRow}>
+                            <Text style={styles.label}>Privacy</Text>
+                            <TouchableOpacity
+                                style={[
+                                    styles.switchContainer,
+                                    isPrivate ? styles.switchActive : styles.switchInactive
+                                ]}
+                                onPress={() => setIsPrivate(!isPrivate)}
+                            >
+                                <Text style={styles.switchText}>{isPrivate ? 'Private' : 'Public'}</Text>
+                                <View style={styles.switchKnob}>
+                                    <Ionicons name={isPrivate ? "lock-closed" : "earth"} size={14} color={Colors.theme.matteBlack} />
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Natural / Enhanced Status Selector */}
+                        <View style={styles.fieldColumn}>
+                            <Text style={styles.label}>Natural status guardrail</Text>
+                            <View style={styles.segmentedContainer}>
+                                {[
+                                    { label: 'Natural', value: true, icon: 'leaf' },
+                                    { label: 'Enhanced', value: false, icon: 'lightning-bolt' },
+                                    { label: 'No Restriction', value: null, icon: 'shield-off' }
+                                ].map((opt) => {
+                                    const isSelected = naturalStatus === opt.value;
+                                    return (
+                                        <TouchableOpacity
+                                            key={opt.label}
+                                            style={[
+                                                styles.segmentButton,
+                                                isSelected && styles.segmentButtonActive
+                                            ]}
+                                            onPress={() => selectNaturalStatus(opt.value)}
+                                        >
+                                            <MaterialCommunityIcons 
+                                                name={opt.icon as any} 
+                                                size={14} 
+                                                color={isSelected ? Colors.theme.matteBlack : Colors.theme.dust} 
+                                                style={{ marginRight: 4 }}
+                                            />
+                                            <Text style={[
+                                                styles.segmentText,
+                                                isSelected && styles.segmentTextActive
+                                            ]}>
+                                                {opt.label}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        </View>
+
+                        {/* Tribe Activity Dropdown */}
+                        <View style={styles.fieldRow}>
+                            <Text style={styles.label}>Tribe activity</Text>
+                            <TouchableOpacity style={styles.pillSelector} onPress={() => setActivityModalVisible(true)}>
+                                <Text style={styles.pillText}>{activity.name}</Text>
+                                <MaterialCommunityIcons name={activity.icon as any} size={16} color={Colors.theme.harvestGold} />
+                            </TouchableOpacity>
+                        </View>
+                        {/* Tribe Type */}
+                        <View style={styles.fieldRow}>
+                            <Text style={styles.label}>Tribe type</Text>
+                            <TouchableOpacity 
+                                style={styles.pillSelector} 
+                                onPress={() => setFocusModalVisible(true)}
+                            >
+                                <Text style={styles.pillText}>{focus.label}</Text>
+                                <MaterialCommunityIcons name={focus.icon as any} size={16} color={Colors.theme.harvestGold} />
+                            </TouchableOpacity>
+                        </View>
+ 
+                        {/* Competition Style (Conditional) */}
+                        {(focus.value === 'head-to-head' || focus.value === 'tribe-vs-tribe') && (
+                            <View style={styles.compSection}>
+                                <Text style={styles.sectionHeader}>Competition style</Text>
+ 
+                                <Text style={styles.sectionSubHeader}>Face-off</Text>
+                                <CompetitionCard
+                                    type="Face-off"
+                                    subtype="Habits"
+                                    description="Compete against fellow tribe members in weekly 1-on-1 matchups. Points are awarded or deducted based on daily proximity to macro targets and/or completed exercise sessions. The user with the higher weekly point total wins their matchup. An elimination-style tournament determines the Tribe Champion. Meal photos and post-workout photos must be submitted for verification."
+                                    isSelected={selectedCompId === 'trad_habits'}
+                                    onPress={() => openCompEdit('trad_habits', 'Face-off', 'Habits')}
+                                />
+                                <CompetitionCard
+                                    type="Face-off"
+                                    subtype="Weight change"
+                                    description="Compete against fellow tribe members in weekly matchups. Users log daily weight with scale photos for verification. Each week, the user with the greater percentage change in bodyweight—either loss or gain, depending on the tribe's setting—wins their matchup. An elimination-style tournament determines the Tribe Champion."
+                                    isSelected={selectedCompId === 'trad_weight'}
+                                    onPress={() => openCompEdit('trad_weight', 'Face-off', 'Weight change')}
+                                />
+ 
+                                <Text style={styles.sectionSubHeader}>Premier</Text>
+                                <CompetitionCard
+                                    type="Premier"
+                                    subtype="Habits"
+                                    description="Compete against fellow tribe members over a fixed competition period. Points are awarded or deducted based on daily proximity to macro targets and/or completed exercise sessions. The user with the highest total points at the end of the competition period is crowned Tribe Champion. Meal photos and post-workout photos must be submitted for verification."
+                                    isSelected={selectedCompId === 'prem_habits'}
+                                    onPress={() => openCompEdit('prem_habits', 'Premier', 'Habits')}
+                                />
+                                <CompetitionCard
+                                    type="Premier"
+                                    subtype="Weight change"
+                                    description="Compete against fellow tribe members over a fixed competition period. Users log daily weight with scale photos for verification. Weekly weight is calculated as the average of daily weigh-ins from Sunday through Saturday. The user with the greatest percent bodyweight change—either loss or gain, depending on the tribe's setting, at the end of the competition period is crowned Tribe Champion."
+                                    isSelected={selectedCompId === 'prem_weight'}
+                                    onPress={() => openCompEdit('prem_weight', 'Premier', 'Weight change')}
+                                />
+                            </View>
                         )}
-                        <View style={styles.editIconBadge}>
-                            <MaterialCommunityIcons name="pencil" size={12} color="white" />
+                        {isEditMode && (
+                            <TouchableOpacity
+                                style={styles.leaveTribeButton}
+                                onPress={handleLeaveTribe}
+                            >
+                                <Ionicons name="exit-outline" size={16} color="#FF6B6B" style={{ marginRight: 6 }} />
+                                <Text style={styles.leaveTribeButtonText}>Leave Tribe</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </ScrollView>
+
+                {/* Bottom Button */}
+                <View style={styles.footer}>
+                    <TouchableOpacity
+                        style={[styles.submitButton, isSubmitting && { opacity: 0.6 }]}
+                        onPress={handleSubmit}
+                        disabled={isSubmitting}
+                    >
+                        {isSubmitting ? (
+                            <ActivityIndicator size="small" color={Colors.theme.matteBlack} />
+                        ) : (
+                            <>
+                                <Text style={styles.submitButtonText}>
+                                    {isEditMode ? 'Save Changes' : 'Is that everything?'}
+                                </Text>
+                                <View style={styles.badgeCircle}>
+                                    <MaterialCommunityIcons 
+                                        name={isEditMode ? "check" : "plus"} 
+                                        size={16} 
+                                        color={Colors.theme.harvestGold} 
+                                    />
+                                </View>
+                            </>
+                        )}
+                    </TouchableOpacity>
+                </View>
+
+                {/* Activity Selector Modal */}
+                <Modal visible={activityModalVisible} transparent animationType="slide">
+                    <TouchableOpacity style={styles.modalOverlay} onPress={() => setActivityModalVisible(false)}>
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalTitle}>Select Tribe Activity</Text>
+                            <FlatList
+                                data={ACTIVITIES}
+                                keyExtractor={item => item.name}
+                                renderItem={({ item }) => (
+                                    <TouchableOpacity 
+                                        style={styles.optionRow} 
+                                        onPress={() => { setActivity(item); setActivityModalVisible(false); }}
+                                    >
+                                        <Text style={styles.optionText}>{item.name}</Text>
+                                        <MaterialCommunityIcons name={item.icon as any} size={20} color={Colors.theme.harvestGold} />
+                                    </TouchableOpacity>
+                                )}
+                            />
                         </View>
                     </TouchableOpacity>
-                    <Text style={styles.symbolText}>Edit tribe symbol</Text>
-                </View>
+                </Modal>
 
-                <View style={styles.form}>
-                    {/* Tribe Name */}
-                    <View style={styles.fieldRow}>
-                        <Text style={styles.label}>Tribe name</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Enter name..."
-                            placeholderTextColor="rgba(79, 99, 82, 0.5)"
-                            maxLength={20}
-                            value={name}
-                            onChangeText={setName}
-                        />
-                    </View>
-
-                    {/* Tribe Color */}
-                    <View style={styles.fieldRow}>
-                        <Text style={styles.label}>Tribe color</Text>
-                        <TouchableOpacity style={[styles.input, { justifyContent: 'center' }]} onPress={() => setColorModalVisible(true)}>
-                            {color ? (
-                                <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: color }} />
-                            ) : (
-                                <Text style={{ color: 'rgba(79, 99, 82, 0.5)' }}>Select color...</Text>
-                            )}
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Privacy */}
-                    <View style={styles.fieldRow}>
-                        <Text style={styles.label}>Privacy</Text>
-                        {/* Custom Switch: Public (Globe) vs Private (Lock) */}
-                        <TouchableOpacity
-                            style={[
-                                styles.switchContainer,
-                                isPrivate ? { backgroundColor: '#666', alignItems: 'flex-start' } : { backgroundColor: Colors.primary, alignItems: 'flex-end' }
-                            ]}
-                            onPress={() => setIsPrivate(!isPrivate)}
-                        >
-                            <View style={styles.switchKnob}>
-                                <Ionicons name={isPrivate ? "lock-closed" : "earth"} size={14} color={isPrivate ? "#666" : Colors.primary} />
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Natural/Enhanced */}
-                    <View style={styles.fieldRow}>
-                        <Text style={styles.label}>Natural/Enhanced status</Text>
-                        <TouchableOpacity
-                            style={[
-                                styles.switchContainer,
-                                !isNatural ? { backgroundColor: '#FFD700', alignItems: 'flex-end' } : { backgroundColor: Colors.success, alignItems: 'flex-end' }
-                            ]}
-                            onPress={() => setIsNatural(!isNatural)}
-                        >
-                            <View style={styles.switchKnob}>
-                                {isNatural ? (
-                                    <MaterialCommunityIcons name="leaf" size={14} color={Colors.natural} />
-                                ) : (
-                                    <MaterialCommunityIcons name="lightning-bolt" size={14} color="#FFD700" />
-                                )}
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Tribe Activity */}
-                    <View style={styles.fieldRow}>
-                        <Text style={styles.label}>Tribe activity</Text>
-                        <TouchableOpacity style={styles.pillSelector} onPress={() => setActivityModalVisible(true)}>
-                            <Text style={styles.pillText}>{activity.name}</Text>
-                            <MaterialCommunityIcons name={activity.icon as any} size={16} color={Colors.primary} />
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Tribe Focus */}
-                    <View style={styles.fieldRow}>
-                        <Text style={styles.label}>Tribe focus</Text>
-                        <TouchableOpacity style={styles.pillSelector} onPress={() => setFocusModalVisible(true)}>
-                            <Text style={styles.pillText}>{focus.label}</Text>
-                            <MaterialCommunityIcons name={focus.icon as any} size={16} color={Colors.primary} />
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Competition Style (Conditional) */}
-                    {(focus.value === 'head-to-head' || focus.value === 'tribe-vs-tribe') && (
-                        <View style={styles.compSection}>
-                            <Text style={styles.sectionHeader}>Competition style</Text>
-
-                            <Text style={styles.sectionSubHeader}>Traditional</Text>
-                            <CompetitionCard
-                                type="Traditional"
-                                subtype="Habits"
-                                description="Compete against fellow tribe members in weekly 1-on-1 matchups. Points are awarded or deducted based on daily proximity to macro targets and/or completed exercise sessions. The user with the higher weekly point total wins their matchup. An elimination-style tournament determines the Tribe Champion. Meal photos and post-workout photos must be submitted for verification."
-                                isSelected={selectedCompId === 'trad_habits'}
-                                onPress={() => openCompEdit('trad_habits', 'Traditional', 'Habits')}
-                            />
-                            <CompetitionCard
-                                type="Traditional"
-                                subtype="Weight change"
-                                description="Compete against fellow tribe members in weekly matchups. Users log daily weight with scale photos for verification. Each week, the user with the greater percentage change in bodyweight—either loss or gain, depending on the tribe's setting—wins their matchup. An elimination-style tournament determines the Tribe Champion."
-                                isSelected={selectedCompId === 'trad_weight'}
-                                onPress={() => openCompEdit('trad_weight', 'Traditional', 'Weight change')}
-                            />
-
-                            <Text style={styles.sectionSubHeader}>Premier</Text>
-                            <CompetitionCard
-                                type="Premier"
-                                subtype="Habits"
-                                description="Compete against fellow tribe members over a fixed competition period. Points are awarded or deducted based on daily proximity to macro targets and/or completed exercise sessions. The user with the highest total points at the end of the competition period is crowned Tribe Champion. Meal photos and post-workout photos must be submitted for verification."
-                                isSelected={selectedCompId === 'prem_habits'}
-                                onPress={() => openCompEdit('prem_habits', 'Premier', 'Habits')}
-                            />
-                            <CompetitionCard
-                                type="Premier"
-                                subtype="Weight change"
-                                description="Compete against fellow tribe members over a fixed competition period. Users log daily weight with scale photos for verification. Weekly weight is calculated as the average of daily weigh-ins from Sunday through Saturday. The user with the greatest percent bodyweight change—either loss or gain, depending on the tribe's setting, at the end of the competition period is crowned Tribe Champion."
-                                isSelected={selectedCompId === 'prem_weight'}
-                                onPress={() => openCompEdit('prem_weight', 'Premier', 'Weight change')}
-                            />
-                        </View>
-                    )}
-
-                    {/* Visibilities */}
-                    <View style={styles.fieldRow}>
-                        <Text style={styles.label}>Meal visibility</Text>
-                        <TouchableOpacity
-                            style={[styles.switchContainer, mealVis === 'public' ? { backgroundColor: Colors.primary, alignItems: 'flex-end' } : { backgroundColor: '#666', alignItems: 'flex-start' }]}
-                            onPress={() => setMealVis(mealVis === 'public' ? 'private' : 'public')}
-                        >
-                            <View style={styles.switchKnob}>
-                                <Ionicons name={mealVis === 'public' ? "earth" : "lock-closed"} size={14} color={mealVis === 'public' ? Colors.primary : '#666'} />
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.fieldRow}>
-                        <Text style={styles.label}>Workout visibility</Text>
-                        <TouchableOpacity
-                            style={[styles.switchContainer, workoutVis === 'public' ? { backgroundColor: Colors.primary, alignItems: 'flex-end' } : { backgroundColor: '#666', alignItems: 'flex-start' }]}
-                            onPress={() => setWorkoutVis(workoutVis === 'public' ? 'private' : 'public')}
-                        >
-                            <View style={styles.switchKnob}>
-                                <Ionicons name={workoutVis === 'public' ? "earth" : "lock-closed"} size={14} color={workoutVis === 'public' ? Colors.primary : '#666'} />
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.fieldRow}>
-                        <Text style={styles.label}>Macro visibility</Text>
-                        <TouchableOpacity
-                            style={[styles.switchContainer, macroVis === 'public' ? { backgroundColor: Colors.primary, alignItems: 'flex-end' } : { backgroundColor: '#666', alignItems: 'flex-start' }]}
-                            onPress={() => setMacroVis(macroVis === 'public' ? 'private' : 'public')}
-                        >
-                            <View style={styles.switchKnob}>
-                                <Ionicons name={macroVis === 'public' ? "earth" : "lock-closed"} size={14} color={macroVis === 'public' ? Colors.primary : '#666'} />
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-
-                </View>
-            </ScrollView>
-
-            {/* Bottom Button */}
-            <View style={styles.footer}>
-                <TouchableOpacity style={styles.createButton} onPress={handleCreate}>
-                    <Text style={styles.createButtonText}>Is that everything?</Text>
-                    <View style={styles.plusBadge}>
-                        <MaterialCommunityIcons name="plus" size={16} color={Colors.primary} />
-                    </View>
-                </TouchableOpacity>
-            </View>
-
-            {/* Modals */}
-            <Modal visible={colorModalVisible} transparent animationType="slide">
-                <TouchableOpacity style={styles.modalOverlay} onPress={() => setColorModalVisible(false)}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Select Color</Text>
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 15, justifyContent: 'center' }}>
-                            {COLORS.map(c => (
-                                <TouchableOpacity
-                                    key={c}
-                                    style={[styles.colorCircle, { backgroundColor: c }, color === c && styles.colorSelected]}
-                                    onPress={() => { setColor(c); setColorModalVisible(false); }}
-                                />
+                {/* Focus Selector Modal */}
+                <Modal visible={focusModalVisible} transparent animationType="slide">
+                    <TouchableOpacity style={styles.modalOverlay} onPress={() => setFocusModalVisible(false)}>
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalTitle}>Select Tribe Type</Text>
+                            {FOCUS_OPTIONS.map(opt => (
+                                <TouchableOpacity 
+                                    key={opt.value} 
+                                    style={styles.optionRow} 
+                                    onPress={() => {
+                                        if (opt.value === 'tribe-vs-tribe') {
+                                            Alert.alert('Under Development', "'Tribe Battle' type in development. Check back soon!");
+                                            return;
+                                        }
+                                        setFocus(opt);
+                                        setFocusModalVisible(false);
+                                    }}
+                                >
+                                    <Text style={styles.optionText}>{opt.label}</Text>
+                                    <MaterialCommunityIcons name={opt.icon as any} size={20} color={Colors.theme.harvestGold} />
+                                </TouchableOpacity>
                             ))}
                         </View>
-                    </View>
-                </TouchableOpacity>
-            </Modal>
+                    </TouchableOpacity>
+                </Modal>
 
-            <Modal visible={activityModalVisible} transparent animationType="slide">
-                <TouchableOpacity style={styles.modalOverlay} onPress={() => setActivityModalVisible(false)}>
-                    <View style={[styles.modalContent, { height: '60%' }]}>
-                        <Text style={styles.modalTitle}>Select Activity</Text>
-                        <FlatList
-                            data={ACTIVITIES}
-                            keyExtractor={item => item.name}
-                            renderItem={({ item }) => (
-                                <TouchableOpacity style={styles.optionRow} onPress={() => { setActivity(item); setActivityModalVisible(false); }}>
-                                    <Text style={styles.optionText}>{item.name}</Text>
-                                    <MaterialCommunityIcons name={item.icon as any} size={20} color={Colors.primary} />
-                                </TouchableOpacity>
-                            )}
-                        />
-                    </View>
-                </TouchableOpacity>
-            </Modal>
-
-            <Modal visible={focusModalVisible} transparent animationType="slide">
-                <TouchableOpacity style={styles.modalOverlay} onPress={() => setFocusModalVisible(false)}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Select Focus</Text>
-                        {FOCUS_OPTIONS.map(opt => (
-                            <TouchableOpacity key={opt.value} style={styles.optionRow} onPress={() => { setFocus(opt); setFocusModalVisible(false); }}>
-                                <Text style={styles.optionText}>{opt.label}</Text>
-                                <MaterialCommunityIcons name={opt.icon as any} size={20} color={Colors.primary} />
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </TouchableOpacity>
-            </Modal>
-
-            {/* Edit Competition Modal */}
-            <EditCompetitionModal
-                visible={editModalVisible}
-                onClose={() => setEditModalVisible(false)}
-                title={editingComp?.title || ''}
-                subtitle={editingComp?.subtitle || ''}
-                initialConfig={editingComp ? compConfigs[editingComp.id] : undefined}
-                onSave={saveCompConfig}
-            />
+                {/* Edit Competition Modal */}
+                <EditCompetitionModal
+                    visible={editModalVisible}
+                    onClose={() => setEditModalVisible(false)}
+                    title={editingComp?.title || ''}
+                    subtitle={editingComp?.subtitle || ''}
+                    initialConfig={editingComp ? compConfigs[editingComp.id] : undefined}
+                    onSave={saveCompConfig}
+                />
             </SafeAreaView>
         </TouchableWithoutFeedback>
     );
 }
 
-// Helper Component for Competition Card
 const CompetitionCard = ({
     type,
     subtype,
@@ -446,7 +613,7 @@ const CompetitionCard = ({
     isSelected: boolean,
     onPress: () => void
 }) => {
-    const [expanded, setExpanded] = useState(true);
+    const [expanded, setExpanded] = useState(false);
 
     return (
         <TouchableOpacity
@@ -454,11 +621,19 @@ const CompetitionCard = ({
             onPress={onPress}
             activeOpacity={0.9}
         >
-            <Text style={styles.compCardHeader}>{type} · Head-to-Head</Text>
-            <Text style={styles.compCardTitle}>{subtype}</Text>
-            <TouchableOpacity onPress={() => setExpanded(!expanded)} hitSlop={10} style={{ padding: 5 }}>
-                <MaterialCommunityIcons name="dots-horizontal" size={24} color="rgba(255,255,255,0.7)" />
-            </TouchableOpacity>
+            <View style={styles.compCardHeaderRow}>
+                <View style={{ flex: 1 }}>
+                    <Text style={styles.compCardHeader}>{type} · Head-to-Head</Text>
+                    <Text style={styles.compCardTitle}>{subtype}</Text>
+                </View>
+                <TouchableOpacity onPress={() => setExpanded(!expanded)} hitSlop={10} style={{ padding: 5 }}>
+                    <MaterialCommunityIcons 
+                        name={expanded ? "chevron-up" : "dots-horizontal"} 
+                        size={24} 
+                        color={Colors.theme.dust} 
+                    />
+                </TouchableOpacity>
+            </View>
             {expanded && (
                 <Text style={styles.compCardDesc}>{description}</Text>
             )}
@@ -469,28 +644,46 @@ const CompetitionCard = ({
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F5F5DC', // Beige background
+        backgroundColor: '#262525', // Deep Charcoal
+    },
+    loadingContainer: {
+        flex: 1,
+        backgroundColor: '#262525',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         paddingHorizontal: 20,
         paddingTop: 10,
-        paddingBottom: 10,
+        paddingBottom: 15,
+        backgroundColor: '#1A1A1A',
+        borderBottomWidth: 1,
+        borderBottomColor: '#262525',
+    },
+    headerTitle: {
+        color: '#DAA520', // Harvest Gold
+        fontSize: 20,
+        fontWeight: 'bold',
     },
     content: {
-        paddingBottom: 100,
+        paddingBottom: 120,
         alignItems: 'center',
+        paddingTop: 20,
     },
     symbolSection: {
         alignItems: 'center',
-        marginBottom: 30,
+        marginBottom: 25,
     },
     symbolCircle: {
         width: 100,
         height: 100,
         borderRadius: 50,
-        backgroundColor: '#E8F0E5',
+        backgroundColor: '#1A1A1A',
         borderWidth: 2,
-        borderColor: Colors.primary,
+        borderColor: '#DAA520',
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 10,
@@ -504,87 +697,135 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: 0,
         right: 0,
-        backgroundColor: Colors.primary,
+        backgroundColor: '#DAA520',
         width: 24,
         height: 24,
         borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 2,
-        borderColor: '#F5F5DC',
+        borderColor: '#1A1A1A',
     },
     symbolText: {
-        color: Colors.primary,
-        fontWeight: 'bold',
-        fontSize: 16,
+        color: '#EDE8D5',
+        fontWeight: '600',
+        fontSize: 14,
     },
     form: {
         width: '100%',
         paddingHorizontal: 20,
-        gap: 15,
+        gap: 20,
     },
     fieldRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: 'rgba(79, 99, 82, 0.2)', // Light green card
-        borderRadius: 30,
-        height: 60,
+        backgroundColor: '#1A1A1A', // Matte Black
+        borderRadius: 20,
+        height: 64,
         paddingHorizontal: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(218, 165, 32, 0.2)',
+    },
+    fieldColumn: {
+        backgroundColor: '#1A1A1A', // Matte Black
+        borderRadius: 20,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(218, 165, 32, 0.2)',
+        gap: 8,
     },
     label: {
-        color: Colors.primary,
-        fontSize: 16,
+        color: '#DAA520', // Harvest Gold
+        fontSize: 15,
         fontWeight: 'bold',
     },
     input: {
-        backgroundColor: '#E8F0E5',
-        borderRadius: 20,
-        paddingHorizontal: 15,
-        paddingVertical: 10,
-        minWidth: 150,
-        textAlign: 'center',
-        fontSize: 14,
-        color: Colors.primary,
-        fontWeight: '600',
+        backgroundColor: '#262525',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        height: 48,
+        fontSize: 15,
+        color: '#FFFFFF', // Soft White Text
+        fontWeight: '500',
         borderWidth: 1,
-        borderColor: 'rgba(79, 99, 82, 0.3)',
+        borderColor: '#DAA520', // Harvest Gold Active Border
     },
     switchContainer: {
-        width: 50,
-        height: 30,
-        borderRadius: 15,
-        padding: 2,
-        justifyContent: 'center',
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 12,
+        gap: 8,
+        borderWidth: 1,
+    },
+    switchActive: {
+        backgroundColor: 'rgba(218, 165, 32, 0.2)',
+        borderColor: '#DAA520',
+    },
+    switchInactive: {
+        backgroundColor: '#262525',
+        borderColor: 'rgba(237, 232, 213, 0.2)',
+    },
+    switchText: {
+        color: '#EDE8D5',
+        fontSize: 13,
+        fontWeight: 'bold',
     },
     switchKnob: {
-        width: 26,
-        height: 26,
-        borderRadius: 13,
-        backgroundColor: 'white',
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        backgroundColor: '#DAA520',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 1,
-        elevation: 2,
+    },
+    segmentedContainer: {
+        flexDirection: 'row',
+        backgroundColor: '#262525',
+        borderRadius: 12,
+        padding: 4,
+        gap: 4,
+    },
+    segmentButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 10,
+        borderRadius: 8,
+    },
+    segmentButtonActive: {
+        backgroundColor: '#DAA520',
+    },
+    segmentText: {
+        color: '#EDE8D5',
+        fontSize: 12,
+        fontWeight: 'bold',
+    },
+    segmentTextActive: {
+        color: '#1A1A1A',
     },
     pillSelector: {
         flexDirection: 'row',
-        backgroundColor: '#E8F0E5',
-        paddingHorizontal: 15,
-        paddingVertical: 8,
-        borderRadius: 20,
+        backgroundColor: '#262525',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 12,
         alignItems: 'center',
         gap: 8,
         borderWidth: 1,
-        borderColor: 'rgba(79, 99, 82, 0.3)',
+        borderColor: 'rgba(218, 165, 32, 0.3)',
         minWidth: 150,
         justifyContent: 'space-between',
     },
+    pillSelectorDisabled: {
+        opacity: 0.6,
+        borderColor: 'rgba(237, 232, 213, 0.1)',
+    },
     pillText: {
-        color: Colors.primary,
+        color: '#EDE8D5',
         fontWeight: '600',
         fontSize: 14,
     },
@@ -595,73 +836,66 @@ const styles = StyleSheet.create({
         right: 0,
         alignItems: 'center',
     },
-    createButton: {
+    submitButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
-        paddingHorizontal: 20,
-        paddingVertical: 12,
+        gap: 12,
+        paddingHorizontal: 24,
+        paddingVertical: 14,
         borderRadius: 30,
-        backgroundColor: 'white',
+        backgroundColor: '#DAA520', // Harvest Gold
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
+        elevation: 6,
     },
-    createButtonText: {
-        color: Colors.primary,
-        fontSize: 18,
+    submitButtonText: {
+        color: '#1A1A1A',
+        fontSize: 16,
         fontWeight: 'bold',
     },
-    plusBadge: {
+    badgeCircle: {
         width: 24,
         height: 24,
         borderRadius: 12,
-        backgroundColor: '#E8F0E5',
+        backgroundColor: '#1A1A1A',
         justifyContent: 'center',
         alignItems: 'center',
     },
     // Modals
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(0,0,0,0.6)',
         justifyContent: 'center',
         alignItems: 'center',
     },
     modalContent: {
-        width: '80%',
-        backgroundColor: '#F5F5DC',
-        borderRadius: 20,
+        width: '85%',
+        backgroundColor: '#1A1A1A',
+        borderColor: '#DAA520',
+        borderWidth: 1,
+        borderRadius: 24,
         padding: 20,
-        maxHeight: '60%',
+        maxHeight: '70%',
     },
     modalTitle: {
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: 'bold',
-        color: Colors.primary,
-        marginBottom: 20,
+        color: '#DAA520',
+        marginBottom: 15,
         textAlign: 'center',
-    },
-    colorCircle: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-    },
-    colorSelected: {
-        borderWidth: 3,
-        borderColor: 'white',
     },
     optionRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         paddingVertical: 15,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(0,0,0,0.1)',
+        borderBottomColor: 'rgba(237, 232, 213, 0.1)',
     },
     optionText: {
-        fontSize: 16,
-        color: Colors.primary,
+        fontSize: 15,
+        color: '#EDE8D5',
         fontWeight: '600',
     },
     compSection: {
@@ -670,50 +904,70 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     sectionHeader: {
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: 'bold',
-        color: '#4F6352',
+        color: '#DAA520',
         marginBottom: 5,
     },
     sectionSubHeader: {
-        fontSize: 14,
-        color: '#4F6352',
+        fontSize: 13,
+        color: '#EDE8D5',
+        opacity: 0.6,
         fontStyle: 'italic',
         marginBottom: 10,
         marginTop: 5,
     },
     compCard: {
-        backgroundColor: '#9FB89F', // Light green
-        borderRadius: 20,
-        padding: 15,
+        backgroundColor: '#1A1A1A',
+        borderRadius: 16,
+        padding: 16,
         marginBottom: 10,
-        borderWidth: 2,
-        borderColor: 'transparent',
+        borderWidth: 1,
+        borderColor: 'rgba(237, 232, 213, 0.1)',
     },
     compCardSelected: {
-        backgroundColor: '#4F6352', // Darker green
-        borderColor: '#2F3A27',
+        borderColor: '#DAA520',
+        backgroundColor: 'rgba(218, 165, 32, 0.05)',
+    },
+    compCardHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
     },
     compCardHeader: {
-        fontSize: 12,
-        color: 'rgba(255,255,255,0.8)',
+        fontSize: 11,
+        color: '#DAA520',
         textTransform: 'uppercase',
-        marginBottom: 5,
-        fontWeight: '600',
-        textAlign: 'center',
+        marginBottom: 2,
+        fontWeight: '700',
     },
     compCardTitle: {
-        fontSize: 24,
+        fontSize: 20,
         fontWeight: 'bold',
-        color: 'white',
-        textAlign: 'center',
-        marginBottom: 5,
+        color: '#FFFFFF',
     },
     compCardDesc: {
-        color: 'white',
-        fontSize: 14,
+        color: '#EDE8D5',
+        opacity: 0.8,
+        fontSize: 13,
         marginTop: 10,
-        textAlign: 'center',
-        lineHeight: 20,
+        lineHeight: 18,
+    },
+    leaveTribeButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#FF6B6B',
+        borderRadius: 16,
+        paddingVertical: 14,
+        marginTop: 20,
+        marginBottom: 10,
+        backgroundColor: 'rgba(255, 107, 107, 0.05)',
+    },
+    leaveTribeButtonText: {
+        color: '#FF6B6B',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
 });

@@ -409,7 +409,7 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
                         <Ionicons
                             name={toastType === 'success' ? 'checkmark-circle' : 'close-circle'}
                             size={20}
-                            color="#F5F5DC"
+                            color={Colors.black}
                         />
                         <Text style={styles.toastText}>{toastMessage}</Text>
                     </TouchableOpacity>
@@ -469,11 +469,11 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background },
     centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, backgroundColor: Colors.background },
     header: { padding: 20, backgroundColor: Colors.background },
-    title: { fontSize: 24, fontWeight: 'bold', color: Colors.textDark },
+    title: { fontSize: 24, fontWeight: 'bold', color: Colors.white },
     subtitle: { color: Colors.textDim, marginTop: 4, fontSize: 14 },
     emptyState: { padding: 60, alignItems: 'center', justifyContent: 'center' },
-    emptyTitle: { color: Colors.textDark, fontSize: 18, fontWeight: '700', marginTop: 16 },
-    emptySubtitle: { color: Colors.textDark + '88', fontSize: 13, marginTop: 6, textAlign: 'center' },
+    emptyTitle: { color: Colors.white, fontSize: 18, fontWeight: '700', marginTop: 16 },
+    emptySubtitle: { color: Colors.theme.dust + 'CC', fontSize: 13, marginTop: 6, textAlign: 'center' },
     list: { paddingHorizontal: 8, paddingVertical: 16, paddingBottom: 100 },
     toastContainer: {
         position: 'absolute',
@@ -486,7 +486,7 @@ const styles = StyleSheet.create({
     toast: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#4F6352',
+        backgroundColor: Colors.primary,
         paddingHorizontal: 20,
         paddingVertical: 12,
         borderRadius: 100,
@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
         elevation: 5,
     },
     toastText: {
-        color: '#F5F5DC',
+        color: Colors.black,
         fontSize: 16,
         fontWeight: '600',
     },

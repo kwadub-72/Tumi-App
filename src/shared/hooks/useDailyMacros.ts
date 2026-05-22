@@ -60,8 +60,9 @@ export function useDailyMacros(date: Date = new Date()): DailyMacroState {
         // Subscribe to changes in the posts table
         if (!session?.user?.id) return;
 
+        const channelId = Math.random().toString(36).substring(7);
         const channel = supabase
-            .channel(`daily-macros-${session.user.id}-${date.toISOString().split('T')[0]}`)
+            .channel(`daily-macros-${session.user.id}-${date.toISOString().split('T')[0]}-${channelId}`)
             .on('postgres_changes', {
                 event: '*',
                 schema: 'public',

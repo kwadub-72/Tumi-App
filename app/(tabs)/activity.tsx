@@ -9,12 +9,10 @@ import { Colors } from '../../src/shared/theme/Colors';
 import { PostStore } from '../../store/PostStore';
 import { WeightEntry, WeightStore } from '../../store/WeightStore';
 import { useUserStore } from '../../store/UserStore';
+import { useUserTribeStore } from '../../src/store/UserTribeStore';
 import { AccountabilityDashboard } from '../../src/features/tribes/components/dashboards/AccountabilityDashboard';
-import { H2HUserMatchupDashboard } from '../../src/features/tribes/components/dashboards/H2HUserMatchupDashboard';
-import { H2HLeaderboardDashboard } from '../../src/features/tribes/components/dashboards/H2HLeaderboardDashboard';
 import { PremierH2HLeaderboardDashboard } from '../../src/features/tribes/components/dashboards/PremierH2HLeaderboardDashboard';
 import { DashboardCarousel } from '../../src/features/tribes/components/dashboards/DashboardCarousel';
-import { TradTribeBattleDashboard } from '../../src/features/tribes/components/dashboards/TradTribeBattleDashboard';
 import { TradTribeBattleUserMatchup } from '../../src/features/tribes/components/dashboards/TradTribeBattleUserMatchup';
 import { LayoutAnimation } from 'react-native';
 import { CalendarModal } from '../../src/features/feed/components/CalendarModal';
@@ -37,6 +35,8 @@ const LEAGUE_DATA = [
 export default function DashboardScreen() {
     const router = useRouter();
     const userInfo = useUserStore();
+    const { selectedTribe } = useUserTribeStore();
+    const activeTribeId = selectedTribe?.id || 'b0000000-0000-0000-0000-000000000004';
     const [dailyTotals, setDailyTotals] = useState({ cals: 0, macros: { p: 0, c: 0, f: 0 } });
     const [isFlipped, setIsFlipped] = useState(false);
     const [weights, setWeights] = useState<WeightEntry[]>([]);
@@ -507,15 +507,8 @@ export default function DashboardScreen() {
                 <View style={styles.dashboardsContainer}>
                     <AccountabilityDashboard />
 
-                    <DashboardCarousel initialIndex={1}>
-                        <H2HUserMatchupDashboard />
-                        <H2HLeaderboardDashboard />
-                    </DashboardCarousel>
-
                     <DashboardCarousel>
-                        <TradTribeBattleDashboard />
-                        <TradTribeBattleUserMatchup />
-                        <TradTribeBattleLeaderboard />
+                        <TradTribeBattleUserMatchup tribeId={activeTribeId} />
                         <TradTribeBattleLeaderboard />
                     </DashboardCarousel>
 

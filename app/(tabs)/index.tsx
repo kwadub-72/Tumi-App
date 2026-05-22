@@ -154,7 +154,6 @@ export default function HomeScreen() {
                 onClose={() => setIsScoreboardVisible(false)}
                 tribeId={selectedTribe?.id}
                 tribeName={selectedTribe?.name}
-                tribeThemeColor={selectedTribe?.themeColor}
             />
 
             {/* Calendar Modal */}

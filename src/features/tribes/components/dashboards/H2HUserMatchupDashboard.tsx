@@ -17,6 +17,8 @@ import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import TribeInfoModal from '../TribeInfoModal';
 import { resolveActivityIcon } from '@/src/shared/constants/Activities';
 
+import * as Haptics from 'expo-haptics';
+
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_INNER_WIDTH = SCREEN_WIDTH - 80; // card has 20px padding left/right, activity has 20px margin left/right
 
@@ -168,26 +170,26 @@ const mockMatchups: MatchupPairing[] = [
     {
         id: 'matchup-4',
         leftUser: {
-            name: 'Empty Left',
-            handle: '@emptyleft',
-            avatar: 'https://i.pravatar.cc/100?img=1',
+            name: 'Riley Cooper',
+            handle: '@rcooper',
+            avatar: 'https://i.pravatar.cc/100?img=12',
             status: 'natural',
             activity: 'Bodybuilding',
             activityIcon: 'weight',
-            score: 0,
-            macros: { calories: 0, protein: 0, carbs: 0, fats: 0 },
-            macroRaw: { caloriesConsumed: 0, caloriesTarget: 2800, proteinConsumed: 0, proteinTarget: 200, carbsConsumed: 0, carbsTarget: 400, fatsConsumed: 0, fatsTarget: 85 }
+            score: 49,
+            macros: { calories: 90, protein: 95, carbs: 80, fats: 85 },
+            macroRaw: { caloriesConsumed: 2520, caloriesTarget: 2800, proteinConsumed: 190, proteinTarget: 200, carbsConsumed: 320, carbsTarget: 400, fatsConsumed: 72, fatsTarget: 85 }
         },
         rightUser: {
-            name: 'Empty Right',
-            handle: '@emptyright',
-            avatar: 'https://i.pravatar.cc/100?img=2',
-            status: 'natural',
-            activity: 'Bodybuilding',
-            activityIcon: 'weight',
+            name: 'Bye Week',
+            handle: '@bye',
+            avatar: '',
+            status: null,
+            activity: '',
+            activityIcon: '',
             score: 0,
             macros: { calories: 0, protein: 0, carbs: 0, fats: 0 },
-            macroRaw: { caloriesConsumed: 0, caloriesTarget: 2800, proteinConsumed: 0, proteinTarget: 200, carbsConsumed: 0, carbsTarget: 400, fatsConsumed: 0, fatsTarget: 85 }
+            macroRaw: { caloriesConsumed: 0, caloriesTarget: 0, proteinConsumed: 0, proteinTarget: 0, carbsConsumed: 0, carbsTarget: 0, fatsConsumed: 0, fatsTarget: 0 }
         },
         dailyLedger: []
     }
@@ -196,9 +198,14 @@ const mockMatchups: MatchupPairing[] = [
 interface H2HUserMatchupDashboardProps {
     isEmbedded?: boolean;
     containerWidth?: number;
+    onSimulateTripleTie?: () => void;
 }
 
-export const H2HUserMatchupDashboard: React.FC<H2HUserMatchupDashboardProps> = ({ isEmbedded = false, containerWidth }) => {
+export const H2HUserMatchupDashboard: React.FC<H2HUserMatchupDashboardProps> = ({ 
+    isEmbedded = false, 
+    containerWidth,
+    onSimulateTripleTie
+}) => {
     const [selectedIdx, setSelectedIdx] = useState(0);
     const [pickerVisible, setPickerVisible] = useState(false);
     const [modalInfo, setModalInfo] = useState<{ visible: boolean; title: string; description: string; iconName: any } | null>(null);
@@ -207,6 +214,9 @@ export const H2HUserMatchupDashboard: React.FC<H2HUserMatchupDashboardProps> = (
     const innerCarouselWidth = containerWidth !== undefined ? containerWidth - 40 : CARD_INNER_WIDTH;
 
     const activeMatchup = mockMatchups[selectedIdx];
+    
+    const isLeftBye = activeMatchup.leftUser.name === 'Bye Week' || activeMatchup.leftUser.handle === '@bye';
+    const isRightBye = activeMatchup.rightUser.name === 'Bye Week' || activeMatchup.rightUser.handle === '@bye';
 
     // Count up & scale pop animation state
     const [leftScoreVal, setLeftScoreVal] = useState(0);
@@ -244,8 +254,8 @@ export const H2HUserMatchupDashboard: React.FC<H2HUserMatchupDashboardProps> = (
                     ]).start();
 
                     // Count up score logic
-                    const leftTarget = activeMatchup.leftUser.score;
-                    const rightTarget = activeMatchup.rightUser.score;
+                    const leftTarget = isLeftBye ? 0 : activeMatchup.leftUser.score;
+                    const rightTarget = isRightBye ? 0 : activeMatchup.rightUser.score;
                     const duration = 1200;
                     const frameTime = 16; // ~60fps
                     const steps = Math.ceil(duration / frameTime);
@@ -271,16 +281,16 @@ export const H2HUserMatchupDashboard: React.FC<H2HUserMatchupDashboardProps> = (
 
                     return () => clearInterval(timer);
                 } else {
-                    setLeftScoreVal(activeMatchup.leftUser.score);
-                    setRightScoreVal(activeMatchup.rightUser.score);
+                    setLeftScoreVal(isLeftBye ? 0 : activeMatchup.leftUser.score);
+                    setRightScoreVal(isRightBye ? 0 : activeMatchup.rightUser.score);
                     scaleLeft.setValue(1);
                     scaleRight.setValue(1);
                     scaleHyphen.setValue(1);
                 }
             } catch (err) {
                 console.warn('AsyncStorage error in matchup animation', err);
-                setLeftScoreVal(activeMatchup.leftUser.score);
-                setRightScoreVal(activeMatchup.rightUser.score);
+                setLeftScoreVal(isLeftBye ? 0 : activeMatchup.leftUser.score);
+                setRightScoreVal(isRightBye ? 0 : activeMatchup.rightUser.score);
             }
         };
 
@@ -331,8 +341,12 @@ export const H2HUserMatchupDashboard: React.FC<H2HUserMatchupDashboardProps> = (
     );
 
     return (
-        <View style={[styles.cardContainer, isEmbedded && styles.embeddedCardContainer]}>
-            {/* Standardized Header System */}
+        <View style={[styles.cardContainer, isEmbedded && styles.embeddedCardContainer, { flex: 1 }]}>
+            <ScrollView 
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 45 }}
+            >
+                {/* Standardized Header System */}
             {!isEmbedded && (
                 <View style={styles.headerContext}>
                     <Text style={styles.headerLine1}>Head-to-Head · Faceoff · Habits</Text>
@@ -359,27 +373,39 @@ export const H2HUserMatchupDashboard: React.FC<H2HUserMatchupDashboardProps> = (
                 <View style={styles.avatarsRow}>
                     {/* Left Avatar */}
                     <View style={styles.avatarWrapper}>
-                        <Image source={{ uri: activeMatchup.leftUser.avatar }} style={styles.avatarImage} />
+                        {isLeftBye ? (
+                            <View style={styles.byeAvatarContainer}>
+                                <MaterialCommunityIcons name="shield" size={28} color={Colors.theme.harvestGold} />
+                            </View>
+                        ) : (
+                            <Image source={{ uri: activeMatchup.leftUser.avatar }} style={styles.avatarImage} />
+                        )}
                     </View>
 
                     {/* Score Centered Comparison */}
                     <View style={styles.centerScoreCol}>
                         <View style={styles.scoreContainer}>
                             <Animated.Text style={[styles.largeScoreText, { transform: [{ scale: scaleLeft }] }]}>
-                                {leftScoreVal}
+                                {isLeftBye ? '—' : leftScoreVal}
                             </Animated.Text>
                             <Animated.Text style={[styles.largeScoreText, { transform: [{ scale: scaleHyphen }] }]}>
                                 {' - '}
                             </Animated.Text>
                             <Animated.Text style={[styles.largeScoreText, { transform: [{ scale: scaleRight }] }]}>
-                                {rightScoreVal}
+                                {isRightBye ? '—' : rightScoreVal}
                             </Animated.Text>
                         </View>
                     </View>
 
                     {/* Right Avatar */}
                     <View style={styles.avatarWrapper}>
-                        <Image source={{ uri: activeMatchup.rightUser.avatar }} style={styles.avatarImage} />
+                        {isRightBye ? (
+                            <View style={styles.byeAvatarContainer}>
+                                <MaterialCommunityIcons name="shield" size={28} color={Colors.theme.harvestGold} />
+                            </View>
+                        ) : (
+                            <Image source={{ uri: activeMatchup.rightUser.avatar }} style={styles.avatarImage} />
+                        )}
                     </View>
                 </View>
 
@@ -389,12 +415,12 @@ export const H2HUserMatchupDashboard: React.FC<H2HUserMatchupDashboardProps> = (
                     <View style={styles.leftMetaCol}>
                         <View style={styles.nameRow}>
                             <Text style={styles.displayName} numberOfLines={1}>
-                                {activeMatchup.leftUser.name}
+                                {isLeftBye ? 'Bye Week' : activeMatchup.leftUser.name}
                             </Text>
-                            {renderIcons(activeMatchup.leftUser)}
+                            {!isLeftBye && renderIcons(activeMatchup.leftUser)}
                         </View>
                         <Text style={styles.handleText} numberOfLines={1}>
-                            {activeMatchup.leftUser.handle}
+                            {isLeftBye ? 'No Opponent' : activeMatchup.leftUser.handle}
                         </Text>
                     </View>
 
@@ -404,13 +430,13 @@ export const H2HUserMatchupDashboard: React.FC<H2HUserMatchupDashboardProps> = (
                     {/* Right Competitor Metadata */}
                     <View style={styles.rightMetaCol}>
                         <View style={[styles.nameRow, { justifyContent: 'flex-end' }]}>
-                            {renderIcons(activeMatchup.rightUser)}
+                            {!isRightBye && renderIcons(activeMatchup.rightUser)}
                             <Text style={styles.displayName} numberOfLines={1}>
-                                {activeMatchup.rightUser.name}
+                                {isRightBye ? 'Bye Week' : activeMatchup.rightUser.name}
                             </Text>
                         </View>
                         <Text style={[styles.handleText, { textAlign: 'right' }]} numberOfLines={1}>
-                            {activeMatchup.rightUser.handle}
+                            {isRightBye ? 'No Opponent' : activeMatchup.rightUser.handle}
                         </Text>
                     </View>
                 </View>
@@ -418,11 +444,11 @@ export const H2HUserMatchupDashboard: React.FC<H2HUserMatchupDashboardProps> = (
 
             {/* Macro Progress Section */}
             <View style={[styles.macroSection, { width: innerCarouselWidth, alignSelf: 'center' }]}>
-                <Text style={styles.todayProgressHeader}>Today's progress</Text>
+                <Text style={styles.todayProgressHeader}>{"Today's progress"}</Text>
                 <View style={styles.slidersSplitGrid}>
                     {/* Left User's Sliders */}
                     <View style={styles.splitSliderColumn}>
-                        {renderSliders(activeMatchup.leftUser.macros, activeMatchup.leftUser.macroRaw, false)}
+                        {renderSliders(activeMatchup.leftUser.macros, activeMatchup.leftUser.macroRaw, false, isLeftBye)}
                     </View>
 
                     {/* Middle Icons Axis */}
@@ -443,7 +469,7 @@ export const H2HUserMatchupDashboard: React.FC<H2HUserMatchupDashboardProps> = (
 
                     {/* Right User's Sliders */}
                     <View style={[styles.splitSliderColumn, { alignItems: 'flex-end' }]}>
-                        {renderSliders(activeMatchup.rightUser.macros, activeMatchup.rightUser.macroRaw, true)}
+                        {renderSliders(activeMatchup.rightUser.macros, activeMatchup.rightUser.macroRaw, true, isRightBye)}
                     </View>
                 </View>
 
@@ -459,6 +485,50 @@ export const H2HUserMatchupDashboard: React.FC<H2HUserMatchupDashboardProps> = (
                     </View>
                 </View>
             </View>
+
+            {/* QA Simulation Panel */}
+            <View style={styles.simulationContainer}>
+                <Text style={styles.simulationTitle}>QA Simulation Rig (v1.5)</Text>
+                <View style={styles.simulationButtonsRow}>
+                    <TouchableOpacity
+                        style={styles.simulationBtn}
+                        onPress={() => {
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                            setSelectedIdx(3);
+                            setModalInfo({
+                                visible: true,
+                                title: "Bye Week Mock Active",
+                                description: "The active Head-to-Head matchup has been set to the odd-number Bye Week pairing.\n\nObserve the Harvest Gold Shield indicator and locked macro progress controllers.",
+                                iconName: "shield"
+                            });
+                        }}
+                    >
+                        <MaterialCommunityIcons name="shield-outline" size={16} color={Colors.theme.harvestGold} />
+                        <Text style={styles.simulationBtnText}>Simulate Bye Week</Text>
+                    </TouchableOpacity>
+
+                    {onSimulateTripleTie && (
+                        <TouchableOpacity
+                            style={[styles.simulationBtn, { borderColor: Colors.theme.burntSienna }]}
+                            onPress={() => {
+                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                onSimulateTripleTie();
+                                setModalInfo({
+                                    visible: true,
+                                    title: "Standings Updated",
+                                    description: "A triple-tie has been simulated: Peyton (B), Sam (C), and Riley (A) now have identical records (8-1, 500pts).\n\nSwipe left back to the main Scoreboard tab to inspect the championship sorting resolved via Logging Streak!",
+                                    iconName: "trophy"
+                                });
+                            }}
+                        >
+                            <MaterialCommunityIcons name="trophy-outline" size={16} color={Colors.theme.burntSienna} />
+                            <Text style={[styles.simulationBtnText, { color: Colors.theme.burntSienna }]}>Simulate Triple-Tie</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+            </View>
+
+            </ScrollView>
 
             {/* Custom Matchup Picker Modal */}
             <Modal
@@ -488,7 +558,13 @@ export const H2HUserMatchupDashboard: React.FC<H2HUserMatchupDashboardProps> = (
                                     }}
                                 >
                                     <View style={styles.pickerCompetitorBlock}>
-                                        <Image source={{ uri: pairing.leftUser.avatar }} style={styles.pickerAvatar} />
+                                        {pairing.leftUser.avatar ? (
+                                            <Image source={{ uri: pairing.leftUser.avatar }} style={styles.pickerAvatar} />
+                                        ) : (
+                                            <View style={styles.pickerAvatarBye}>
+                                                <MaterialCommunityIcons name="shield" size={14} color={Colors.theme.harvestGold} />
+                                            </View>
+                                        )}
                                         <Text style={[styles.pickerName, selectedIdx === index && { color: Colors.theme.harvestGold }]} numberOfLines={1}>
                                             {pairing.leftUser.name}
                                         </Text>
@@ -498,7 +574,13 @@ export const H2HUserMatchupDashboard: React.FC<H2HUserMatchupDashboardProps> = (
                                         <Text style={[styles.pickerName, selectedIdx === index && { color: Colors.theme.harvestGold }]} numberOfLines={1}>
                                             {pairing.rightUser.name}
                                         </Text>
-                                        <Image source={{ uri: pairing.rightUser.avatar }} style={styles.pickerAvatar} />
+                                        {pairing.rightUser.avatar ? (
+                                            <Image source={{ uri: pairing.rightUser.avatar }} style={styles.pickerAvatar} />
+                                        ) : (
+                                            <View style={styles.pickerAvatarBye}>
+                                                <MaterialCommunityIcons name="shield" size={14} color={Colors.theme.harvestGold} />
+                                            </View>
+                                        )}
                                     </View>
                                 </TouchableOpacity>
                             ))}
@@ -523,28 +605,35 @@ export const H2HUserMatchupDashboard: React.FC<H2HUserMatchupDashboardProps> = (
 };
 
 // Helper renderer for macro progression sliders with consumed/remaining labels
-const renderSliders = (macros: Competitor['macros'], raw: MacroRaw, isRightSide = false) => {
-    const rows: { key: keyof Competitor['macros']; consumed: number; target: number; unit: string }[] = [
-        { key: 'calories',  consumed: raw.caloriesConsumed,  target: raw.caloriesTarget,  unit: 'kcal' },
-        { key: 'protein',   consumed: raw.proteinConsumed,   target: raw.proteinTarget,   unit: 'g' },
-        { key: 'carbs',     consumed: raw.carbsConsumed,     target: raw.carbsTarget,     unit: 'g' },
-        { key: 'fats',      consumed: raw.fatsConsumed,      target: raw.fatsTarget,      unit: 'g' },
+const renderSliders = (macros: Competitor['macros'], raw: MacroRaw, isRightSide = false, isDisabled = false) => {
+    const rows: { key: keyof Competitor['macros']; consumed: any; target: any; unit: string }[] = [
+        { key: 'calories',  consumed: isDisabled ? '—' : raw.caloriesConsumed,  target: isDisabled ? '—' : raw.caloriesTarget,  unit: 'kcal' },
+        { key: 'protein',   consumed: isDisabled ? '—' : raw.proteinConsumed,   target: isDisabled ? '—' : raw.proteinTarget,   unit: 'g' },
+        { key: 'carbs',     consumed: isDisabled ? '—' : raw.carbsConsumed,     target: isDisabled ? '—' : raw.carbsTarget,     unit: 'g' },
+        { key: 'fats',      consumed: isDisabled ? '—' : raw.fatsConsumed,      target: isDisabled ? '—' : raw.fatsTarget,      unit: 'g' },
     ];
     return rows.map(({ key, consumed, target, unit }) => {
-        const pct = macros[key];
-        const remaining = Math.max(0, target - consumed);
+        const pct = isDisabled ? 0 : macros[key];
+        const remaining = isDisabled ? '—' : Math.max(0, target - consumed);
         return (
             <View key={key} style={styles.sliderTrackWrapper}>
                 {/* Consumed / Remaining label row */}
                 <View style={[styles.sliderLabelRow, isRightSide && { flexDirection: 'row-reverse' }]}>
-                    <Text style={styles.sliderLabelConsumed}>{consumed}{unit}</Text>
-                    <Text style={styles.sliderLabelRemaining}>{remaining}{unit} left</Text>
+                    <Text style={[styles.sliderLabelConsumed, isDisabled && { color: 'rgba(237,232,213,0.2)' }]}>
+                        {consumed}{unit}
+                    </Text>
+                    <Text style={[styles.sliderLabelRemaining, isDisabled && { color: 'rgba(237,232,213,0.2)' }]}>
+                        {isDisabled ? 'Disabled' : `${remaining}${unit} left`}
+                    </Text>
                 </View>
                 <View style={styles.sliderTrackBg}>
                     <View
                         style={[
                             styles.sliderTrackFill,
-                            { width: `${pct}%`, backgroundColor: Colors.theme.harvestGold },
+                            { 
+                                width: `${pct}%`, 
+                                backgroundColor: isDisabled ? 'rgba(237,232,213,0.1)' : Colors.theme.harvestGold 
+                            },
                             isRightSide && { alignSelf: 'flex-end' }
                         ]}
                     />
@@ -935,5 +1024,59 @@ const styles = StyleSheet.create({
         fontWeight: '900',
         width: '12%',
         textAlign: 'center',
+    },
+    byeAvatarContainer: {
+        width: '100%',
+        height: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#262525',
+    },
+    pickerAvatarBye: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        borderWidth: 1.5,
+        borderColor: '#DAA520',
+        backgroundColor: '#1A1A1A',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    simulationContainer: {
+        marginTop: 20,
+        paddingTop: 16,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(237, 232, 213, 0.08)',
+        alignItems: 'center',
+    },
+    simulationTitle: {
+        color: '#DAA520',
+        fontSize: 11,
+        fontWeight: 'bold',
+        letterSpacing: 1.5,
+        textTransform: 'uppercase',
+        marginBottom: 10,
+    },
+    simulationButtonsRow: {
+        flexDirection: 'row',
+        gap: 12,
+        justifyContent: 'center',
+        width: '100%',
+    },
+    simulationBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#1A1A1A',
+        borderWidth: 1.2,
+        borderColor: '#DAA520',
+        borderRadius: 14,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        gap: 6,
+    },
+    simulationBtnText: {
+        color: '#EDE8D5',
+        fontSize: 11,
+        fontWeight: '700',
     }
 });

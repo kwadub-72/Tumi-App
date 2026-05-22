@@ -27,6 +27,15 @@ export interface FaceoffMatchup {
     user_2_weekly_points: number;
 }
 
+const getCompetitionWeek = () => {
+    const START_DATE = new Date('2026-03-22T00:00:00Z');
+    const now = new Date();
+    const diffMs = now.getTime() - START_DATE.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const weeks = Math.floor(diffDays / 7) + 1;
+    return Math.max(1, weeks);
+};
+
 export const useFaceoffMatchups = (tribeId?: string, weekNumber?: number) => {
     const { session } = useAuthStore();
     const currentUserId = session?.user?.id;
@@ -48,8 +57,21 @@ export const useFaceoffMatchups = (tribeId?: string, weekNumber?: number) => {
         targetTribeId = mockMap[targetTribeId] || targetTribeId;
     }
 
+    const currentWeek = getCompetitionWeek();
+    const isLocked = weekNumber !== undefined && weekNumber > currentWeek;
+
     const fetchMatchups = useCallback(async () => {
         if (!targetTribeId || !weekNumber) return;
+
+        // Temporal Anti-Peeking Lock: restrict access to future week matchups
+        const activeCurrentWeek = getCompetitionWeek();
+        if (weekNumber > activeCurrentWeek) {
+            setMatchups([]);
+            setUserMatchup(null);
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         setError(null);
 
@@ -96,8 +118,9 @@ export const useFaceoffMatchups = (tribeId?: string, weekNumber?: number) => {
     useEffect(() => {
         if (!targetTribeId) return;
 
+        const channelId = Math.random().toString(36).substring(7);
         const channel = supabase
-            .channel(`faceoff-matchups-realtime-${targetTribeId}`)
+            .channel(`faceoff-matchups-realtime-${targetTribeId}-${channelId}`)
             .on(
                 'postgres_changes',
                 {
@@ -119,10 +142,11 @@ export const useFaceoffMatchups = (tribeId?: string, weekNumber?: number) => {
     }, [targetTribeId, fetchMatchups]);
 
     return {
-        matchups,
-        userMatchup,
+        matchups: isLocked ? [] : matchups,
+        userMatchup: isLocked ? null : userMatchup,
         loading,
         error,
+        isLocked,
         refetch: fetchMatchups,
     };
 };
