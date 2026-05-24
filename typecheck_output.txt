@@ -1,0 +1,24 @@
+
+> forge@1.0.0 typecheck
+> tsc --noEmit
+
+src/features/macro-maps/components/BMRWarningModal.tsx(5,32): error TS2307: Cannot find module 'expo-linear-gradient' or its corresponding type declarations.
+src/features/macro-maps/components/MacroMapDeepDiveSheet.tsx(6,32): error TS2307: Cannot find module 'expo-linear-gradient' or its corresponding type declarations.
+src/features/macro-maps/components/MacroMapsLanding.tsx(5,32): error TS2307: Cannot find module 'expo-linear-gradient' or its corresponding type declarations.
+src/features/macro-maps/components/OutlierFlareModal.tsx(5,32): error TS2307: Cannot find module 'expo-linear-gradient' or its corresponding type declarations.
+src/features/macro-maps/screens/CompileStudioScreen.tsx(6,32): error TS2307: Cannot find module 'expo-linear-gradient' or its corresponding type declarations.
+src/features/macromaps/hooks/useSubscribeToLiveMap.ts(1,29): error TS2307: Cannot find module '@tanstack/react-query' or its corresponding type declarations.
+supabase/functions/activity-heartbeat/index.ts(1,23): error TS2307: Cannot find module 'https://deno.land/std@0.177.0/http/server.ts' or its corresponding type declarations.
+supabase/functions/activity-heartbeat/index.ts(2,30): error TS2307: Cannot find module 'https://esm.sh/@supabase/supabase-js@2.38.0' or its corresponding type declarations.
+supabase/functions/activity-heartbeat/index.ts(9,14): error TS7006: Parameter 'req' implicitly has an 'any' type.
+supabase/functions/activity-heartbeat/index.ts(17,13): error TS2304: Cannot find name 'Deno'.
+supabase/functions/activity-heartbeat/index.ts(18,13): error TS2304: Cannot find name 'Deno'.
+supabase/functions/activity-heartbeat/index.ts(69,53): error TS18046: 'error' is of type 'unknown'.
+supabase/functions/algorithmic-stagnation/index.ts(1,23): error TS2307: Cannot find module 'https://deno.land/std@0.177.0/http/server.ts' or its corresponding type declarations.
+supabase/functions/algorithmic-stagnation/index.ts(2,30): error TS2307: Cannot find module 'https://esm.sh/@supabase/supabase-js@2.38.0' or its corresponding type declarations.
+supabase/functions/algorithmic-stagnation/index.ts(41,14): error TS7006: Parameter 'req' implicitly has an 'any' type.
+supabase/functions/algorithmic-stagnation/index.ts(49,13): error TS2304: Cannot find name 'Deno'.
+supabase/functions/algorithmic-stagnation/index.ts(50,13): error TS2304: Cannot find name 'Deno'.
+supabase/functions/algorithmic-stagnation/index.ts(86,55): error TS7006: Parameter 'w' implicitly has an 'any' type.
+supabase/functions/algorithmic-stagnation/index.ts(87,55): error TS7006: Parameter 'w' implicitly has an 'any' type.
+supabase/functions/algorithmic-stagnation/index.ts(146,53): error TS18046: 'error' is of type 'unknown'.

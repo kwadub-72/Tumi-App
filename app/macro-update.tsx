@@ -35,15 +35,20 @@ import { NutritionService } from '@/src/shared/services/NutritionService';
 import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
 import { Video, ResizeMode } from 'expo-av';
 import { useWorkoutLogStore } from '@/src/store/useWorkoutLogStore';
-import { BookCard } from '@/src/features/feed/components/BookCard';
 import { CondensedMacroCard } from '@/src/features/feed/components/CondensedMacroCard';
+import { MapsLandingView } from '@/src/features/macro-maps/components/MapsLandingView';
+import { UpdateCompilerScreen } from '@/src/features/macro-maps/screens/UpdateCompilerScreen';
+import { CreateMapFromScratchScreen } from '@/src/features/macro-maps/screens/CreateMapFromScratchScreen';
+import { useMacroMapPromptStore } from '@/src/features/macromaps/store/useMacroMapPromptStore';
+import { MacroMapInterceptor } from '@/src/features/macromaps/components/MacroMapInterceptor';
+import { useFeedStore } from '@/store/FeedStore';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const SHEET_MIN_Y = SCREEN_HEIGHT - 145;
 const SHEET_MAX_Y = SCREEN_HEIGHT * 0.5;
 
-type ScreenMode = 'macro-update' | 'snapshot' | 'macro-book';
-const MODES: ScreenMode[] = ['macro-update', 'snapshot', 'macro-book'];
+type ScreenMode = 'macro-update' | 'snapshot' | 'macro-book' | 'macro-maps';
+const MODES: ScreenMode[] = ['macro-update', 'snapshot', 'macro-book', 'macro-maps'];
 
 const MacroUpdateRow = ({ icon, oldVal, value, onChange, diff }: any) => {
     const inputRef = React.useRef<TextInput>(null);
@@ -179,6 +184,11 @@ export default function MacroUpdateScreen() {
     const [fText, setFText] = useState(paramF ?? '');
     const [caption, setCaption] = useState('');
     const [media, setMedia] = useState<{ uri: string; type: 'image' | 'video' } | null>(null);
+    const [intentDriver, setIntentDriver] = useState<'Weight-Driven' | 'Time-Driven'>('Weight-Driven');
+    const { is_macro_locked } = useMacroMapPromptStore();
+    const [isCompileStudioOpen, setIsCompileStudioOpen] = useState(false);
+    const [isCreateMapOpen, setIsCreateMapOpen] = useState(false);
+    const setActiveFeedTab = useFeedStore((state) => state.setActiveFeedTab);
 
     const loadMacroBook = async () => {
         if (!profile?.id) return;
@@ -315,6 +325,10 @@ export default function MacroUpdateScreen() {
         if (!profile?.id) return;
 
         if (mode === 'macro-update') {
+            if (is_macro_locked) {
+                Alert.alert("Locked", "You cannot manually update your macros while there are pending map updates in your queue. Please resolve them first.");
+                return;
+            }
             if (!pText || !cText || !fText) {
                 Alert.alert("Missing Macros", "Please enter values for Protein, Carbs, and Fats before posting.");
                 return;
@@ -385,10 +399,18 @@ export default function MacroUpdateScreen() {
         transform: [{ translateY: translateY.value }],
     }));
 
+    if (isCompileStudioOpen) {
+        return <UpdateCompilerScreen onClose={() => setIsCompileStudioOpen(false)} />;
+    }
+
+    if (isCreateMapOpen) {
+        return <CreateMapFromScratchScreen onClose={() => setIsCreateMapOpen(false)} setActiveFeedTab={setActiveFeedTab} />;
+    }
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
             <Stack.Screen options={{ headerShown: false }} />
+            <MacroMapInterceptor />
             <SafeAreaView style={styles.container}>
                 <View style={{ flex: 1 }}>
                         <View style={styles.header}>
@@ -415,6 +437,12 @@ export default function MacroUpdateScreen() {
                                         onPress={() => handleModeChange('macro-book')}
                                     >
                                         <Text style={[styles.modeText, mode === 'macro-book' && styles.modeTextActive]}>Macro book</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.modeBtn, mode === 'macro-maps' && styles.modeBtnActive]}
+                                        onPress={() => handleModeChange('macro-maps')}
+                                    >
+                                        <Text style={[styles.modeText, mode === 'macro-maps' && styles.modeTextActive]}>Maps</Text>
                                     </TouchableOpacity>
                                 </View>
                             </View>
@@ -505,6 +533,27 @@ export default function MacroUpdateScreen() {
                                                         <Text style={styles.targetUnit}>g</Text>
                                                     </View>
                                                 </View>
+                                            </View>
+
+                                            <View style={styles.intentContainer}>
+                                                <Text style={styles.intentTitle}>Daily Logging Intent</Text>
+                                                <View style={styles.intentToggle}>
+                                                    <TouchableOpacity
+                                                        style={[styles.intentBtn, intentDriver === 'Weight-Driven' && styles.intentBtnActive]}
+                                                        onPress={() => setIntentDriver('Weight-Driven')}
+                                                    >
+                                                        <Text style={[styles.intentText, intentDriver === 'Weight-Driven' && styles.intentTextActive]}>Weight-Driven</Text>
+                                                    </TouchableOpacity>
+                                                    <TouchableOpacity
+                                                        style={[styles.intentBtn, intentDriver === 'Time-Driven' && styles.intentBtnActive]}
+                                                        onPress={() => setIntentDriver('Time-Driven')}
+                                                    >
+                                                        <Text style={[styles.intentText, intentDriver === 'Time-Driven' && styles.intentTextActive]}>Time-Driven</Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                                <Text style={styles.intentWarning}>
+                                                    Privacy Disclaimer: Your intent driver will be publicly associated with this macro update.
+                                                </Text>
                                             </View>
                                         </ScrollView>
                                     )}
@@ -635,6 +684,15 @@ export default function MacroUpdateScreen() {
                                             )}
                                         </ScrollView>
                                     )}
+
+                                    {item === 'macro-maps' && (
+                                        <MapsLandingView 
+                                            onFindMap={() => router.push('/in-development')}
+                                            onLaunch={() => router.push('/in-development')}
+                                            onCreate={() => setIsCreateMapOpen(true)}
+                                            onSavePrevious={() => setIsCompileStudioOpen(true)}
+                                        />
+                                    )}
                                 </View>
                             )}
                         />
@@ -737,6 +795,46 @@ const styles = StyleSheet.create({
     scrollContent: {
         flex: 1,
         marginTop: 10,
+    },
+    intentContainer: {
+        marginTop: 30,
+        paddingHorizontal: 15,
+        marginBottom: 40,
+    },
+    intentTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: Colors.theme.harvestGold,
+        marginBottom: 10,
+    },
+    intentToggle: {
+        flexDirection: 'row',
+        backgroundColor: Colors.theme.charcoal,
+        borderRadius: 12,
+        padding: 4,
+        marginBottom: 10,
+    },
+    intentBtn: {
+        flex: 1,
+        paddingVertical: 10,
+        alignItems: 'center',
+        borderRadius: 8,
+    },
+    intentBtnActive: {
+        backgroundColor: Colors.theme.dust,
+    },
+    intentText: {
+        fontSize: 14,
+        color: Colors.theme.softWhite,
+        fontWeight: '600',
+    },
+    intentTextActive: {
+        color: Colors.theme.matteBlack,
+    },
+    intentWarning: {
+        fontSize: 12,
+        color: Colors.theme.burntSienna,
+        textAlign: 'center',
     },
     globalTitleContainer: {
         marginTop: 20,

@@ -18,6 +18,7 @@ type NavTab = 'Following' | 'Diary' | 'Tribe';
 
 import { useUserTribeStore } from '@/src/store/UserTribeStore';
 import { useAuthStore } from '@/store/AuthStore';
+import { MacroMapInterceptor } from '@/src/features/macromaps/components/MacroMapInterceptor';
 
 export default function HomeScreen() {
     const params = useLocalSearchParams();
@@ -89,6 +90,7 @@ export default function HomeScreen() {
 
     return (
         <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+            <MacroMapInterceptor />
             {/* Top Navigation */}
             <View style={styles.topNavWrapper}>
                 <View style={styles.tabsContainer}>

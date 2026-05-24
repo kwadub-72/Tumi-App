@@ -16,6 +16,8 @@ import { useProfileNavigation } from '@/src/shared/hooks/useProfileNavigation';
 import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
 import { supabase } from '@/src/shared/services/supabase';
 import * as Haptics from 'expo-haptics';
+import { MacroMapDeepDiveSheet } from '@/src/features/macro-maps/components/MacroMapDeepDiveSheet';
+
 
 const BURGUNDY = Colors.theme.burntSienna; // Accent 2 (Burnt Sienna)
 const TRIBE_GREEN = Colors.theme.oliveDrab; // Secondary (Olive)
@@ -68,6 +70,7 @@ export default function FeedItem({
     const [isMuted, setIsMuted] = useState(false);
     const [isVerifiedVisible, setIsVerifiedVisible] = useState(false);
     const [isCopying, setIsCopying] = useState(false);
+    const [isMacroMapSheetVisible, setIsMacroMapSheetVisible] = useState(false);
     const videoRef = useRef<Video>(null);
 
     const mealStore = useMealLogStore();
@@ -506,6 +509,10 @@ export default function FeedItem({
             if (post.snapshot) {
                 onToggleSelect?.('targets', 'snapshot');
             }
+            return;
+        }
+        if (post.macroMap) {
+            setIsMacroMapSheetVisible(true);
             return;
         }
         if (post.id && !isDetailView) router.push(`/post/${post.id}`);
@@ -966,8 +973,34 @@ export default function FeedItem({
         );
     };
 
+    const renderMacroMap = (macroMap: any) => {
+        return (
+            <View style={styles.macroMapPreviewContainer}>
+                <View style={styles.macroMapPreviewHeader}>
+                    <MaterialCommunityIcons name="map-legend" size={24} color={Colors.theme.harvestGold} />
+                    <Text style={styles.macroMapPreviewTitle}>Macro Map Journey</Text>
+                </View>
+                <View style={styles.macroMapPreviewMetrics}>
+                    <View style={styles.macroMapPreviewMetric}>
+                        <Text style={styles.macroMapPreviewLabel}>Type</Text>
+                        <Text style={styles.macroMapPreviewValue}>{macroMap.mapType}</Text>
+                    </View>
+                    <View style={styles.macroMapPreviewMetric}>
+                        <Text style={styles.macroMapPreviewLabel}>Duration</Text>
+                        <Text style={styles.macroMapPreviewValue}>{macroMap.durationWeeks} wks</Text>
+                    </View>
+                    <View style={styles.macroMapPreviewMetric}>
+                        <Text style={styles.macroMapPreviewLabel}>Avg Shift</Text>
+                        <Text style={styles.macroMapPreviewValue}>{macroMap.avgMacroShiftPct > 0 ? '+' : ''}{macroMap.avgMacroShiftPct}%</Text>
+                    </View>
+                </View>
+            </View>
+        );
+    };
+
     const content = () => {
         if (post.snapshot) return renderSnapshot(post.snapshot);
+        if (post.macroMap) return renderMacroMap(post.macroMap);
         if (post.macroUpdate) return renderMacroUpdate(post.macroUpdate);
         if (post.meal) return renderMeal(post.meal);
         if (post.workout) return renderWorkout(post.workout);
@@ -984,6 +1017,15 @@ export default function FeedItem({
             // @ts-ignore
             sharedTransitionTag={sharedTransitionTag}
         >
+            {post.macroMap && (
+                <MacroMapDeepDiveSheet 
+                    visible={isMacroMapSheetVisible} 
+                    onClose={() => setIsMacroMapSheetVisible(false)} 
+                    mapData={post.macroMap as any} 
+                    isCreator={post.user.id === session?.user?.id}
+                />
+            )}
+            
             {isTribeMenuOpen && (
                 <TouchableWithoutFeedback onPress={() => setIsTribeMenuOpen(false)}>
                     <View style={[StyleSheet.absoluteFill, styles.dimOverlay]} />
@@ -1622,9 +1664,50 @@ const styles = StyleSheet.create({
         borderRadius: 20,
     },
     macroWarningDismissText: {
-        color: '#F5F5DC',
-        fontSize: 15,
-        fontWeight: '700',
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    macroMapPreviewContainer: {
+        backgroundColor: Colors.theme.charcoal,
+        padding: 16,
+        borderRadius: 16,
+        marginTop: 12,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.05)',
+    },
+    macroMapPreviewHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 12,
+    },
+    macroMapPreviewTitle: {
+        color: Colors.theme.harvestGold,
+        fontSize: 16,
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    macroMapPreviewMetrics: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        backgroundColor: Colors.theme.matteBlack,
+        padding: 12,
+        borderRadius: 12,
+    },
+    macroMapPreviewMetric: {
+        alignItems: 'center',
+    },
+    macroMapPreviewLabel: {
+        color: Colors.theme.dust,
+        fontSize: 12,
+        marginBottom: 4,
+    },
+    macroMapPreviewValue: {
+        color: Colors.theme.softWhite,
+        fontSize: 16,
+        fontWeight: 'bold',
     },
 });
-

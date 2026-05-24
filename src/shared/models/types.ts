@@ -94,7 +94,37 @@ export interface FeedPost {
     mediaType?: 'image' | 'video';
     macroUpdate?: MacroUpdate;
     snapshot?: Snapshot;
+    macroMap?: MacroMapFeedData;
     comments?: Comment[];
+}
+
+export interface MacroMapCheckpoint {
+    id: string;
+    date: string;
+    weight: number;
+    targets: {
+        calories: number;
+        p: number;
+        c: number;
+        f: number;
+    };
+    delta?: {
+        weight: number;
+        calories: number;
+        p: number;
+        c: number;
+        f: number;
+    };
+    intent: 'weight-up' | 'weight-down' | 'maintain';
+}
+
+export interface MacroMapFeedData {
+    id: string;
+    mapType: 'Cut' | 'Bulk' | 'Maintenance';
+    durationWeeks: number;
+    avgMacroShiftPct: number;
+    isLive: boolean;
+    checkpoints: MacroMapCheckpoint[];
 }
 
 export interface Snapshot {
