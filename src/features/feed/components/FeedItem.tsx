@@ -974,12 +974,61 @@ export default function FeedItem({
     };
 
     const renderMacroMap = (macroMap: any) => {
+        const isLive = macroMap.isLive || macroMap.is_live;
+        
+        let heartbeatText = '';
+        let isAbandoned = false;
+        if (isLive && macroMap.checkpoints && macroMap.checkpoints.length > 0) {
+            const dates = macroMap.checkpoints.map((cp: any) => new Date(cp.date || cp.created_at || Date.now()).getTime());
+            const maxTime = Math.max(...dates);
+            const diffDays = Math.floor((Date.now() - maxTime) / (1000 * 60 * 60 * 24));
+            const days = Math.max(0, diffDays);
+            heartbeatText = `Last Updated: ${days} ${days === 1 ? 'day' : 'days'} ago`;
+            isAbandoned = days > 14;
+        }
+
         return (
             <View style={styles.macroMapPreviewContainer}>
                 <View style={styles.macroMapPreviewHeader}>
-                    <MaterialCommunityIcons name="map-legend" size={24} color={Colors.theme.harvestGold} />
-                    <Text style={styles.macroMapPreviewTitle}>Macro Map Journey</Text>
+                    <View style={styles.macroMapHeaderTitleRow}>
+                        <MaterialCommunityIcons name="map-legend" size={24} color={Colors.theme.harvestGold} />
+                        <Text style={styles.macroMapPreviewTitle}>Macro Map Journey</Text>
+                    </View>
+                    {isLive && (
+                        <View style={[
+                            styles.liveBadge, 
+                            isAbandoned ? styles.abandonedBadge : styles.activeLiveBadge
+                        ]}>
+                            <View style={[
+                                styles.liveDot, 
+                                isAbandoned ? styles.abandonedDot : styles.activeLiveDot
+                            ]} />
+                            <Text style={[
+                                styles.liveText, 
+                                isAbandoned ? styles.abandonedText : styles.activeLiveText
+                            ]}>
+                                {isAbandoned ? 'Inactive' : 'Live'}
+                            </Text>
+                        </View>
+                    )}
                 </View>
+
+                {isLive && heartbeatText !== '' && (
+                    <View style={styles.heartbeatRow}>
+                        <Ionicons 
+                            name="heart" 
+                            size={14} 
+                            color={isAbandoned ? Colors.theme.burntSienna : Colors.theme.oliveDrab} 
+                        />
+                        <Text style={[
+                            styles.heartbeatText, 
+                            isAbandoned && { color: Colors.theme.burntSienna, fontWeight: 'bold' }
+                        ]}>
+                            {heartbeatText} {isAbandoned && '(Abandoned)'}
+                        </Text>
+                    </View>
+                )}
+
                 <View style={styles.macroMapPreviewMetrics}>
                     <View style={styles.macroMapPreviewMetric}>
                         <Text style={styles.macroMapPreviewLabel}>Type</Text>
@@ -1680,8 +1729,66 @@ const styles = StyleSheet.create({
     macroMapPreviewHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        justifyContent: 'space-between',
         marginBottom: 12,
+    },
+    macroMapHeaderTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    liveBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        gap: 4,
+    },
+    activeLiveBadge: {
+        backgroundColor: 'rgba(27, 182, 7, 0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(27, 182, 7, 0.3)',
+    },
+    abandonedBadge: {
+        backgroundColor: 'rgba(235, 87, 87, 0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(235, 87, 87, 0.3)',
+    },
+    liveDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    activeLiveDot: {
+        backgroundColor: Colors.theme.oliveDrab,
+    },
+    abandonedDot: {
+        backgroundColor: Colors.theme.burntSienna,
+    },
+    liveText: {
+        fontSize: 11,
+        fontWeight: 'bold',
+    },
+    activeLiveText: {
+        color: Colors.theme.oliveDrab,
+    },
+    abandonedText: {
+        color: Colors.theme.burntSienna,
+    },
+    heartbeatRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 12,
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        borderRadius: 8,
+    },
+    heartbeatText: {
+        color: Colors.theme.dust,
+        fontSize: 13,
     },
     macroMapPreviewTitle: {
         color: Colors.theme.harvestGold,

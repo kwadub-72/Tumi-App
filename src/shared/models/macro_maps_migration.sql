@@ -1,5 +1,6 @@
 -- 1. ENUMs
 CREATE TYPE engine_type AS ENUM ('EXPERIENTIAL', 'ALGORITHMIC_CREATED', 'LIVE');
+CREATE TYPE generation_type AS ENUM ('update', 'meal_log');
 CREATE TYPE goal_type AS ENUM ('CUT', 'BULK', 'MAINTENANCE');
 CREATE TYPE trigger_type AS ENUM ('WEIGHT_BASED', 'TIME_BASED');
 CREATE TYPE intent_tag AS ENUM ('PLATEAU_BREAK', 'TARGET_REACHED', 'STRATEGIC_REVERSAL', 'EVENT_MILESTONE');
@@ -12,9 +13,11 @@ CREATE TABLE public.macro_maps (
   creator_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   name VARCHAR NOT NULL,
   engine_type engine_type NOT NULL,
+  generation_type generation_type NOT NULL DEFAULT 'update',
   goal_type goal_type NOT NULL,
   total_duration_weeks INT NOT NULL,
   plateau_formula_json JSONB,
+  is_live BOOLEAN DEFAULT false,
   is_published BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now()
 );
@@ -32,6 +35,13 @@ CREATE TABLE public.macro_map_checkpoints (
   fats_ratio NUMERIC NOT NULL CHECK (fats_ratio >= 0.0 AND fats_ratio <= 1.0),
   calorie_delta_pct NUMERIC NOT NULL,
   is_outlier_flare BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE public.macro_map_live_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  map_id UUID NOT NULL REFERENCES public.macro_maps(id) ON DELETE CASCADE,
+  macro_payload JSONB NOT NULL,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -125,6 +135,7 @@ EXECUTE FUNCTION public.trigger_live_map_overwrite();
 -- 6. ROW LEVEL SECURITY (RLS)
 ALTER TABLE public.macro_maps ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.macro_map_checkpoints ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.macro_map_live_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.macro_map_subscriptions ENABLE ROW LEVEL SECURITY;
 
 -- Creators can manage their own maps
@@ -143,6 +154,12 @@ CREATE POLICY "Creators can manage checkpoints" ON public.macro_map_checkpoints 
 CREATE POLICY "Subscribers can read checkpoints" ON public.macro_map_checkpoints FOR SELECT USING (
   EXISTS (SELECT 1 FROM public.macro_maps map WHERE map.id = map_id AND map.is_published = true)
 );
+
+-- Live Events policies
+CREATE POLICY "Creators can insert live events" ON public.macro_map_live_events FOR INSERT WITH CHECK (
+  EXISTS (SELECT 1 FROM public.macro_maps map WHERE map.id = map_id AND map.creator_id = auth.uid())
+);
+CREATE POLICY "Anyone can read live events" ON public.macro_map_live_events FOR SELECT USING (auth.role() = 'authenticated');
 
 -- 7. MARKETPLACE DISCOVERY RPC
 -- Returns all published maps regardless of engine_type, with creator metadata and subscriber count
@@ -197,15 +214,17 @@ RETURNS TABLE (
     weight NUMERIC,
     intent_driver VARCHAR
 ) AS $$
-BEGIN
     RETURN QUERY
     SELECT 
         mh.created_at,
-        mh.p AS protein,
-        mh.c AS carbs,
-        mh.f AS fats,
-        mh.calories,
-        mh.weight,
+        COALESCE((mh.macro_targets->>'p')::NUMERIC, 0) AS protein,
+        COALESCE((mh.macro_targets->>'c')::NUMERIC, 0) AS carbs,
+        COALESCE((mh.macro_targets->>'f')::NUMERIC, 0) AS fats,
+        COALESCE((mh.macro_targets->>'calories')::NUMERIC, 0) AS calories,
+        COALESCE(
+            (SELECT w.weight FROM public.weights w WHERE w.user_id = mh.user_id AND w.date <= mh.created_at::date ORDER BY w.date DESC, w.created_at DESC LIMIT 1),
+            (SELECT p.weight_lbs FROM public.profiles p WHERE p.id = mh.user_id)
+        )::NUMERIC AS weight,
         mh.intent_driver
     FROM public.macro_history mh
     WHERE mh.user_id = target_user_id
@@ -287,3 +306,112 @@ BEGIN
     RETURN new_map_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 10. WEEKLY MEAL LOG AGGREGATION RPC
+-- Aggregates daily macro_history entries into calendar weeks (Sunday to Saturday) and calculates relative ratios
+CREATE OR REPLACE FUNCTION public.fetch_historical_meal_averages(
+    target_user_id UUID,
+    start_date TEXT,
+    end_date TEXT,
+    generation_type TEXT
+)
+RETURNS TABLE (
+    week_start DATE,
+    avg_calories NUMERIC,
+    avg_protein NUMERIC,
+    avg_carbs NUMERIC,
+    avg_fats NUMERIC,
+    avg_weight NUMERIC,
+    protein_ratio NUMERIC,
+    carbs_ratio NUMERIC,
+    fats_ratio NUMERIC,
+    calorie_delta_pct NUMERIC
+) AS $$
+BEGIN
+    IF generation_type = 'meal_log' THEN
+        RETURN QUERY
+        WITH weekly_stats AS (
+            SELECT
+                (date_trunc('week', mh.created_at::date + interval '1 day') - interval '1 day')::DATE AS week_start_date,
+                AVG(COALESCE((mh.macro_targets->>'calories')::NUMERIC, 0)) AS w_calories,
+                AVG(COALESCE((mh.macro_targets->>'p')::NUMERIC, 0)) AS w_protein,
+                AVG(COALESCE((mh.macro_targets->>'c')::NUMERIC, 0)) AS w_carbs,
+                AVG(COALESCE((mh.macro_targets->>'f')::NUMERIC, 0)) AS w_fats,
+                AVG(COALESCE(
+                    (SELECT w.weight FROM public.weights w WHERE w.user_id = mh.user_id AND w.date <= mh.created_at::date ORDER BY w.date DESC, w.created_at DESC LIMIT 1),
+                    (SELECT p.weight_lbs FROM public.profiles p WHERE p.id = mh.user_id)
+                )) AS w_weight
+            FROM public.macro_history mh
+            WHERE mh.user_id = target_user_id
+              AND DATE(mh.created_at) >= start_date::date
+              AND DATE(mh.created_at) <= end_date::date
+            GROUP BY (date_trunc('week', mh.created_at::date + interval '1 day') - interval '1 day')::DATE
+        ),
+        baseline AS (
+            SELECT w_calories AS base_cal
+            FROM weekly_stats
+            ORDER BY week_start_date ASC
+            LIMIT 1
+        )
+        SELECT 
+            ws.week_start_date,
+            ROUND(ws.w_calories, 1),
+            ROUND(ws.w_protein, 1),
+            ROUND(ws.w_carbs, 1),
+            ROUND(ws.w_fats, 1),
+            ROUND(ws.w_weight, 2),
+            CASE WHEN (ws.w_protein * 4 + ws.w_carbs * 4 + ws.w_fats * 9) > 0 THEN
+                 ROUND((ws.w_protein * 4) / (ws.w_protein * 4 + ws.w_carbs * 4 + ws.w_fats * 9), 4)
+                 ELSE 0 END AS p_ratio,
+            CASE WHEN (ws.w_protein * 4 + ws.w_carbs * 4 + ws.w_fats * 9) > 0 THEN
+                 ROUND((ws.w_carbs * 4) / (ws.w_protein * 4 + ws.w_carbs * 4 + ws.w_fats * 9), 4)
+                 ELSE 0 END AS c_ratio,
+            CASE WHEN (ws.w_protein * 4 + ws.w_carbs * 4 + ws.w_fats * 9) > 0 THEN
+                 ROUND((ws.w_fats * 9) / (ws.w_protein * 4 + ws.w_carbs * 4 + ws.w_fats * 9), 4)
+                 ELSE 0 END AS f_ratio,
+            CASE WHEN b.base_cal > 0 THEN
+                 ROUND((ws.w_calories - b.base_cal) / b.base_cal, 4)
+                 ELSE 0 END AS cal_delta_pct
+        FROM weekly_stats ws
+        CROSS JOIN baseline b
+        ORDER BY ws.week_start_date ASC;
+    ELSE
+        RETURN;
+    END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 11. ENABLE REALTIME REPLICATION FOR LIVE EVENTS
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'macro_map_live_events'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.macro_map_live_events;
+    END IF;
+END
+$$;
+
+-- 12. PUBLIC DISCOVERY VIEW
+CREATE OR REPLACE VIEW public.public_discovery_maps AS
+SELECT 
+    m.id,
+    m.creator_id,
+    m.name AS map_name,
+    m.goal_type AS global_track,
+    m.generation_type,
+    m.is_live,
+    m.is_published,
+    m.created_at,
+    p.handle AS username,
+    p.name AS display_name,
+    p.avatar_url,
+    p.bio AS verified_bio,
+    p.status AS natural_status,
+    p.activity AS activity_type
+FROM public.macro_maps m
+JOIN public.profiles p ON m.creator_id = p.id
+WHERE m.is_published = true OR m.is_live = true;
+
+GRANT SELECT ON public.public_discovery_maps TO authenticated;

@@ -70,7 +70,7 @@ export function MapsLandingView({ onLaunch, onCreate, onFindMap, onSavePrevious 
                 />
                 <OptionCard 
                     title="Launch a live map"
-                    subtitle="Broadcast your real-time, day-to-day macro choices synchronously to your followers as you make them."
+                    subtitle="Broadcast your macro updates to subscribers for real-time nutrition guidance"
                     icon="satellite-uplink"
                     onPress={onLaunch}
                 />

@@ -54,26 +54,77 @@ export function MacroMapInterceptor() {
             <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
             <View style={styles.card}>
                 <View style={styles.header}>
-                    <Ionicons name="map" size={28} color={Colors.theme.harvestGold} />
-                    <Text style={styles.title}>Map Update</Text>
+                    <Ionicons name="flash" size={28} color={Colors.theme.harvestGold} />
+                    <Text style={styles.title}>Live Map Adjustment</Text>
                 </View>
 
                 <Text style={styles.subtitle}>
-                    {activePrompt.creator_name} has updated their macros.
+                    {activePrompt.creator_name} has pushed a live macro update to your active map. Resolve this adjustment below:
                 </Text>
+
+                {/* Macro Comparison Grid */}
+                <View style={styles.comparisonGrid}>
+                    <View style={styles.gridHeader}>
+                        <Text style={styles.gridHeaderCell}>Macro</Text>
+                        <Text style={styles.gridHeaderCell}>Current</Text>
+                        <Text style={styles.gridHeaderCell}>New</Text>
+                        <Text style={styles.gridHeaderCell}>Change</Text>
+                    </View>
+
+                    {/* Calories Row */}
+                    <View style={styles.gridRow}>
+                        <Text style={styles.macroLabelCell}>Calories</Text>
+                        <Text style={styles.macroValueCell}>{activePrompt.old_macros.calories} kcal</Text>
+                        <Text style={[styles.macroValueCell, { color: Colors.theme.harvestGold }]}>{activePrompt.new_macros.calories} kcal</Text>
+                        <Text style={[styles.macroDiffCell, { color: activePrompt.new_macros.calories >= activePrompt.old_macros.calories ? Colors.theme.oliveDrab : Colors.theme.burntSienna }]}>
+                            {activePrompt.new_macros.calories >= activePrompt.old_macros.calories ? '+' : ''}
+                            {activePrompt.new_macros.calories - activePrompt.old_macros.calories}
+                        </Text>
+                    </View>
+
+                    {/* Protein Row */}
+                    <View style={styles.gridRow}>
+                        <Text style={styles.macroLabelCell}>Protein</Text>
+                        <Text style={styles.macroValueCell}>{activePrompt.old_macros.p}g</Text>
+                        <Text style={[styles.macroValueCell, { color: Colors.theme.harvestGold }]}>{activePrompt.new_macros.p}g</Text>
+                        <Text style={[styles.macroDiffCell, { color: activePrompt.new_macros.p >= activePrompt.old_macros.p ? Colors.theme.oliveDrab : Colors.theme.burntSienna }]}>
+                            {activePrompt.new_macros.p >= activePrompt.old_macros.p ? '+' : ''}
+                            {activePrompt.new_macros.p - activePrompt.old_macros.p}g
+                        </Text>
+                    </View>
+
+                    {/* Carbs Row */}
+                    <View style={styles.gridRow}>
+                        <Text style={styles.macroLabelCell}>Carbs</Text>
+                        <Text style={styles.macroValueCell}>{activePrompt.old_macros.c}g</Text>
+                        <Text style={[styles.macroValueCell, { color: Colors.theme.harvestGold }]}>{activePrompt.new_macros.c}g</Text>
+                        <Text style={[styles.macroDiffCell, { color: activePrompt.new_macros.c >= activePrompt.old_macros.c ? Colors.theme.oliveDrab : Colors.theme.burntSienna }]}>
+                            {activePrompt.new_macros.c >= activePrompt.old_macros.c ? '+' : ''}
+                            {activePrompt.new_macros.c - activePrompt.old_macros.c}g
+                        </Text>
+                    </View>
+
+                    {/* Fats Row */}
+                    <View style={styles.gridRow}>
+                        <Text style={styles.macroLabelCell}>Fats</Text>
+                        <Text style={styles.macroValueCell}>{activePrompt.old_macros.f}g</Text>
+                        <Text style={[styles.macroValueCell, { color: Colors.theme.harvestGold }]}>{activePrompt.new_macros.f}g</Text>
+                        <Text style={[styles.macroDiffCell, { color: activePrompt.new_macros.f >= activePrompt.old_macros.f ? Colors.theme.oliveDrab : Colors.theme.burntSienna }]}>
+                            {activePrompt.new_macros.f >= activePrompt.old_macros.f ? '+' : ''}
+                            {activePrompt.new_macros.f - activePrompt.old_macros.f}g
+                        </Text>
+                    </View>
+                </View>
 
                 <View style={styles.actions}>
                     <TouchableOpacity style={[styles.button, styles.acceptButton]} onPress={accept}>
                         <Text style={styles.buttonText}>Accept</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.button, styles.postponeButton]} onPress={postpone}>
-                        <Text style={styles.buttonText}>Postpone (7 Days)</Text>
+                        <Text style={[styles.buttonText, { color: Colors.theme.softWhite }]}>Postpone</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.button, styles.rejectButton]} onPress={rejectOrSkip}>
-                        <Text style={styles.buttonText}>Skip</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.button, styles.revertButton]} onPress={revert}>
-                        <Text style={styles.buttonText}>Revert</Text>
+                        <Text style={[styles.buttonText, { color: Colors.theme.softWhite }]}>Reject</Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -166,5 +217,51 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
         color: Colors.theme.matteBlack,
+    },
+    comparisonGrid: {
+        width: '100%',
+        backgroundColor: 'rgba(0, 0, 0, 0.2)',
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 20,
+        gap: 8,
+    },
+    gridHeader: {
+        flexDirection: 'row',
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+        paddingBottom: 6,
+        marginBottom: 4,
+    },
+    gridHeaderCell: {
+        flex: 1,
+        fontSize: 12,
+        fontWeight: '600',
+        color: Colors.theme.dust,
+        textAlign: 'center',
+    },
+    gridRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 4,
+    },
+    macroLabelCell: {
+        flex: 1,
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: Colors.theme.softWhite,
+        textAlign: 'left',
+    },
+    macroValueCell: {
+        flex: 1,
+        fontSize: 14,
+        color: Colors.theme.dust,
+        textAlign: 'center',
+    },
+    macroDiffCell: {
+        flex: 1,
+        fontSize: 14,
+        fontWeight: 'bold',
+        textAlign: 'right',
     },
 });

@@ -29,18 +29,26 @@ interface MacroMapPromptState {
     queue: MacroMapPromptPayload[];
     is_macro_locked: boolean;
     activePrompt: MacroMapPromptPayload | null;
+    pendingLiveUpdate: MacroMapPromptPayload | null;
+    is_live: boolean;
+    activeLiveMapId: string | null;
     enqueue: (prompt: MacroMapPromptPayload) => void;
     accept: () => Promise<void>;
     postpone: () => Promise<void>;
     rejectOrSkip: () => Promise<void>;
     revert: () => void;
     fetchActiveResolutions: (userId: string) => Promise<void>;
+    toggleLiveBroadcast: () => Promise<void>;
+    checkActiveBroadcast: () => Promise<void>;
 }
 
 export const useMacroMapPromptStore = create<MacroMapPromptState>((set, get) => ({
     queue: [],
     is_macro_locked: false,
     activePrompt: null,
+    pendingLiveUpdate: null,
+    is_live: false,
+    activeLiveMapId: null,
 
     fetchActiveResolutions: async (userId: string) => {
         try {
@@ -110,6 +118,7 @@ export const useMacroMapPromptStore = create<MacroMapPromptState>((set, get) => 
             set({
                 queue: queueList,
                 activePrompt: queueList.length > 0 ? queueList[0] : null,
+                pendingLiveUpdate: queueList.length > 0 ? queueList[0] : null,
                 is_macro_locked: queueList.length > 0
             });
         } catch (err) {
@@ -124,6 +133,7 @@ export const useMacroMapPromptStore = create<MacroMapPromptState>((set, get) => 
             return {
                 queue: newQueue,
                 activePrompt: newQueue.length > 0 ? newQueue[0] : null,
+                pendingLiveUpdate: newQueue.length > 0 ? newQueue[0] : null,
                 is_macro_locked: newQueue.length > 0,
             };
         });
@@ -162,6 +172,7 @@ export const useMacroMapPromptStore = create<MacroMapPromptState>((set, get) => 
                 return {
                     queue: newQueue,
                     activePrompt: newQueue.length > 0 ? newQueue[0] : null,
+                    pendingLiveUpdate: newQueue.length > 0 ? newQueue[0] : null,
                     is_macro_locked: newQueue.length > 0,
                 };
             });
@@ -193,6 +204,7 @@ export const useMacroMapPromptStore = create<MacroMapPromptState>((set, get) => 
                 return {
                     queue: newQueue,
                     activePrompt: newQueue.length > 0 ? newQueue[0] : null,
+                    pendingLiveUpdate: newQueue.length > 0 ? newQueue[0] : null,
                     is_macro_locked: newQueue.length > 0,
                 };
             });
@@ -233,6 +245,7 @@ export const useMacroMapPromptStore = create<MacroMapPromptState>((set, get) => 
                 return {
                     queue: newQueue,
                     activePrompt: newQueue.length > 0 ? newQueue[0] : null,
+                    pendingLiveUpdate: newQueue.length > 0 ? newQueue[0] : null,
                     is_macro_locked: newQueue.length > 0,
                 };
             });
@@ -247,8 +260,77 @@ export const useMacroMapPromptStore = create<MacroMapPromptState>((set, get) => 
             return {
                 queue: newQueue,
                 activePrompt: newQueue.length > 0 ? newQueue[0] : null,
+                pendingLiveUpdate: newQueue.length > 0 ? newQueue[0] : null,
                 is_macro_locked: newQueue.length > 0,
             };
         });
     },
+
+    checkActiveBroadcast: async () => {
+        const userId = useAuthStore.getState().session?.user?.id;
+        if (!userId) return;
+
+        try {
+            const { data, error } = await supabase
+                .from('macro_maps')
+                .select('id, is_live')
+                .eq('creator_id', userId)
+                .eq('engine_type', 'LIVE')
+                .limit(1)
+                .maybeSingle();
+
+            if (error) {
+                console.error('[checkActiveBroadcast] Error fetching live map:', error);
+                return;
+            }
+
+            if (data) {
+                set({ is_live: data.is_live ?? false, activeLiveMapId: data.id });
+            }
+        } catch (err) {
+            console.error('[checkActiveBroadcast] Exception:', err);
+        }
+    },
+
+    toggleLiveBroadcast: async () => {
+        const userId = useAuthStore.getState().session?.user?.id;
+        if (!userId) return;
+
+        const currentIsLive = get().is_live;
+        const mapId = get().activeLiveMapId;
+
+        try {
+            if (mapId) {
+                // Update existing live map status
+                const { error } = await supabase
+                    .from('macro_maps')
+                    .update({ is_live: !currentIsLive })
+                    .eq('id', mapId);
+
+                if (error) throw error;
+                set({ is_live: !currentIsLive });
+            } else {
+                // Create a new default LIVE map
+                const { data, error } = await supabase
+                    .from('macro_maps')
+                    .insert({
+                        creator_id: userId,
+                        name: 'My Live Broadcast',
+                        engine_type: 'LIVE',
+                        generation_type: 'update',
+                        goal_type: 'MAINTENANCE',
+                        total_duration_weeks: 12,
+                        is_live: true,
+                        is_published: true
+                    })
+                    .select('id')
+                    .single();
+
+                if (error) throw error;
+                set({ is_live: true, activeLiveMapId: data.id });
+            }
+        } catch (err) {
+            console.error('[toggleLiveBroadcast] Exception:', err);
+        }
+    }
 }));

@@ -11,6 +11,8 @@ export interface CompilerCheckpoint extends Omit<MacroMapCheckpoint, 'intent'> {
 
 interface UpdateCompilerState {
     // Dates & inputs
+    generationType: 'update' | 'meal_log';
+    mapName: string;
     startDate: string | null;
     endDate: string | null;
     startLogs: any[];
@@ -28,11 +30,17 @@ interface UpdateCompilerState {
     } | null;
     isCompiling: boolean;
 
+    // Logged dates
+    loggedDates: Set<string>;
+
     // For CompileStudioScreen compatibility
     macroLogs: CompilerCheckpoint[];
     outlierFlares: Record<string, boolean>;
 
     // Actions
+    setGenerationType: (type: 'update' | 'meal_log') => void;
+    setMapName: (name: string) => void;
+    loadLoggedDates: () => Promise<void>;
     setStartDate: (date: string) => Promise<void>;
     setEndDate: (date: string) => Promise<void>;
     setSelectedStartLogId: (id: string | null) => void;
@@ -40,6 +48,8 @@ interface UpdateCompilerState {
     toggleOutlierFlare: (id: string) => void;
     compileRange: () => Promise<void>;
     reset: () => void;
+    clearCompilation: () => void;
+    resetDates: () => void;
 
     // Helper actions for compatibility with older screens
     selectStartLog: (id: string | null) => void;
@@ -52,6 +62,8 @@ interface UpdateCompilerState {
 }
 
 export const useUpdateCompilerStore = create<UpdateCompilerState>((set, get) => ({
+    generationType: 'update',
+    mapName: '',
     startDate: null,
     endDate: null,
     startLogs: [],
@@ -63,10 +75,71 @@ export const useUpdateCompilerStore = create<UpdateCompilerState>((set, get) => 
     trajectoryAverages: null,
     isCompiling: false,
 
+    loggedDates: new Set<string>(),
+
     macroLogs: [],
     outlierFlares: {},
 
+    setMapName: (name: string) => set({ mapName: name }),
+    setGenerationType: (type: 'update' | 'meal_log') => set({ generationType: type }),
+
+    loadLoggedDates: async () => {
+        const userId = useAuthStore.getState().session?.user?.id;
+        if (!userId) {
+            // Mock data fallback for offline/guest mode testing
+            const mockDates = new Set<string>();
+            const today = new Date();
+            for (let i = 0; i < 30; i++) {
+                // mock every alternate day
+                if (i % 2 === 0) {
+                    const d = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
+                    mockDates.add(d.toISOString().split('T')[0]);
+                }
+            }
+            set({ loggedDates: mockDates });
+            return;
+        }
+
+        try {
+            const { data, error } = await supabase
+                .from('macro_history')
+                .select('created_at')
+                .eq('user_id', userId);
+
+            if (error) throw error;
+
+            const dates = new Set<string>();
+            if (data) {
+                data.forEach((row: any) => {
+                    if (row.created_at) {
+                        dates.add(row.created_at.split('T')[0]);
+                    }
+                });
+            }
+            set({ loggedDates: dates });
+        } catch (err) {
+            console.error('[useUpdateCompilerStore.loadLoggedDates] Error:', err);
+        }
+    },
+
     setStartDate: async (date: string) => {
+        const { loggedDates, endDate } = get();
+        let currentLoggedDates = loggedDates;
+        if (currentLoggedDates.size === 0) {
+            await get().loadLoggedDates();
+            currentLoggedDates = get().loggedDates;
+        }
+
+        if (!currentLoggedDates.has(date)) {
+            Alert.alert('Invalid Selection', 'Start Boundary must be set on a date where you have logged history.');
+            return;
+        }
+
+        if (endDate && new Date(date) >= new Date(endDate)) {
+            Alert.alert('Invalid Selection', 'Start date must be chronologically before the end date.');
+            return;
+        }
+
         set({ startDate: date, isCompiling: true });
         const userId = useAuthStore.getState().session?.user?.id;
         
@@ -152,6 +225,23 @@ export const useUpdateCompilerStore = create<UpdateCompilerState>((set, get) => 
     },
 
     setEndDate: async (date: string) => {
+        const { loggedDates, startDate } = get();
+        let currentLoggedDates = loggedDates;
+        if (currentLoggedDates.size === 0) {
+            await get().loadLoggedDates();
+            currentLoggedDates = get().loggedDates;
+        }
+
+        if (!currentLoggedDates.has(date)) {
+            Alert.alert('Invalid Selection', 'End Boundary must be set on a date where you have logged history.');
+            return;
+        }
+
+        if (startDate && new Date(date) <= new Date(startDate)) {
+            Alert.alert('Invalid Selection', 'End date must be chronologically after the start date.');
+            return;
+        }
+
         set({ endDate: date, isCompiling: true });
         const userId = useAuthStore.getState().session?.user?.id;
         
@@ -342,45 +432,83 @@ export const useUpdateCompilerStore = create<UpdateCompilerState>((set, get) => 
                 return;
             }
 
-            const { data: historyData, error: historyErr } = await supabase
-                .from('macro_history')
-                .select('*')
-                .eq('user_id', userId)
-                .gte('created_at', `${startDate}T00:00:00Z`)
-                .lte('created_at', `${endDate}T23:59:59Z`)
-                .order('created_at', { ascending: true });
-
-            if (historyErr) throw historyErr;
-
-            if (!historyData || historyData.length === 0) {
-                throw new Error('No historical macro changes logged in this date range.');
+            if (!userId) {
+                throw new Error("Cannot compile range: missing user ID.");
             }
 
-            const checkpoints: CompilerCheckpoint[] = await Promise.all(historyData.map(async (log: any) => {
-                const datePart = log.created_at.split('T')[0];
-                const { data: wData } = await supabase
-                    .from('weights')
-                    .select('weight')
-                    .eq('user_id', userId)
-                    .eq('date', datePart)
-                    .limit(1)
-                    .maybeSingle();
+            let checkpoints: CompilerCheckpoint[] = [];
 
-                const targets = log.macro_targets ?? {};
-                return {
-                    id: log.id,
-                    date: datePart,
-                    weight: wData ? Number(wData.weight) : 180,
-                    targets: {
-                        calories: targets.calories ?? 2000,
-                        p: targets.p ?? 150,
-                        c: targets.c ?? 200,
-                        f: targets.f ?? 60
-                    },
-                    intent: log.intent_driver === 'WEIGHT_PLATEAU' ? 'weight-plateau' : 'time-deadline',
-                    is_outlier_flare: get().outlierFlareLogIds.includes(log.id)
+            if (get().generationType === 'meal_log') {
+                const payloadObject = {
+                    target_user_id: userId,
+                    start_date: startDate,
+                    end_date: endDate,
+                    generation_type: get().generationType
                 };
-            }));
+                console.log("🔥 EXACT RPC PAYLOAD:", JSON.stringify(payloadObject, null, 2));
+
+                const { data: historyData, error: historyErr } = await supabase.rpc('fetch_historical_meal_averages', payloadObject);
+
+                if (historyErr) throw historyErr;
+
+                if (!historyData || historyData.length === 0) {
+                    throw new Error('No historical meal logs found in this date range.');
+                }
+
+                checkpoints = historyData.map((log: any) => ({
+                    id: log.week_start,
+                    date: log.week_start,
+                    weight: log.avg_weight ? Number(log.avg_weight) : 180,
+                    targets: {
+                        calories: Number(log.avg_calories) || 2000,
+                        p: Number(log.avg_protein) || 150,
+                        c: Number(log.avg_carbs) || 200,
+                        f: Number(log.avg_fats) || 60
+                    },
+                    intent: 'time-deadline',
+                    is_outlier_flare: false
+                }));
+            } else {
+                const { data: historyData, error: historyErr } = await supabase
+                    .from('macro_history')
+                    .select('*')
+                    .eq('user_id', userId)
+                    .gte('created_at', `${startDate}T00:00:00Z`)
+                    .lte('created_at', `${endDate}T23:59:59Z`)
+                    .order('created_at', { ascending: true });
+
+                if (historyErr) throw historyErr;
+
+                if (!historyData || historyData.length === 0) {
+                    throw new Error('No historical macro changes logged in this date range.');
+                }
+
+                checkpoints = await Promise.all(historyData.map(async (log: any) => {
+                    const datePart = log.created_at.split('T')[0];
+                    const { data: wData } = await supabase
+                        .from('weights')
+                        .select('weight')
+                        .eq('user_id', userId)
+                        .eq('date', datePart)
+                        .limit(1)
+                        .maybeSingle();
+
+                    const targets = log.macro_targets ?? {};
+                    return {
+                        id: log.id,
+                        date: datePart,
+                        weight: wData ? Number(wData.weight) : 180,
+                        targets: {
+                            calories: targets.calories ?? 2000,
+                            p: targets.p ?? 150,
+                            c: targets.c ?? 200,
+                            f: targets.f ?? 60
+                        },
+                        intent: log.intent_driver === 'WEIGHT_PLATEAU' ? 'weight-plateau' : 'time-deadline',
+                        is_outlier_flare: get().outlierFlareLogIds.includes(log.id)
+                    };
+                }));
+            }
 
             const avgCalories = Math.round(checkpoints.reduce((acc, curr) => acc + curr.targets.calories, 0) / checkpoints.length);
             const avgProtein = Math.round(checkpoints.reduce((acc, curr) => acc + curr.targets.p, 0) / checkpoints.length);
@@ -447,6 +575,8 @@ export const useUpdateCompilerStore = create<UpdateCompilerState>((set, get) => 
     },
 
     reset: () => set({
+        mapName: '',
+        generationType: 'update',
         startDate: null,
         endDate: null,
         startLogs: [],
@@ -456,6 +586,28 @@ export const useUpdateCompilerStore = create<UpdateCompilerState>((set, get) => 
         outlierFlareLogIds: [],
         parsedCheckpoints: null,
         trajectoryAverages: null,
+        macroLogs: [],
+        outlierFlares: {}
+    }),
+
+    clearCompilation: () => set({
+        parsedCheckpoints: null,
+        trajectoryAverages: null,
+        outlierFlareLogIds: [],
+        macroLogs: [],
+        outlierFlares: {}
+    }),
+
+    resetDates: () => set({
+        startDate: null,
+        endDate: null,
+        startLogs: [],
+        endLogs: [],
+        selectedStartLogId: null,
+        selectedEndLogId: null,
+        parsedCheckpoints: null,
+        trajectoryAverages: null,
+        outlierFlareLogIds: [],
         macroLogs: [],
         outlierFlares: {}
     })

@@ -50,7 +50,7 @@ const SHEET_MAX_Y = SCREEN_HEIGHT * 0.5;
 type ScreenMode = 'macro-update' | 'snapshot' | 'macro-book' | 'macro-maps';
 const MODES: ScreenMode[] = ['macro-update', 'snapshot', 'macro-book', 'macro-maps'];
 
-const MacroUpdateRow = ({ icon, oldVal, value, onChange, diff }: any) => {
+const MacroUpdateRow = ({ icon, oldVal, value, onChange, diff, editable = true }: any) => {
     const inputRef = React.useRef<TextInput>(null);
     const isNegative = diff < 0;
     const hasValue = value !== '';
@@ -62,8 +62,9 @@ const MacroUpdateRow = ({ icon, oldVal, value, onChange, diff }: any) => {
             <MaterialCommunityIcons name={icon} size={28} color={Colors.primary} style={styles.macroIconSmall} />
             <TouchableOpacity 
                 activeOpacity={1} 
-                onPress={() => inputRef.current?.focus()}
-                style={styles.inputBubble}
+                onPress={() => editable && inputRef.current?.focus()}
+                style={[styles.inputBubble, !editable && { opacity: 0.5 }]}
+                disabled={!editable}
             >
                 <TextInput
                     ref={inputRef}
@@ -73,6 +74,7 @@ const MacroUpdateRow = ({ icon, oldVal, value, onChange, diff }: any) => {
                     keyboardType="number-pad"
                     placeholder="..."
                     placeholderTextColor="#aaa"
+                    editable={editable}
                 />
                 <Text style={styles.suffixText}>g</Text>
             </TouchableOpacity>
@@ -400,11 +402,19 @@ export default function MacroUpdateScreen() {
     }));
 
     if (isCompileStudioOpen) {
-        return <UpdateCompilerScreen onClose={() => setIsCompileStudioOpen(false)} />;
+        return <UpdateCompilerScreen onClose={() => {
+            setIsCompileStudioOpen(false);
+            setActiveFeedTab('Maps');
+            router.replace('/(tabs)');
+        }} />;
     }
 
     if (isCreateMapOpen) {
-        return <CreateMapFromScratchScreen onClose={() => setIsCreateMapOpen(false)} setActiveFeedTab={setActiveFeedTab} />;
+        return <CreateMapFromScratchScreen onClose={() => {
+            setIsCreateMapOpen(false);
+            setActiveFeedTab('Maps');
+            router.replace('/(tabs)');
+        }} setActiveFeedTab={setActiveFeedTab} />;
     }
 
     return (
@@ -496,9 +506,9 @@ export default function MacroUpdateScreen() {
                                             </View>
 
                                             <View style={styles.macrosList}>
-                                                <MacroUpdateRow icon="food-drumstick" oldVal={oldP} value={pText} onChange={setPText} diff={diffP} />
-                                                <MacroUpdateRow icon="barley" oldVal={oldC} value={cText} onChange={setCText} diff={diffC} />
-                                                <MacroUpdateRow icon="water" oldVal={oldF} value={fText} onChange={setFText} diff={diffF} />
+                                                <MacroUpdateRow icon="food-drumstick" oldVal={oldP} value={pText} onChange={setPText} diff={diffP} editable={!is_macro_locked} />
+                                                <MacroUpdateRow icon="barley" oldVal={oldC} value={cText} onChange={setCText} diff={diffC} editable={!is_macro_locked} />
+                                                <MacroUpdateRow icon="water" oldVal={oldF} value={fText} onChange={setFText} diff={diffF} editable={!is_macro_locked} />
                                             </View>
 
                                             <View style={styles.newTargetsWrapper}>
@@ -687,8 +697,8 @@ export default function MacroUpdateScreen() {
 
                                     {item === 'macro-maps' && (
                                         <MapsLandingView 
-                                            onFindMap={() => router.push('/in-development')}
-                                            onLaunch={() => router.push('/in-development')}
+                                            onFindMap={() => router.push('/discovery')}
+                                            onLaunch={() => router.push('/live-broadcast')}
                                             onCreate={() => setIsCreateMapOpen(true)}
                                             onSavePrevious={() => setIsCompileStudioOpen(true)}
                                         />
@@ -705,22 +715,31 @@ export default function MacroUpdateScreen() {
                         </View>
                     </GestureDetector>
                     <View style={styles.loggerTopRow}>
-                        <TouchableOpacity style={styles.cameraBtn} onPress={() => router.push('/camera-capture?source=workout')}>
+                        <TouchableOpacity 
+                            style={[styles.cameraBtn, is_macro_locked && { opacity: 0.5 }]} 
+                            onPress={() => router.push('/camera-capture?source=workout')}
+                            disabled={is_macro_locked}
+                        >
                             <Ionicons name="camera" size={28} color="white" />
                         </TouchableOpacity>
                         <TextInput
-                            style={styles.loggerInput}
-                            placeholder="Caption..."
+                            style={[styles.loggerInput, is_macro_locked && { opacity: 0.5 }]}
+                            placeholder={is_macro_locked ? "Locked - Resolve map updates" : "Caption..."}
                             placeholderTextColor={Colors.textDark + '88'}
                             value={caption}
                             onChangeText={setCaption}
                             multiline
+                            editable={!is_macro_locked}
                             onFocus={() => {
                                 translateY.value = withSpring(SHEET_MAX_Y);
                             }}
                             onBlur={() => {}}
                         />
-                        <TouchableOpacity style={styles.postSubmitBtn} onPress={handlePost}>
+                        <TouchableOpacity 
+                            style={[styles.postSubmitBtn, is_macro_locked && { opacity: 0.5 }]} 
+                            onPress={handlePost}
+                            disabled={is_macro_locked}
+                        >
                             <MaterialCommunityIcons name="post-outline" size={32} color="white" />
                         </TouchableOpacity>
                     </View>

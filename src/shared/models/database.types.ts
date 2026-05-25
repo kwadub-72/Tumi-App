@@ -1,4 +1,5 @@
 export type EngineType = 'EXPERIENTIAL' | 'ALGORITHMIC_CREATED' | 'LIVE';
+export type GenerationType = 'update' | 'meal_log';
 export type GoalType = 'CUT' | 'BULK' | 'MAINTENANCE';
 export type TriggerType = 'WEIGHT_BASED' | 'TIME_BASED';
 export type IntentTag = 'PLATEAU_BREAK' | 'TARGET_REACHED' | 'STRATEGIC_REVERSAL' | 'EVENT_MILESTONE';
@@ -10,11 +11,25 @@ export interface MacroMap {
   creator_id: string;
   name: string;
   engine_type: EngineType;
+  generation_type: GenerationType;
   goal_type: GoalType;
   total_duration_weeks: number;
   plateau_formula_json: any | null; // JSONB
+  is_live: boolean;
   is_published: boolean;
   created_at?: string;
+}
+
+export interface MacroMapLiveEvent {
+  id: string;
+  map_id: string;
+  macro_payload: {
+    calories: number;
+    p: number;
+    c: number;
+    f: number;
+  };
+  created_at: string;
 }
 
 export interface MacroMapCheckpoint {
@@ -61,6 +76,24 @@ export interface MacroHistoryExtensions {
   anomaly_note: string | null;
 }
 
+// View Types
+export interface PublicDiscoveryMap {
+  id: string;
+  creator_id: string;
+  map_name: string;
+  global_track: GoalType;
+  generation_type: GenerationType;
+  is_live: boolean;
+  is_published: boolean;
+  created_at: string;
+  username: string;
+  display_name: string;
+  avatar_url: string | null;
+  verified_bio: string | null;
+  natural_status: string | null;
+  activity_type: string | null;
+}
+
 // RPC Return Types
 export interface MarketplaceMacroMap {
   id: string;
@@ -84,4 +117,17 @@ export interface HistoricalLogEntry {
   calories: number;
   weight: number | null;
   intent_driver: string | null;
+}
+
+export interface HistoricalMealAverage {
+  week_start: string;
+  avg_calories: number;
+  avg_protein: number;
+  avg_carbs: number;
+  avg_fats: number;
+  avg_weight: number | null;
+  protein_ratio: number;
+  carbs_ratio: number;
+  fats_ratio: number;
+  calorie_delta_pct: number;
 }
