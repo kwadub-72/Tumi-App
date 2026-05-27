@@ -1,11 +1,13 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { Tabs } from 'react-native-collapsible-tab-view';
 import React, { useEffect, useState, useMemo } from 'react';
 import {
     FlatList,
     Image,
     Linking,
     Platform,
+    Pressable,
     RefreshControl,
     ScrollView,
     StyleSheet,
@@ -34,22 +36,27 @@ import { Colors } from '@/src/shared/theme/Colors';
 import { useUserStore } from '../../store/UserStore'; // For units
 import { useUserTribeStore } from '@/src/store/UserTribeStore';
 import { useNetworkStore } from '@/src/store/NetworkStore';
+import { useProfileStore } from '@/src/store/useProfileStore';
+import { DiscoveryMapCard } from '@/src/features/macromaps/components/DiscoveryMapCard';
 
 const { width, height } = Dimensions.get('window');
 
-type TabType = 'meals' | 'workouts' | 'macros';
+type TabType = 'meals' | 'workouts' | 'macros' | 'maps';
 
 export default function OtherUserProfileScreen() {
-    const { handle } = useLocalSearchParams<{ handle: string }>();
+    const { handle, initialTab } = useLocalSearchParams<{ handle: string, initialTab?: TabType }>();
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const session = useAuthStore((state) => state.session);
     const userInfo = useUserStore();
     const { units } = userInfo;
+    const { activeProfileMaps, fetchProfileMaps } = useProfileStore();
+
+    const tabs: TabType[] = ['meals', 'workouts', 'macros', 'maps'];
 
     // State
     const [posts, setPosts] = useState<FeedPost[]>([]);
-    const [activeTab, setActiveTab] = useState<TabType>('meals');
+    const [activeTab, setActiveTab] = useState<TabType>(initialTab && tabs.includes(initialTab) ? initialTab : 'meals');
     const [refreshing, setRefreshing] = useState(false);
     const [loading, setLoading] = useState(true);
     
@@ -78,35 +85,7 @@ export default function OtherUserProfileScreen() {
     const [targetTribe, setTargetTribe] = useState<any>(null);
 
     // Animation & Pager Refs
-    const scrollX = React.useRef(new Animated.Value(0)).current;
-    const scrollY = React.useRef(new Animated.Value(0)).current;
-    const pagerRef = React.useRef<ScrollView>(null);
-    const tabs: TabType[] = ['meals', 'workouts', 'macros'];
-
-    // Collapsible header
-    const [headerHeight, setHeaderHeight] = useState(0);
-    const tabScrollOffsets = React.useRef<Record<TabType, number>>({ meals: 0, workouts: 0, macros: 0 });
-    const activeTabRef = React.useRef<TabType>('meals');
-
-    const headerTranslateY = scrollY.interpolate({
-        inputRange: [0, headerHeight],
-        outputRange: [0, -headerHeight],
-        extrapolate: 'clamp',
-    });
-
-    const handleScroll = (tab: TabType) => (e: any) => {
-        const y = e.nativeEvent.contentOffset.y;
-        tabScrollOffsets.current[tab] = y;
-        scrollY.setValue(Math.max(0, y));
-    };
-
-    const handleTabSwitch = (tab: TabType, index: number) => {
-        activeTabRef.current = tab;
-        setActiveTab(tab);
-        pagerRef.current?.scrollTo({ x: index * width, animated: true });
-        const savedY = tabScrollOffsets.current[tab];
-        scrollY.setValue(Math.max(0, savedY));
-    };
+    // No manual animated sliding tab index is used to ensure maximum performance
 
     const loadData = async (silent = false) => {
         if (!handle || !session?.user?.id) return;
@@ -200,6 +179,11 @@ export default function OtherUserProfileScreen() {
             } else {
                 setTargetTribe(null);
             }
+
+            // 6. Fetch target user's published maps
+            if (session.user.id && profileData.id) {
+                fetchProfileMaps(profileData.id, session.user.id);
+            }
             
         } catch (e) {
             console.error(e);
@@ -221,6 +205,12 @@ export default function OtherUserProfileScreen() {
         }
     }, [session?.user?.id]);
 
+    useEffect(() => {
+        if (!loading && initialTab && tabs.includes(initialTab)) {
+            setActiveTab(initialTab);
+        }
+    }, [loading, initialTab]);
+
 
     // Derived UI visibility flags
     const isSameTribe = !!sharedTribeSettings;
@@ -239,6 +229,7 @@ export default function OtherUserProfileScreen() {
         if (tab === 'meals') return canSeeMeals;
         if (tab === 'workouts') return canSeeWorkouts;
         if (tab === 'macros') return canSeeMacros;
+        if (tab === 'maps') return true; // Maps are public
         return true;
     };
 
@@ -332,7 +323,7 @@ export default function OtherUserProfileScreen() {
     };
 
     const renderHeaderContent = () => (
-        <>
+        <View pointerEvents="box-none" style={{ backgroundColor: Colors.background, paddingTop: insets.top }}>
             {/* Top Bar */}
             <View style={styles.topBar}>
                 <TouchableOpacity onPress={() => router.back()} style={{ padding: 8 }}>
@@ -481,55 +472,48 @@ export default function OtherUserProfileScreen() {
                     </TouchableOpacity>
                 </View>
             </View>
+        </View>
+    );
 
-            {/* Tabs */}
+    const renderTabBar = (props: any) => (
+        <View style={{ backgroundColor: Colors.background }}>
             <View style={styles.tabsContainer}>
                 {tabs.map((tab, index) => (
-                    <TouchableOpacity 
+                    <Pressable 
                         key={tab}
-                        style={[styles.tabItem]} 
+                        style={[
+                            styles.tabItem,
+                            {
+                                flex: 1,
+                                alignItems: 'center',
+                                borderBottomWidth: 3,
+                                borderBottomColor: activeTab === tab ? Colors.theme.harvestGold : 'transparent',
+                            }
+                        ]} 
                         onPress={() => {
-                            handleTabSwitch(tab, index);
+                            props.onTabPress(tab);
                         }}
                     >
-                        {tab === 'meals' || tab === 'workouts' ? (
-                            <MaterialCommunityIcons 
-                                name={tab === 'meals' ? 'fire' : 'dumbbell'} 
-                                size={32} 
-                                color={activeTab === tab ? Colors.primary : '#D4D4D4'} 
-                            />
+                        {tab === 'meals' ? (
+                            <MaterialCommunityIcons name="fire" size={32} color={activeTab === tab ? Colors.theme.harvestGold : Colors.theme.softWhite} />
+                        ) : tab === 'workouts' ? (
+                            <MaterialCommunityIcons name="dumbbell" size={32} color={activeTab === tab ? Colors.theme.harvestGold : Colors.theme.softWhite} />
+                        ) : tab === 'maps' ? (
+                            <MaterialCommunityIcons name="map-legend" size={32} color={activeTab === tab ? Colors.theme.harvestGold : Colors.theme.softWhite} />
                         ) : (
-                            <Ionicons 
-                                name={'stats-chart'} 
-                                size={32} 
-                                color={activeTab === tab ? Colors.primary : '#D4D4D4'} 
-                            />
+                            <Ionicons name="stats-chart" size={32} color={activeTab === tab ? Colors.theme.harvestGold : Colors.theme.softWhite} />
                         )}
-                        <Text style={styles.tabLabel}>{
-                            tab === 'meals' ? getTabPosts('meals').length : (tab === 'workouts' ? getTabPosts('workouts').length : getTabPosts('macros').length)
+                        <Text style={[
+                            styles.tabLabel,
+                            { color: activeTab === tab ? Colors.theme.harvestGold : Colors.theme.softWhite }
+                        ]}>{
+                            tab === 'meals' ? getTabPosts('meals').length : (tab === 'workouts' ? getTabPosts('workouts').length : (tab === 'maps' ? activeProfileMaps.length : getTabPosts('macros').length))
                         }{'\n'}{tab === 'macros' ? 'macros' : tab}</Text>
-                    </TouchableOpacity>
+                    </Pressable>
                 ))}
-                
-                {/* Animated Indicator */}
-                <Animated.View 
-                    style={[
-                        styles.activeIndicator, 
-                        { 
-                            width: (width - 40) / 3 * 0.8,
-                            left: 20 + (width - 40) / 3 * 0.1,
-                            transform: [{
-                                translateX: scrollX.interpolate({
-                                    inputRange: [0, width * (tabs.length - 1)],
-                                    outputRange: [0, (width - 40) / 3 * (tabs.length - 1)]
-                                })
-                            }]
-                        }
-                    ]} 
-                />
             </View>
             <View style={styles.thickDivider} />
-        </>
+        </View>
     );
 
     // Empty State (Dynamic based on privacy and content)
@@ -555,6 +539,9 @@ export default function OtherUserProfileScreen() {
                     break;
                 case 'macros':
                     icon = <Ionicons name="stats-chart" size={80} color="#D4D4D4" />;
+                    break;
+                case 'maps':
+                    icon = <MaterialCommunityIcons name="map-legend" size={80} color="#D4D4D4" />;
                     break;
             }
         }
@@ -593,89 +580,88 @@ export default function OtherUserProfileScreen() {
                 post={shareTargetPost}
             />
 
-            <Animated.ScrollView
-                ref={pagerRef as any}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onScroll={Animated.event(
-                    [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-                    { useNativeDriver: true }
-                )}
-                onMomentumScrollEnd={(e) => {
-                    const index = Math.round(e.nativeEvent.contentOffset.x / width);
-                    const newTab = tabs[index];
-                    activeTabRef.current = newTab;
-                    setActiveTab(newTab);
-                    scrollY.setValue(Math.max(0, tabScrollOffsets.current[newTab]));
+            <Tabs.Container
+                renderHeader={renderHeaderContent}
+                renderTabBar={renderTabBar}
+                headerContainerStyle={{ backgroundColor: Colors.background, shadowOpacity: 0, elevation: 0 }}
+                initialTabName={initialTab && tabs.includes(initialTab) ? initialTab : 'meals'}
+                onIndexChange={(index) => {
+                    setActiveTab(tabs[index]);
                 }}
-                scrollEventThrottle={16}
-                style={StyleSheet.absoluteFillObject}
             >
                 {tabs.map((tab) => {
+                    if (tab === 'maps') {
+                        const isEmpty = activeProfileMaps.length === 0;
+                        return (
+                            <Tabs.Tab name={tab} key={tab}>
+                                <Tabs.FlatList
+                                    data={activeProfileMaps}
+                                    keyExtractor={(item: any) => item.id}
+                                    renderItem={({ item }: { item: any }) => (
+                                        <View style={{ marginBottom: 16, paddingHorizontal: 16 }}>
+                                            <DiscoveryMapCard map={item} />
+                                        </View>
+                                    )}
+                                    ListEmptyComponent={renderEmptyState(tab)}
+                                    scrollEnabled={!isEmpty}
+                                    bounces={!isEmpty}
+                                    showsVerticalScrollIndicator={false}
+                                    refreshControl={
+                                        !isEmpty ? (
+                                            <RefreshControl
+                                                refreshing={refreshing}
+                                                onRefresh={() => loadData(false)}
+                                                tintColor={Colors.theme.harvestGold}
+                                            />
+                                        ) : undefined
+                                    }
+                                />
+                            </Tabs.Tab>
+                        );
+                    }
+
                     const tabPosts = getTabPosts(tab);
                     const isEmpty = tabPosts.length === 0;
                     return (
-                        <FlatList
-                            key={tab}
-                            style={{ width }}
-                            data={tabPosts}
-                            keyExtractor={(item) => item.id}
-                            renderItem={({ item }) => (
-                                <View style={{ marginBottom: 16, paddingHorizontal: 16 }}>
-                                    <FeedItem
-                                        post={item}
-                                        onPressOptions={() => handleOptions(item)}
-                                        onPressComment={() => handleCommentPress(item)}
-                                        onPressLike={() => toggleLike(item)}
-                                        onPressVerified={() => setVerifiedModalVisible(true)}
-                                        onPressHammer={() => setHammerModalVisible(true)}
-                                        onPressShare={() => {
-                                            setShareTargetPost(item);
-                                            setShareModalVisible(true);
-                                        }}
-                                        sharedTransitionTag={`post-${item.id}`}
-                                    />
-                                </View>
-                            )}
-                            ListEmptyComponent={renderEmptyState(tab)}
-                            scrollEnabled={!isEmpty}
-                            bounces={!isEmpty}
-                            showsVerticalScrollIndicator={false}
-                            contentContainerStyle={{ paddingTop: headerHeight, paddingBottom: 32 }}
-                            onScroll={handleScroll(tab)}
-                            scrollEventThrottle={16}
-                            refreshControl={
-                                !isEmpty ? (
-                                    <RefreshControl
-                                        refreshing={refreshing}
-                                        onRefresh={() => loadData(false)}
-                                        tintColor={Colors.primary}
-                                    />
-                                ) : undefined
-                            }
-                        />
+                        <Tabs.Tab name={tab} key={tab}>
+                            <Tabs.FlatList
+                                data={tabPosts}
+                                keyExtractor={(item) => item.id}
+                                renderItem={({ item }) => (
+                                    <View style={{ marginBottom: 16, paddingHorizontal: 16 }}>
+                                        <FeedItem
+                                            post={item}
+                                            onPressOptions={() => handleOptions(item)}
+                                            onPressComment={() => handleCommentPress(item)}
+                                            onPressLike={() => toggleLike(item)}
+                                            onPressVerified={() => setVerifiedModalVisible(true)}
+                                            onPressHammer={() => setHammerModalVisible(true)}
+                                            onPressShare={() => {
+                                                setShareTargetPost(item);
+                                                setShareModalVisible(true);
+                                            }}
+                                            sharedTransitionTag={`post-${item.id}`}
+                                        />
+                                    </View>
+                                )}
+                                ListEmptyComponent={renderEmptyState(tab)}
+                                scrollEnabled={!isEmpty}
+                                bounces={!isEmpty}
+                                showsVerticalScrollIndicator={false}
+                                refreshControl={
+                                    !isEmpty ? (
+                                        <RefreshControl
+                                            refreshing={refreshing}
+                                            onRefresh={() => loadData(false)}
+                                            tintColor={Colors.primary}
+                                        />
+                                    ) : undefined
+                                }
+                            />
+                        </Tabs.Tab>
                     );
                 })}
-            </Animated.ScrollView>
-
-            <Animated.View
-                style={[
-                    styles.headerContainer,
-                    {
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        paddingTop: insets.top,
-                        transform: [{ translateY: headerTranslateY }],
-                        zIndex: 10,
-                    }
-                ]}
-                onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
-            >
-                {renderHeaderContent()}
-            </Animated.View>
+            </Tabs.Container>
         </View>
     );
 }

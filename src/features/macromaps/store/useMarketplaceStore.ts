@@ -143,7 +143,7 @@ export const useMarketplaceStore = create<MarketplaceState>((set, get) => ({
             if (!activeEngineFilters.includes('All')) {
                 engineMatch = activeEngineFilters.some(engine => {
                     if (engine === 'Live') return map.is_live === true;
-                    if (engine === 'Retrospective') return map.is_live === false && map.generation_type === 'update';
+                    if (engine === 'Historical') return map.is_live === false && map.generation_type === 'update';
                     if (engine === 'Created') return map.is_live === false && map.generation_type !== 'update';
                     return false;
                 });

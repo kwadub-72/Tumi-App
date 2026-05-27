@@ -198,7 +198,8 @@ export const ExploreService = {
       stats: {
         meals: parseInt(row.meal_count) || 0,
         workouts: parseInt(row.workout_count) || 0,
-        updates: parseInt(row.update_count) || 0
+        updates: parseInt(row.update_count) || 0,
+        published_maps_count: parseInt(row.published_maps_count) || 0
       }
     } as User;
   }

@@ -23,11 +23,14 @@ const generateDummyLeaderboard = () => [
     { id: '6', rank: 6, name: 'Peteyboy', handle: '@CheterMesservy4', avatar: 'https://i.pravatar.cc/100?img=59', logged: false, trend: 0, trendDir: 'none', record: '6-2', leaf: true, activity: 'hammer' },
 ];
 
-export const TradTribeBattleLeaderboard = () => {
+import { useIsSpectator } from '../../hooks/useTribeRoles';
+
+export const TradTribeBattleLeaderboard = ({ tribeId }: { tribeId?: string }) => {
     const [expanded, setExpanded] = useState(false);
     const [modalInfo, setModalInfo] = useState<{ visible: boolean, title: string, description: string, iconName: any } | null>(null);
     const week = getCompetitionWeek();
     const users = generateDummyLeaderboard();
+    const { isSpectator } = useIsSpectator(tribeId);
 
     const visibleUsers = expanded ? users : users.slice(0, 5);
 
@@ -45,6 +48,13 @@ export const TradTribeBattleLeaderboard = () => {
                 <Image source={{ uri: 'https://i.pravatar.cc/100?img=26' }} style={styles.leagueImage} />
             </View>
             <Text style={styles.weekText}>Week {week}</Text>
+
+            {isSpectator && (
+                <View style={styles.spectatorBanner}>
+                    <MaterialCommunityIcons name="eye-outline" size={16} color="rgba(255,255,255,0.6)" />
+                    <Text style={styles.spectatorText}>Spectator Mode</Text>
+                </View>
+            )}
 
             <View style={styles.tableHeader}>
                 <View style={[styles.headerCol, { flex: 2 }]} />
@@ -197,6 +207,22 @@ const styles = StyleSheet.create({
         color: 'white',
         fontWeight: 'bold',
         fontSize: 14,
+    },
+    spectatorBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        paddingVertical: 4,
+        borderRadius: 12,
+        marginBottom: 10,
+        marginHorizontal: 40,
+    },
+    spectatorText: {
+        color: 'rgba(255,255,255,0.6)',
+        fontSize: 12,
+        fontStyle: 'italic',
     },
     userRow: {
         flexDirection: 'row',

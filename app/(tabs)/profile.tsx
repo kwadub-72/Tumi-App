@@ -1,5 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { Tabs } from 'react-native-collapsible-tab-view';
 import React, { useEffect, useState } from 'react';
 import {
     FlatList,
@@ -34,6 +35,8 @@ import { Colors } from '@/src/shared/theme/Colors';
 import { useUserStore } from '../../store/UserStore';
 import { useUserTribeStore } from '@/src/store/UserTribeStore';
 import { WeightStore } from '@/store/WeightStore';
+import { useProfileStore } from '@/src/store/useProfileStore';
+import { DiscoveryMapCard } from '@/src/features/macromaps/components/DiscoveryMapCard';
 
 const { width, height } = Dimensions.get('window');
 
@@ -46,7 +49,7 @@ const TEST_COLORS = {
     surface: Colors.theme.dust,
 };
 
-type TabType = 'meals' | 'workouts' | 'likes' | 'macros';
+type TabType = 'meals' | 'workouts' | 'macros' | 'maps' | 'likes';
 
 export default function ProfileScreen() {
     const router = useRouter();
@@ -70,39 +73,10 @@ export default function ProfileScreen() {
     const { myTribes, selectedTribe, selectTribe, init: initTribes } = useUserTribeStore();
 
     // Animation & Pager Refs
-    const scrollX = React.useRef(new Animated.Value(0)).current;
-    const scrollY = React.useRef(new Animated.Value(0)).current;
-    const pagerRef = React.useRef<ScrollView>(null);
-    const tabs: TabType[] = ['meals', 'workouts', 'likes', 'macros'];
-
-    // Collapsible header
-    const [headerHeight, setHeaderHeight] = useState(0);
-    // Store each tab's scroll offset so we can restore it on switch
-    const tabScrollOffsets = React.useRef<Record<TabType, number>>({ meals: 0, workouts: 0, likes: 0, macros: 0 });
-    const activeTabRef = React.useRef<TabType>('meals');
-
-    // Derived: translate the header up as user scrolls
-    const headerTranslateY = scrollY.interpolate({
-        inputRange: [0, headerHeight],
-        outputRange: [0, -headerHeight],
-        extrapolate: 'clamp',
-    });
-
-    const handleScroll = (tab: TabType) => (e: any) => {
-        const y = e.nativeEvent.contentOffset.y;
-        tabScrollOffsets.current[tab] = y;
-        // Drive shared scrollY (JS thread is fine here — only affects header transform)
-        scrollY.setValue(Math.max(0, y));
-    };
-
-    const handleTabSwitch = (tab: TabType, index: number) => {
-        activeTabRef.current = tab;
-        setActiveTab(tab);
-        pagerRef.current?.scrollTo({ x: index * width, animated: true });
-        // Restore this tab's previously saved scroll position for the header
-        const savedY = tabScrollOffsets.current[tab];
-        scrollY.setValue(Math.max(0, savedY));
-    };
+    const tabs: TabType[] = ['meals', 'workouts', 'macros', 'maps', 'likes'];
+    
+    // Maps state
+    const { activeProfileMaps, fetchProfileMaps } = useProfileStore();
 
     // Helper to get posts for a given tab
     const getTabPosts = (tab: TabType) => posts.filter(p => {
@@ -125,6 +99,8 @@ export default function ProfileScreen() {
             supabase.from('profiles').select('*').eq('id', session.user.id).single(),
             WeightStore.getEstimatedWeight()
         ]);
+
+        fetchProfileMaps(session.user.id, session.user.id);
 
         setPosts(profilePosts);
         if (profileData) {
@@ -251,7 +227,7 @@ export default function ProfileScreen() {
 
     // Split renderHeader to allow dynamic padding injection
     const renderHeaderContent = () => (
-        <>
+        <View pointerEvents="box-none" style={{ backgroundColor: TEST_COLORS.background, paddingTop: insets.top }}>
             {/* Top Bar (Hamburger) */}
             <View style={styles.topBar}>
                 <View style={{ flex: 1 }} />
@@ -369,55 +345,56 @@ export default function ProfileScreen() {
                     </TouchableOpacity>
                 </View>
             </View>
+        </View>
+    );
 
-            {/* Tabs */}
+    const renderTabBar = (props: any) => (
+        <View style={{ backgroundColor: TEST_COLORS.background }}>
             <View style={styles.tabsContainer}>
                 {tabs.map((tab, index) => (
-                    <TouchableOpacity 
+                    <Pressable 
                         key={tab}
-                        style={[styles.tabItem]} 
+                        style={[
+                            styles.tabItem,
+                            {
+                                borderBottomWidth: 3,
+                                borderBottomColor: activeTab === tab ? Colors.theme.harvestGold : 'transparent',
+                            }
+                        ]} 
                         onPress={() => {
-                            handleTabSwitch(tab, index);
+                            props.onTabPress(tab);
                         }}
                     >
                         {tab === 'meals' || tab === 'workouts' ? (
                             <MaterialCommunityIcons 
                                 name={tab === 'meals' ? 'fire' : 'dumbbell'} 
                                 size={32} 
-                                color={activeTab === tab ? TEST_COLORS.text : '#D4D4D4'} 
+                                color={activeTab === tab ? Colors.theme.harvestGold : Colors.theme.softWhite} 
+                            />
+                        ) : tab === 'maps' ? (
+                            <MaterialCommunityIcons 
+                                name="map-legend" 
+                                size={32} 
+                                color={activeTab === tab ? Colors.theme.harvestGold : Colors.theme.softWhite} 
                             />
                         ) : (
                             <Ionicons 
                                 name={tab === 'likes' ? 'heart' : 'stats-chart'} 
                                 size={32} 
-                                color={activeTab === tab ? TEST_COLORS.text : '#D4D4D4'} 
+                                color={activeTab === tab ? Colors.theme.harvestGold : Colors.theme.softWhite} 
                             />
                         )}
-                        <Text style={styles.tabLabel}>{
-                            tab === 'meals' ? mealsCount : (tab === 'workouts' ? workoutsCount : (tab === 'likes' ? likesCount : macroUpdatesCount))
+                        <Text style={[
+                            styles.tabLabel,
+                            { color: activeTab === tab ? Colors.theme.harvestGold : Colors.theme.softWhite }
+                        ]}>{
+                            tab === 'meals' ? mealsCount : (tab === 'workouts' ? workoutsCount : (tab === 'likes' ? likesCount : (tab === 'maps' ? activeProfileMaps.length : macroUpdatesCount)))
                         }{'\n'}{tab === 'macros' ? 'macros' : tab}</Text>
-                    </TouchableOpacity>
+                    </Pressable>
                 ))}
-                
-                {/* Animated Indicator */}
-                <Animated.View 
-                    style={[
-                        styles.activeIndicator, 
-                        { 
-                            width: (width - 40) / 4 * 0.8,
-                            left: 20 + (width - 40) / 4 * 0.1,
-                            transform: [{
-                                translateX: scrollX.interpolate({
-                                    inputRange: [0, width * (tabs.length - 1)],
-                                    outputRange: [0, (width - 40) / 4 * (tabs.length - 1)]
-                                })
-                            }]
-                        }
-                    ]} 
-                />
             </View>
             <View style={styles.thickDivider} />
-        </>
+        </View>
     );
 
     // Empty State
@@ -441,6 +418,10 @@ export default function ProfileScreen() {
             case 'macros':
                 message = 'Post macros to see it here';
                 icon = <Ionicons name="stats-chart" size={80} color="#D4D4D4" />;
+                break;
+            case 'maps':
+                message = 'Publish a map to see it here';
+                icon = <MaterialCommunityIcons name="map-legend" size={80} color="#D4D4D4" />;
                 break;
         }
 
@@ -483,98 +464,87 @@ export default function ProfileScreen() {
                 post={shareTargetPost}
             />
 
-            {/*
-             * Horizontal pager fills the ENTIRE container from top=0.
-             * Each FlatList has paddingTop=headerHeight so the first item
-             * starts below the floating header. As the user scrolls, the
-             * header translates upward (see below), reclaiming that space.
-             */}
-            <Animated.ScrollView
-                ref={pagerRef as any}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onScroll={Animated.event(
-                    [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-                    { useNativeDriver: true }
-                )}
-                onMomentumScrollEnd={(e) => {
-                    const index = Math.round(e.nativeEvent.contentOffset.x / width);
-                    const newTab = tabs[index];
-                    activeTabRef.current = newTab;
-                    setActiveTab(newTab);
-                    // Restore the header position for this tab
-                    scrollY.setValue(Math.max(0, tabScrollOffsets.current[newTab]));
+            <Tabs.Container
+                renderHeader={renderHeaderContent}
+                renderTabBar={renderTabBar}
+                headerContainerStyle={{ backgroundColor: TEST_COLORS.background, shadowOpacity: 0, elevation: 0 }}
+                onIndexChange={(index) => {
+                    setActiveTab(tabs[index]);
                 }}
-                scrollEventThrottle={16}
-                style={StyleSheet.absoluteFillObject}
             >
                 {tabs.map((tab) => {
+                    if (tab === 'maps') {
+                        const isEmpty = activeProfileMaps.length === 0;
+                        return (
+                            <Tabs.Tab name={tab} key={tab}>
+                                <Tabs.FlatList
+                                    data={activeProfileMaps}
+                                    keyExtractor={(item: any) => item.id}
+                                    renderItem={({ item }: { item: any }) => (
+                                        <View style={{ marginBottom: 16, paddingHorizontal: 16 }}>
+                                            <DiscoveryMapCard map={item} />
+                                        </View>
+                                    )}
+                                    ListEmptyComponent={getEmptyStateForTab(tab)}
+                                    scrollEnabled={!isEmpty}
+                                    bounces={!isEmpty}
+                                    showsVerticalScrollIndicator={false}
+                                    refreshControl={
+                                        !isEmpty ? (
+                                            <RefreshControl
+                                                refreshing={refreshing}
+                                                onRefresh={loadData}
+                                                tintColor={TEST_COLORS.text}
+                                            />
+                                        ) : undefined
+                                    }
+                                />
+                            </Tabs.Tab>
+                        );
+                    }
+
                     const tabPosts = getTabPosts(tab);
                     const isEmpty = tabPosts.length === 0;
                     return (
-                        <FlatList
-                            key={tab}
-                            style={{ width }}
-                            data={tabPosts}
-                            keyExtractor={(item) => item.id}
-                            renderItem={({ item }) => (
-                                <View style={{ marginBottom: 16, paddingHorizontal: 16 }}>
-                                    <FeedItem
-                                        post={item}
-                                        onPressOptions={() => handleOptions(item)}
-                                        onPressComment={() => handleCommentPress(item)}
-                                        onPressLike={() => toggleLike(item)}
-                                        onPressVerified={() => setVerifiedModalVisible(true)}
-                                        onPressHammer={() => setHammerModalVisible(true)}
-                                        onPressShare={() => {
-                                            setShareTargetPost(item);
-                                            setShareModalVisible(true);
-                                        }}
-                                        sharedTransitionTag={`post-${item.id}`}
-                                    />
-                                </View>
-                            )}
-                            ListEmptyComponent={getEmptyStateForTab(tab)}
-                            scrollEnabled={!isEmpty}
-                            bounces={!isEmpty}
-                            showsVerticalScrollIndicator={false}
-                            // paddingTop reserves space under the floating header
-                            contentContainerStyle={{ paddingTop: headerHeight, paddingBottom: 32 }}
-                            onScroll={handleScroll(tab)}
-                            scrollEventThrottle={16}
-                            refreshControl={
-                                !isEmpty ? (
-                                    <RefreshControl
-                                        refreshing={refreshing}
-                                        onRefresh={loadData}
-                                        tintColor={TEST_COLORS.text}
-                                    />
-                                ) : undefined
-                            }
-                        />
+                        <Tabs.Tab name={tab} key={tab}>
+                            <Tabs.FlatList
+                                data={tabPosts}
+                                keyExtractor={(item) => item.id}
+                                renderItem={({ item }) => (
+                                    <View style={{ marginBottom: 16, paddingHorizontal: 16 }}>
+                                        <FeedItem
+                                            post={item}
+                                            onPressOptions={() => handleOptions(item)}
+                                            onPressComment={() => handleCommentPress(item)}
+                                            onPressLike={() => toggleLike(item)}
+                                            onPressVerified={() => setVerifiedModalVisible(true)}
+                                            onPressHammer={() => setHammerModalVisible(true)}
+                                            onPressShare={() => {
+                                                setShareTargetPost(item);
+                                                setShareModalVisible(true);
+                                            }}
+                                            sharedTransitionTag={`post-${item.id}`}
+                                        />
+                                    </View>
+                                )}
+                                ListEmptyComponent={getEmptyStateForTab(tab)}
+                                scrollEnabled={!isEmpty}
+                                bounces={!isEmpty}
+                                showsVerticalScrollIndicator={false}
+                                refreshControl={
+                                    !isEmpty ? (
+                                        <RefreshControl
+                                            refreshing={refreshing}
+                                            onRefresh={loadData}
+                                            tintColor={TEST_COLORS.text}
+                                        />
+                                    ) : undefined
+                                }
+                            />
+                        </Tabs.Tab>
                     );
                 })}
-            </Animated.ScrollView>
-
-            {/* Floating header — sits on top, translates up as user scrolls */}
-            <Animated.View
-                style={[
-                    styles.headerContainer,
-                    {
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        paddingTop: insets.top,
-                        transform: [{ translateY: headerTranslateY }],
-                        zIndex: 10,
-                    }
-                ]}
-                onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
-            >
-                {renderHeaderContent()}
-            </Animated.View>
+            </Tabs.Container>
         </View>
     );
 }

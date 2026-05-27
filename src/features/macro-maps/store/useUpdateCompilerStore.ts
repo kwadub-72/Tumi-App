@@ -366,7 +366,7 @@ export const useUpdateCompilerStore = create<UpdateCompilerState>((set, get) => 
             const isMocked = selectedStartLogId?.startsWith('mock') || selectedEndLogId?.startsWith('mock');
 
             if (isMocked || !userId) {
-                // Form a structured retrospective sequence of 3 milestones
+                // Form a structured historical sequence of 3 milestones
                 const startLog = startLogs.find(l => l.id === selectedStartLogId) || startLogs[0];
                 const endLog = endLogs.find(l => l.id === selectedEndLogId) || endLogs[0];
 

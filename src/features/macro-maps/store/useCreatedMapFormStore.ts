@@ -6,16 +6,16 @@ export interface CheckpointFormState {
     
     // Sign toggles + absolute values to support refeed/deficit scaling
     weight_delta_sign: '+' | '-';
-    weight_delta_val: number;
+    weight_delta_val: string;
     
     calorie_delta_sign: '+' | '-';
-    calorie_delta_val: number; // Value representing % Calorie reduction/increase (e.g. 10 for 10%)
+    calorie_delta_val: string; // Value representing % Calorie reduction/increase (e.g. 10 for 10%)
     
-    time_elapsed_val: number; // Value in current timeUnit (days or weeks)
+    time_elapsed_val: string; // Value in current timeUnit (days or weeks)
     
-    protein_ratio: number; // Stored as whole number (e.g. 35 for 35%)
-    carbs_ratio: number;   // Stored as whole number (e.g. 45 for 45%)
-    fats_ratio: number;    // Stored as whole number (e.g. 20 for 20%)
+    protein_ratio: string; // Stored as string (e.g. "35" for 35%)
+    carbs_ratio: string;   // Stored as string (e.g. "45" for 45%)
+    fats_ratio: string;    // Stored as string (e.g. "20" for 20%)
 }
 
 interface CreatedMapFormState {
@@ -40,10 +40,10 @@ interface CreatedMapFormState {
     // Validation actions
     validateMacroRatios: () => void;
     validateForm: () => boolean;
-    validateTimeBasedCheckpoint: (timeElapsedVal: number) => { isValid: boolean; error?: string };
+    validateTimeBasedCheckpoint: (timeElapsedVal: string) => { isValid: boolean; error?: string };
     
     // Derived state selector
-    calculateTimeRemaining: (timeElapsedVal: number) => string;
+    calculateTimeRemaining: (timeElapsedVal: string) => string;
     
     resetForm: () => void;
 }
@@ -52,13 +52,13 @@ const defaultCheckpoint = (goalSign: '+' | '-' = '-'): CheckpointFormState => ({
     trigger_type: 'TIME_BASED',
     intent_tag: 'PLATEAU_BREAK',
     weight_delta_sign: goalSign,
-    weight_delta_val: 2,
+    weight_delta_val: '2',
     calorie_delta_sign: goalSign,
-    calorie_delta_val: 10, // Default to 10% Calorie delta
-    time_elapsed_val: 7,
-    protein_ratio: 35, // Default whole numbers
-    carbs_ratio: 45,
-    fats_ratio: 20
+    calorie_delta_val: '10', // Default to 10% Calorie delta
+    time_elapsed_val: '7',
+    protein_ratio: '35', // Default whole numbers
+    carbs_ratio: '45',
+    fats_ratio: '20'
 });
 
 const calculateMacroSumError = (checkpoints: CheckpointFormState[]): string | null => {
@@ -124,19 +124,22 @@ export const useCreatedMapFormStore = create<CreatedMapFormState>((set, get) => 
         set({ formValidationError: calculateFormValidationError(mapName, weeks, checkpoints) });
     },
     
-    setTimeUnit: (unit) => set((state) => {
-        const updatedCheckpoints = state.checkpoints.map(cp => {
-            let newVal = cp.time_elapsed_val;
-            if (unit === 'days' && state.timeUnit === 'weeks') {
-                newVal = Math.round(cp.time_elapsed_val * 7);
-            } else if (unit === 'weeks' && state.timeUnit === 'days') {
-                newVal = Number((cp.time_elapsed_val / 7).toFixed(1));
+    setTimeUnit: (unit) => {
+        const { checkpoints, timeUnit, updateCheckpoint } = get();
+        checkpoints.forEach((cp, index) => {
+            if (cp.trigger_type === 'TIME_BASED') {
+                const currentT = parseFloat(cp.time_elapsed_val) || 0;
+                let newVal = currentT;
+                if (unit === 'days' && timeUnit === 'weeks') {
+                    newVal = Math.round(currentT * 7);
+                } else if (unit === 'weeks' && timeUnit === 'days') {
+                    newVal = Number((currentT / 7).toFixed(1));
+                }
+                updateCheckpoint(index, { time_elapsed_val: newVal.toString() });
             }
-            return { ...cp, time_elapsed_val: newVal };
         });
-
-        return { timeUnit: unit, checkpoints: updatedCheckpoints };
-    }),
+        set({ timeUnit: unit });
+    },
 
     addCheckpoint: () => set((state) => {
         const sign = state.goalType === 'BULK' ? '+' : '-';
@@ -179,7 +182,8 @@ export const useCreatedMapFormStore = create<CreatedMapFormState>((set, get) => 
     validateTimeBasedCheckpoint: (timeElapsedVal) => {
         const { totalDurationWeeks, timeUnit } = get();
         const maxDays = totalDurationWeeks * 7;
-        const normalizedDays = timeUnit === 'weeks' ? timeElapsedVal * 7 : timeElapsedVal;
+        const val = parseFloat(timeElapsedVal) || 0;
+        const normalizedDays = timeUnit === 'weeks' ? val * 7 : val;
 
         if (normalizedDays > maxDays) {
             return {
@@ -199,7 +203,8 @@ export const useCreatedMapFormStore = create<CreatedMapFormState>((set, get) => 
     calculateTimeRemaining: (timeElapsedVal) => {
         const { totalDurationWeeks, timeUnit } = get();
         const maxDays = totalDurationWeeks * 7;
-        const normalizedDays = timeUnit === 'weeks' ? timeElapsedVal * 7 : timeElapsedVal;
+        const val = parseFloat(timeElapsedVal) || 0;
+        const normalizedDays = timeUnit === 'weeks' ? val * 7 : val;
         
         const remainingDays = Math.max(0, maxDays - normalizedDays);
         

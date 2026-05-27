@@ -18,11 +18,13 @@ const getCompetitionWeek = () => {
     const weeks = Math.floor(diffDays / 7) + 1;
     return Math.max(1, weeks);
 };
+import { useIsSpectator } from '../../hooks/useTribeRoles';
 
-export const H2HLeaderboardDashboard = () => {
-    const tribeId = 'b0000000-0000-0000-0000-000000000004'; // The Cut Squad ID
+export const H2HLeaderboardDashboard = ({ tribeId: propsTribeId }: { tribeId?: string }) => {
+    const tribeId = propsTribeId || 'b0000000-0000-0000-0000-000000000004'; // The Cut Squad ID
     const { loading, data, header, competition, mutateRecord } = useTribeScoreboard(tribeId);
     const { navigateToProfile } = useProfileNavigation();
+    const { isSpectator } = useIsSpectator(tribeId);
     
     const [expanded, setExpanded] = useState(false);
     const [modalInfo, setModalInfo] = useState<{ visible: boolean, title: string, description: string, iconName: any } | null>(null);
@@ -49,6 +51,13 @@ export const H2HLeaderboardDashboard = () => {
                 <Image source={{ uri: 'https://i.pravatar.cc/100?img=26' }} style={styles.leagueImage} />
             </View>
             <Text style={styles.weekText}>Week {week}</Text>
+
+            {isSpectator && (
+                <View style={styles.spectatorBanner}>
+                    <MaterialCommunityIcons name="eye-outline" size={16} color="rgba(255,255,255,0.6)" />
+                    <Text style={styles.spectatorText}>Spectator Mode</Text>
+                </View>
+            )}
 
             {loading ? (
                 <View style={styles.loaderContainer}>
@@ -260,6 +269,22 @@ const styles = StyleSheet.create({
         fontWeight: '900',
         fontSize: 10,
         letterSpacing: 1.2,
+    },
+    spectatorBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        paddingVertical: 4,
+        borderRadius: 12,
+        marginBottom: 10,
+        marginHorizontal: 40,
+    },
+    spectatorText: {
+        color: 'rgba(255,255,255,0.6)',
+        fontSize: 12,
+        fontStyle: 'italic',
     },
     rowsWrapper: {
         gap: 2,

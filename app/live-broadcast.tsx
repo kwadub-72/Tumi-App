@@ -1,24 +1,33 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ActivityIndicator, TextInput, KeyboardAvoidingView, ScrollView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '@/src/shared/theme/Colors';
 import { useMacroMapPromptStore } from '@/src/features/macromaps/store/useMacroMapPromptStore';
+import { useAuthStore } from '@/store/AuthStore';
 import { LinearGradient } from 'expo-linear-gradient';
 
 export default function LiveMapBroadcastStudioScreen() {
     const router = useRouter();
-    const { is_live, checkActiveBroadcast, toggleLiveBroadcast } = useMacroMapPromptStore();
+    const { is_live, checkActiveStream, toggleLiveBroadcast, activeBroadcast } = useMacroMapPromptStore();
     const [loading, setLoading] = React.useState(false);
+    const [mapName, setMapName] = React.useState('');
+    const [selectedGoal, setSelectedGoal] = React.useState<'Cut' | 'Bulk' | 'Maintenance' | null>(null);
+    const [isFocused, setIsFocused] = React.useState(false);
 
     useEffect(() => {
-        checkActiveBroadcast();
+        const userId = useAuthStore.getState().session?.user?.id;
+        if (userId) {
+            checkActiveStream(userId);
+        }
     }, []);
+
+    const isReady = mapName.trim().length > 0 && selectedGoal !== null;
 
     const handleToggle = async () => {
         setLoading(true);
         try {
-            await toggleLiveBroadcast();
+            await toggleLiveBroadcast(mapName, selectedGoal || 'Maintenance');
         } finally {
             setLoading(false);
         }
@@ -34,84 +43,144 @@ export default function LiveMapBroadcastStudioScreen() {
                 <View style={{ width: 28 }} />
             </View>
 
-            <View style={styles.content}>
-                {/* Status Indicator */}
-                <View style={styles.statusContainer}>
-                    {is_live ? (
-                        <View style={[styles.liveBadge, styles.liveBadgeActive]}>
-                            <View style={styles.glowingDot} />
-                            <Text style={styles.liveText}>🔴 LIVE BROADCAST</Text>
-                        </View>
-                    ) : (
-                        <View style={[styles.liveBadge, styles.liveBadgeInactive]}>
-                            <Text style={styles.liveTextOffline}>⚪ STANDBY MODE</Text>
-                        </View>
-                    )}
-                </View>
-
-                {/* Dashboard Card */}
-                <View style={styles.card}>
-                    <View style={styles.iconContainer}>
-                        <MaterialCommunityIcons 
-                            name={is_live ? "satellite-uplink" : "satellite-variant"} 
-                            size={64} 
-                            color={is_live ? Colors.theme.naturalGreen : Colors.theme.dust} 
-                        />
-                    </View>
-                    
-                    <Text style={styles.cardTitle}>
-                        {is_live ? "Broadcasting Active Map" : "Broadcast Offline"}
-                    </Text>
-                    
-                    <Text style={styles.cardSubtitle}>
-                        {is_live 
-                            ? "Your macro updates will be sent to subscribers as you make them"
-                            : "Launch your live broadcast to send subscribers real-time macro updates"
-                        }
-                    </Text>
-
-                    {/* Subscriber Context Card */}
-                    <View style={styles.infoBox}>
-                        <MaterialCommunityIcons name="information" size={20} color={Colors.theme.harvestGold} />
-                        <Text style={styles.infoText}>
-                            Active subscribers will receive automatic scaling prompts to align their macros with your journey in real-time
-                        </Text>
-                    </View>
-                </View>
-
-                {/* Massive Premium Toggle Button */}
-                <TouchableOpacity 
-                    activeOpacity={0.85} 
-                    onPress={handleToggle} 
-                    disabled={loading}
-                    style={styles.toggleButtonContainer}
+            <KeyboardAvoidingView 
+                style={{ flex: 1 }} 
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            >
+                <ScrollView 
+                    contentContainerStyle={styles.contentContainer} 
+                    showsVerticalScrollIndicator={false}
                 >
-                    <LinearGradient
-                        colors={is_live ? ['#8B4513', '#6E320A'] : ['#DAA520', '#B8860B']}
-                        style={styles.toggleButton}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                    >
-                        {loading ? (
-                            <ActivityIndicator size="small" color={is_live ? "#FFFFFF" : Colors.theme.matteBlack} />
+                    {/* Status Indicator */}
+                    <View style={styles.statusContainer}>
+                        {is_live ? (
+                            <View style={[styles.liveBadge, styles.liveBadgeActive]}>
+                                <View style={styles.glowingDot} />
+                                <Text style={styles.liveText}>🔴 LIVE STREAM</Text>
+                            </View>
                         ) : (
-                            <>
-                                <MaterialCommunityIcons 
-                                    name={is_live ? "stop-circle" : "play-circle"} 
-                                    size={28} 
-                                    color={is_live ? "#FFFFFF" : Colors.theme.matteBlack} 
-                                />
-                                <Text style={[
-                                    styles.toggleButtonText, 
-                                    { color: is_live ? "#FFFFFF" : Colors.theme.matteBlack }
-                                ]}>
-                                    {is_live ? "End Live Broadcast" : "Start Live Broadcast"}
-                                </Text>
-                            </>
+                            <View style={[styles.liveBadge, styles.liveBadgeInactive]}>
+                                <Text style={styles.liveTextOffline}>⚪ STANDBY MODE</Text>
+                            </View>
                         )}
-                    </LinearGradient>
-                </TouchableOpacity>
-            </View>
+                    </View>
+
+                    {/* Dashboard Card */}
+                    <View style={styles.card}>
+                        <View style={styles.iconContainer}>
+                            <MaterialCommunityIcons 
+                                name={is_live ? "satellite-uplink" : "satellite-variant"} 
+                                size={64} 
+                                color={is_live ? Colors.theme.naturalGreen : Colors.theme.dust} 
+                            />
+                        </View>
+                        
+                        {is_live && (
+                            <Text style={styles.activeBroadcastName}>
+                                {mapName || activeBroadcast?.name || 'Live Map'}
+                            </Text>
+                        )}
+                        
+                        <Text style={styles.cardTitle}>
+                            {is_live ? "Map Stream Live" : "Stream Offline"}
+                        </Text>
+                        
+                        <Text style={styles.cardSubtitle}>
+                            {is_live 
+                                ? "Your macro updates will be sent to subscribers as you make them"
+                                : "Launch your live stream to send subscribers real-time macro updates"
+                            }
+                        </Text>
+
+                        {/* Input Fields (only when standby/offline) */}
+                        {!is_live && (
+                            <View style={styles.inputSection}>
+                                <Text style={styles.inputLabel}>LIVE MAP NAME</Text>
+                                <TextInput
+                                    style={[
+                                        styles.textInput,
+                                        isFocused && { borderColor: Colors.theme.harvestGold }
+                                    ]}
+                                    value={mapName}
+                                    onChangeText={setMapName}
+                                    placeholder="Enter map name.."
+                                    placeholderTextColor="rgba(255, 255, 255, 0.3)"
+                                    onFocus={() => setIsFocused(true)}
+                                    onBlur={() => setIsFocused(false)}
+                                />
+
+                                <Text style={styles.inputLabel}>CHOOSE GOAL</Text>
+                                <View style={styles.chipsRow}>
+                                    {(['Cut', 'Bulk', 'Maintenance'] as const).map((goal) => {
+                                        const isSelected = selectedGoal === goal;
+                                        return (
+                                            <TouchableOpacity
+                                                key={goal}
+                                                style={[
+                                                    styles.chip,
+                                                    isSelected && styles.chipActive
+                                                ]}
+                                                onPress={() => setSelectedGoal(goal)}
+                                            >
+                                                <Text style={[
+                                                    styles.chipText,
+                                                    isSelected && styles.chipTextActive
+                                                ]}>
+                                                    {goal === 'Maintenance' ? 'Maint.' : goal}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                            </View>
+                        )}
+
+                        {/* Subscriber Context Card */}
+                        <View style={styles.infoBox}>
+                            <MaterialCommunityIcons name="information" size={20} color={Colors.theme.harvestGold} />
+                            <Text style={styles.infoText}>
+                                Active subscribers will receive automatic scaling prompts to align their macros with your journey in real-time
+                            </Text>
+                        </View>
+                    </View>
+
+                    {/* Massive Premium Toggle Button */}
+                    <TouchableOpacity 
+                        activeOpacity={0.85} 
+                        onPress={handleToggle} 
+                        disabled={loading || (!is_live && !isReady)} 
+                        style={[
+                            styles.toggleButtonContainer,
+                            (!is_live && !isReady) && { opacity: 0.5 }
+                        ]}
+                    >
+                        <LinearGradient
+                            colors={is_live ? ['#8B4513', '#6E320A'] : ['#DAA520', '#B8860B']}
+                            style={styles.toggleButton}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                        >
+                            {loading ? (
+                                <ActivityIndicator size="small" color={is_live ? "#FFFFFF" : Colors.theme.matteBlack} />
+                            ) : (
+                                <>
+                                    <MaterialCommunityIcons 
+                                        name={is_live ? "stop-circle" : "play-circle"} 
+                                        size={28} 
+                                        color={is_live ? "#FFFFFF" : Colors.theme.matteBlack} 
+                                    />
+                                    <Text style={[
+                                        styles.toggleButtonText, 
+                                        { color: is_live ? "#FFFFFF" : Colors.theme.matteBlack }
+                                    ]}>
+                                        {is_live ? "End Live Stream" : "Stream macro updates"}
+                                    </Text>
+                                </>
+                            )}
+                        </LinearGradient>
+                    </TouchableOpacity>
+                </ScrollView>
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 }
@@ -139,15 +208,16 @@ const styles = StyleSheet.create({
         color: Colors.theme.softWhite,
         letterSpacing: 0.5,
     },
-    content: {
-        flex: 1,
+    contentContainer: {
+        flexGrow: 1,
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 30,
         paddingBottom: 40,
+        paddingTop: 20,
     },
     statusContainer: {
-        marginBottom: 30,
+        marginBottom: 20,
         alignItems: 'center',
     },
     liveBadge: {
@@ -194,7 +264,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.05)',
-        marginBottom: 40,
+        marginBottom: 30,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.3,
@@ -202,19 +272,19 @@ const styles = StyleSheet.create({
         elevation: 8,
     },
     iconContainer: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
+        width: 80,
+        height: 80,
+        borderRadius: 40,
         backgroundColor: 'rgba(255, 255, 255, 0.03)',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 20,
+        marginBottom: 15,
     },
     cardTitle: {
         fontSize: 22,
         fontWeight: 'bold',
         color: Colors.theme.softWhite,
-        marginBottom: 12,
+        marginBottom: 8,
         textAlign: 'center',
     },
     cardSubtitle: {
@@ -222,8 +292,59 @@ const styles = StyleSheet.create({
         color: Colors.theme.dust,
         textAlign: 'center',
         lineHeight: 20,
-        marginBottom: 24,
+        marginBottom: 20,
         paddingHorizontal: 10,
+    },
+    inputSection: {
+        width: '100%',
+        marginVertical: 15,
+    },
+    inputLabel: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: Colors.theme.harvestGold,
+        letterSpacing: 1,
+        marginBottom: 8,
+    },
+    textInput: {
+        width: '100%',
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        fontSize: 15,
+        color: Colors.theme.softWhite,
+        marginBottom: 20,
+    },
+    chipsRow: {
+        flexDirection: 'row',
+        gap: 10,
+        width: '100%',
+    },
+    chip: {
+        flex: 1,
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderRadius: 12,
+        paddingVertical: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    chipActive: {
+        backgroundColor: 'rgba(218, 165, 32, 0.1)',
+        borderColor: Colors.theme.harvestGold,
+    },
+    chipText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: Colors.theme.dust,
+    },
+    chipTextActive: {
+        color: Colors.theme.harvestGold,
+        fontWeight: 'bold',
     },
     infoBox: {
         flexDirection: 'row',
@@ -234,6 +355,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: 'rgba(218, 165, 32, 0.15)',
         gap: 12,
+        width: '100%',
     },
     infoText: {
         flex: 1,
@@ -263,4 +385,11 @@ const styles = StyleSheet.create({
         fontWeight: '900',
         letterSpacing: 0.5,
     },
+    activeBroadcastName: {
+        fontSize: 36,
+        fontWeight: 'bold',
+        color: Colors.theme.harvestGold,
+        marginBottom: 8,
+        textAlign: 'center',
+    }
 });

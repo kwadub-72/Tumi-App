@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, ActivityIndicator, Pressable, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '@/src/shared/theme/Colors';
@@ -23,37 +23,42 @@ export default function MapPreviewScreen() {
     const router = useRouter();
     
     const [checkpoints, setCheckpoints] = useState<CheckpointNode[]>([]);
+    const [mapData, setMapData] = useState<{ engine_type: string; is_live: boolean } | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         if (map_id) {
-            fetchCheckpoints();
+            fetchData();
         }
     }, [map_id]);
 
-    const fetchCheckpoints = async () => {
+    const fetchData = async () => {
         setLoading(true);
         try {
-            const { data, error } = await supabase
-                .from('macro_map_checkpoints')
-                .select('*')
-                .eq('map_id', map_id)
-                .order('sequence_index', { ascending: true });
+            const [checkpointsRes, mapRes] = await Promise.all([
+                supabase
+                    .from('macro_map_checkpoints')
+                    .select('*')
+                    .eq('map_id', map_id)
+                    .order('sequence_index', { ascending: true }),
+                supabase
+                    .from('macro_maps')
+                    .select('engine_type, is_live')
+                    .eq('id', map_id)
+                    .single()
+            ]);
 
-            if (!error && data) {
-                setCheckpoints(data);
+            if (!checkpointsRes.error && checkpointsRes.data) {
+                setCheckpoints(checkpointsRes.data);
+            }
+            if (!mapRes.error && mapRes.data) {
+                setMapData(mapRes.data as any);
             }
         } catch (err) {
             console.error(err);
         } finally {
             setLoading(false);
         }
-    };
-
-    const getIntentInfo = (tag: string) => {
-        if (tag === 'CUT' || tag === 'weight-down') return { text: 'Cut', icon: 'trending-down' };
-        if (tag === 'BULK' || tag === 'weight-up') return { text: 'Bulk', icon: 'trending-up' };
-        return { text: 'Maintain', icon: 'minus' };
     };
 
     return (
@@ -66,6 +71,17 @@ export default function MapPreviewScreen() {
                 <View style={{ width: 28 }} />
             </View>
 
+            {mapData?.engine_type === 'LIVE' && (
+                <View style={[
+                    styles.broadcastBanner, 
+                    { backgroundColor: mapData.is_live ? Colors.theme.naturalGreen : Colors.theme.burntSienna }
+                ]}>
+                    <Text style={styles.broadcastBannerText}>
+                        {mapData.is_live ? 'Map Stream Live' : 'Stream Concluded'}
+                    </Text>
+                </View>
+            )}
+
             {loading ? (
                 <View style={styles.center}>
                     <ActivityIndicator size="large" color={Colors.theme.harvestGold} />
@@ -74,7 +90,7 @@ export default function MapPreviewScreen() {
                 <ScrollView contentContainerStyle={styles.content}>
                     <View style={styles.listHeader}>
                         <Text style={styles.listTitle}>Map Checkpoints</Text>
-                        <Text style={styles.listSubtitle}>Review the sequential milestones and structural trajectory of this map before subscribing.</Text>
+                        <Text style={styles.listSubtitle}>Review the map checkpoints and updates before subscribing.</Text>
                     </View>
 
                     {checkpoints.length === 0 ? (
@@ -84,9 +100,41 @@ export default function MapPreviewScreen() {
                     ) : (
                         <View style={styles.timelineWrapper}>
                             {checkpoints.map((cp, index) => {
-                                const intent = getIntentInfo(cp.intent_tag);
-                                const calShift = Number(cp.calorie_delta_pct);
+                                const calShift = Number(cp.calorie_delta_pct) * 100;
                                 const isPositiveCal = calShift > 0;
+                                const prevCp = index > 0 ? checkpoints[index - 1] : undefined;
+
+                                const renderMacroBlock = (letter: string, currentRatio: number, prevRatio?: number) => {
+                                    const val = Math.round(Number(currentRatio) * 100);
+                                    const prevVal = prevRatio !== undefined ? Math.round(Number(prevRatio) * 100) : null;
+                                    let diff = prevVal !== null ? val - prevVal : 0;
+                                    
+                                    let deltaText = '(-)';
+                                    let deltaColor = Colors.theme.dust;
+                                    
+                                    if (prevVal !== null && diff > 0) {
+                                        deltaText = `(+${diff})`;
+                                        deltaColor = Colors.theme.oliveDrab;
+                                    } else if (prevVal !== null && diff < 0) {
+                                        deltaText = `(${diff})`;
+                                        deltaColor = Colors.theme.burntSienna;
+                                    }
+
+                                    return (
+                                        <View style={styles.macroBlock}>
+                                            <View style={styles.macroBubble}>
+                                                <Text style={styles.macroBubbleText}>{letter}</Text>
+                                            </View>
+                                            <Text 
+                                                style={styles.macroText} 
+                                                numberOfLines={1} 
+                                                adjustsFontSizeToFit
+                                            >
+                                                {val}% <Text style={{ color: deltaColor, fontSize: 13 }}>{deltaText}</Text>
+                                            </Text>
+                                        </View>
+                                    );
+                                };
                                 
                                 return (
                                     <View key={cp.id} style={styles.checkpointContainer}>
@@ -97,52 +145,45 @@ export default function MapPreviewScreen() {
                                         <View style={styles.checkpointCard}>
                                             <View style={styles.cardHeader}>
                                                 <Text style={styles.dateText}>
-                                                    Milestone {cp.sequence_index}
+                                                    {cp.sequence_index === 0 ? "Starting point" : `Checkpoint #${cp.sequence_index}`}
                                                 </Text>
-                                                <View style={styles.intentBadge}>
-                                                    <MaterialCommunityIcons 
-                                                        name={intent.icon as any} 
-                                                        size={14} 
-                                                        color={Colors.theme.matteBlack} 
-                                                    />
-                                                    <Text style={styles.intentText}>{intent.text}</Text>
-                                                </View>
                                             </View>
 
                                             <View style={styles.metricsRow}>
                                                 <View style={styles.metricItem}>
-                                                    <Text style={styles.metricLabel}>Weight Shift</Text>
+                                                    <Text style={styles.metricLabel}>Weight Trigger</Text>
                                                     <Text style={[styles.metricValue, { color: Colors.theme.dust }]}>
-                                                        {cp.trigger_weight_delta_pct ? `${cp.trigger_weight_delta_pct > 0 ? '+' : ''}${cp.trigger_weight_delta_pct}%` : 'N/A'}
+                                                        {cp.trigger_weight_delta_pct !== null ? `${cp.trigger_weight_delta_pct > 0 ? '+' : ''}${(Number(cp.trigger_weight_delta_pct) * 100).toFixed(1)}%` : 'N/A'}
                                                     </Text>
                                                 </View>
                                                 <View style={styles.metricItem}>
-                                                    <Text style={styles.metricLabel}>Calorie Target Shift</Text>
+                                                    <Text style={styles.metricLabel}>Calorie Update</Text>
                                                     <Text style={[
                                                         styles.metricValue, 
                                                         { color: isPositiveCal ? Colors.theme.oliveDrab : (calShift < 0 ? Colors.theme.burntSienna : Colors.theme.softWhite) }
                                                     ]}>
-                                                        {isPositiveCal ? '+' : ''}{calShift}%
+                                                        {isPositiveCal ? '+' : ''}{calShift.toFixed(2)}%
                                                     </Text>
                                                 </View>
                                             </View>
 
-                                            <View style={styles.macroSplitRow}>
-                                                <Text style={styles.macroLabel}>Macro Targets</Text>
+                                            <View style={styles.macroContainer}>
+                                                <Text style={styles.macroLabel}>Calorie Breakdown</Text>
                                                 <View style={styles.macroValues}>
-                                                    <Text style={styles.macroText}>P: {Math.round(Number(cp.protein_ratio) * 100)}%</Text>
-                                                    <Text style={styles.dot}>•</Text>
-                                                    <Text style={styles.macroText}>C: {Math.round(Number(cp.carbs_ratio) * 100)}%</Text>
-                                                    <Text style={styles.dot}>•</Text>
-                                                    <Text style={styles.macroText}>F: {Math.round(Number(cp.fats_ratio) * 100)}%</Text>
+                                                    {renderMacroBlock('P', cp.protein_ratio, prevCp?.protein_ratio)}
+                                                    {renderMacroBlock('C', cp.carbs_ratio, prevCp?.carbs_ratio)}
+                                                    {renderMacroBlock('F', cp.fats_ratio, prevCp?.fats_ratio)}
                                                 </View>
                                             </View>
 
                                             {cp.is_outlier_flare && (
-                                                <View style={styles.flareBox}>
+                                                <Pressable 
+                                                    style={styles.flareBox}
+                                                    onPress={() => Alert.alert("Caution: Creator Flagged", "Creator flagged this update as an outlier or accidental. We suggest to skip it.")}
+                                                >
                                                     <Ionicons name="warning" size={16} color={Colors.theme.burntSienna} />
-                                                    <Text style={styles.flareText}>Outlier Flare Detected</Text>
-                                                </View>
+                                                    <Text style={styles.flareText}>Caution: Creator Flagged</Text>
+                                                </Pressable>
                                             )}
                                         </View>
                                     </View>
@@ -292,29 +333,43 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
     },
-    macroSplitRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+    macroContainer: {
+        marginBottom: 8,
     },
     macroLabel: {
         color: Colors.theme.dust,
-        fontSize: 13,
-        fontWeight: '600',
+        fontSize: 12,
+        marginBottom: 8,
     },
     macroValues: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        justifyContent: 'space-between',
+    },
+    macroBlock: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexShrink: 1,
+    },
+    macroBubble: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: Colors.theme.harvestGold,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 4,
+    },
+    macroBubbleText: {
+        color: Colors.theme.matteBlack,
+        fontSize: 10,
+        fontWeight: 'bold',
     },
     macroText: {
         color: Colors.theme.softWhite,
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: 'bold',
-    },
-    dot: {
-        color: 'rgba(255, 255, 255, 0.2)',
-        fontSize: 14,
+        flexShrink: 1,
     },
     flareBox: {
         flexDirection: 'row',
@@ -354,5 +409,18 @@ const styles = StyleSheet.create({
         color: Colors.theme.matteBlack,
         fontSize: 18,
         fontWeight: 'bold',
+    },
+    broadcastBanner: {
+        width: '100%',
+        paddingVertical: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    broadcastBannerText: {
+        color: Colors.theme.softWhite,
+        fontSize: 15,
+        fontWeight: '900',
+        letterSpacing: 0.5,
+        textTransform: 'uppercase',
     }
 });

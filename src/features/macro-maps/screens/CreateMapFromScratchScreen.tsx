@@ -76,7 +76,8 @@ export function CreateMapFromScratchScreen({
     const checkBmrBreach = (): boolean => {
         if (!bmr) return false;
         return checkpoints.some((cp) => {
-            const calDeltaVal = Math.round(baselineCals * (cp.calorie_delta_val / 100));
+            const cDelta = parseFloat(cp.calorie_delta_val) || 0;
+            const calDeltaVal = Math.round(baselineCals * (cDelta / 100));
             const deltaValue = cp.calorie_delta_sign === '+' ? calDeltaVal : -calDeltaVal;
             const proposedCals = baselineCals + deltaValue;
             return proposedCals < bmr;
@@ -152,20 +153,27 @@ export function CreateMapFromScratchScreen({
 
             // 2. Insert checkpoints
             const checkpointsToInsert = checkpoints.map((cp, idx) => {
-                const weightDelta = cp.weight_delta_sign === '+' ? cp.weight_delta_val : -cp.weight_delta_val;
-                const calorieDeltaPct = cp.calorie_delta_sign === '+' ? (cp.calorie_delta_val / 100) : -(cp.calorie_delta_val / 100);
-                const timeDays = timeUnit === 'weeks' ? cp.time_elapsed_val * 7 : cp.time_elapsed_val;
+                const wDelta = parseFloat(cp.weight_delta_val) || 0;
+                const cDelta = parseFloat(cp.calorie_delta_val) || 0;
+                const tElapsed = parseFloat(cp.time_elapsed_val) || 0;
+                const pRatio = parseFloat(cp.protein_ratio) || 0;
+                const cRatio = parseFloat(cp.carbs_ratio) || 0;
+                const fRatio = parseFloat(cp.fats_ratio) || 0;
+
+                const weightDelta = cp.weight_delta_sign === '+' ? (wDelta / 100) : -(wDelta / 100);
+                const calorieDeltaPct = cp.calorie_delta_sign === '+' ? (cDelta / 100) : -(cDelta / 100);
+                const timeDays = timeUnit === 'weeks' ? tElapsed * 7 : tElapsed;
 
                 return {
                     map_id: mapData.id,
                     sequence_index: idx + 1,
                     trigger_type: cp.trigger_type,
                     intent_tag: cp.intent_tag,
-                    trigger_weight_delta_pct: cp.trigger_type === 'WEIGHT_BASED' ? weightDelta : null,
+                    trigger_weight_delta_pct: cp.trigger_type === 'WEIGHT_BASED' ? Number(weightDelta.toFixed(4)) : null,
                     trigger_days_elapsed: cp.trigger_type === 'TIME_BASED' ? Math.round(timeDays) : null,
-                    protein_ratio: cp.protein_ratio / 100,
-                    carbs_ratio: cp.carbs_ratio / 100,
-                    fats_ratio: cp.fats_ratio / 100,
+                    protein_ratio: pRatio / 100,
+                    carbs_ratio: cRatio / 100,
+                    fats_ratio: fRatio / 100,
                     calorie_delta_pct: Number(calorieDeltaPct.toFixed(4)),
                     is_outlier_flare: false
                 };
@@ -330,7 +338,7 @@ export function CreateMapFromScratchScreen({
                                                 style={styles.numberInputWithSign}
                                                 keyboardType="decimal-pad"
                                                 value={String(cp.weight_delta_val)}
-                                                onChangeText={(v) => updateCheckpoint(index, { weight_delta_val: parseFloat(v) || 0 })}
+                                                onChangeText={(v) => updateCheckpoint(index, { weight_delta_val: v })}
                                             />
                                         </View>
                                     </View>
@@ -342,7 +350,7 @@ export function CreateMapFromScratchScreen({
                                                 style={styles.timeNumberInput}
                                                 keyboardType="number-pad"
                                                 value={String(cp.time_elapsed_val)}
-                                                onChangeText={(v) => updateCheckpoint(index, { time_elapsed_val: parseFloat(v) || 0 })}
+                                                onChangeText={(v) => updateCheckpoint(index, { time_elapsed_val: v })}
                                             />
                                             
                                             <View style={styles.inlineUnitSelector}>
@@ -383,7 +391,7 @@ export function CreateMapFromScratchScreen({
                                                 style={styles.ratioInput}
                                                 keyboardType="decimal-pad"
                                                 value={String(cp.protein_ratio)}
-                                                onChangeText={(v) => updateCheckpoint(index, { protein_ratio: parseFloat(v) || 0 })}
+                                                onChangeText={(v) => updateCheckpoint(index, { protein_ratio: v })}
                                                 onBlur={validateMacroRatios}
                                             />
                                         </View>
@@ -393,7 +401,7 @@ export function CreateMapFromScratchScreen({
                                                 style={styles.ratioInput}
                                                 keyboardType="decimal-pad"
                                                 value={String(cp.carbs_ratio)}
-                                                onChangeText={(v) => updateCheckpoint(index, { carbs_ratio: parseFloat(v) || 0 })}
+                                                onChangeText={(v) => updateCheckpoint(index, { carbs_ratio: v })}
                                                 onBlur={validateMacroRatios}
                                             />
                                         </View>
@@ -403,7 +411,7 @@ export function CreateMapFromScratchScreen({
                                                 style={styles.ratioInput}
                                                 keyboardType="decimal-pad"
                                                 value={String(cp.fats_ratio)}
-                                                onChangeText={(v) => updateCheckpoint(index, { fats_ratio: parseFloat(v) || 0 })}
+                                                onChangeText={(v) => updateCheckpoint(index, { fats_ratio: v })}
                                                 onBlur={validateMacroRatios}
                                             />
                                         </View>
@@ -435,7 +443,7 @@ export function CreateMapFromScratchScreen({
                                             style={styles.numberInputWithSign}
                                             keyboardType="decimal-pad"
                                             value={String(cp.calorie_delta_val)}
-                                            onChangeText={(v) => updateCheckpoint(index, { calorie_delta_val: parseFloat(v) || 0 })}
+                                            onChangeText={(v) => updateCheckpoint(index, { calorie_delta_val: v })}
                                         />
                                     </View>
                                 </View>

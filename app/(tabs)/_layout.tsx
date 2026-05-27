@@ -6,6 +6,7 @@ import { Alert, Keyboard, Modal, Platform, Pressable, StyleSheet, Text, TextInpu
 import { Colors } from '../../src/shared/theme/Colors';
 import { WeightStore } from '../../store/WeightStore';
 import { useUserStore } from '../../store/UserStore';
+import { LineChartIcon } from '../../src/features/tribes/components/TribeIcons';
 
 export default function TabLayout() {
     const pathname = usePathname();
@@ -218,7 +219,7 @@ export default function TabLayout() {
                     name="activity"
                     options={{
                         tabBarIcon: ({ color, focused }) => (
-                            <Ionicons name="stats-chart" size={32} color={color} />
+                            <LineChartIcon color={color} size={32} />
                         ),
                     }}
                 />

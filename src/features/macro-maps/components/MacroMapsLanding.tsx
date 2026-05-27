@@ -83,7 +83,7 @@ export function MacroMapsLanding({ onLaunch, onCreate, onStartLive, onSavePrevio
                 />
                 <OptionCard 
                     title="Save a previous journey"
-                    subtitle="Archive a past block of training and nutrition as a retrospective map."
+                    subtitle="Archive a past block of training and nutrition as a historical map."
                     icon="archive-arrow-down"
                     onPress={onSavePrevious}
                 />

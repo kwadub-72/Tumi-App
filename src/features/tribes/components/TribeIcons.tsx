@@ -49,3 +49,7 @@ export const PrivacyIcon = ({ privacy }: { privacy: TribePrivacy }) => {
         </TouchableOpacity>
     );
 }
+
+export const LineChartIcon = ({ color, size = 32 }: { color: string; size?: number }) => (
+    <MaterialCommunityIcons name="chart-line" size={size} color={color} />
+);

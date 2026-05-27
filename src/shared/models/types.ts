@@ -60,6 +60,7 @@ export interface User {
         meals: number;
         workouts: number;
         updates: number;
+        published_maps_count?: number;
     };
     isFollowing?: boolean;
     isRequested?: boolean;

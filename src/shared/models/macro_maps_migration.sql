@@ -19,7 +19,8 @@ CREATE TABLE public.macro_maps (
   plateau_formula_json JSONB,
   is_live BOOLEAN DEFAULT false,
   is_published BOOLEAN DEFAULT false,
-  created_at TIMESTAMPTZ DEFAULT now()
+  created_at TIMESTAMPTZ DEFAULT now(),
+  ended_at TIMESTAMPTZ
 );
 
 CREATE TABLE public.macro_map_checkpoints (
@@ -30,6 +31,7 @@ CREATE TABLE public.macro_map_checkpoints (
   intent_tag intent_tag NOT NULL,
   trigger_weight_delta_pct NUMERIC,
   trigger_time_elapsed_days INT,
+  trigger_days_elapsed INT,
   protein_ratio NUMERIC NOT NULL CHECK (protein_ratio >= 0.0 AND protein_ratio <= 1.0),
   carbs_ratio NUMERIC NOT NULL CHECK (carbs_ratio >= 0.0 AND carbs_ratio <= 1.0),
   fats_ratio NUMERIC NOT NULL CHECK (fats_ratio >= 0.0 AND fats_ratio <= 1.0),
@@ -149,7 +151,9 @@ CREATE POLICY "Users can manage their own subscriptions" ON public.macro_map_sub
 
 -- Anyone can read checkpoints for published maps, creators can manage their map's checkpoints
 CREATE POLICY "Creators can manage checkpoints" ON public.macro_map_checkpoints FOR ALL USING (
-  EXISTS (SELECT 1 FROM public.macro_maps map WHERE map.id = map_id AND map.creator_id = auth.uid())
+  auth.uid() = (SELECT creator_id FROM public.macro_maps WHERE id = map_id)
+) WITH CHECK (
+  auth.uid() = (SELECT creator_id FROM public.macro_maps WHERE id = map_id)
 );
 CREATE POLICY "Subscribers can read checkpoints" ON public.macro_map_checkpoints FOR SELECT USING (
   EXISTS (SELECT 1 FROM public.macro_maps map WHERE map.id = map_id AND map.is_published = true)
@@ -399,19 +403,36 @@ SELECT
     m.id,
     m.creator_id,
     m.name AS map_name,
+    m.engine_type,
     m.goal_type AS global_track,
     m.generation_type,
     m.is_live,
     m.is_published,
     m.created_at,
+    m.created_at AS sort_date,
     p.handle AS username,
     p.name AS display_name,
     p.avatar_url,
     p.bio AS verified_bio,
     p.status AS natural_status,
-    p.activity AS activity_type
+    p.activity AS activity_type,
+    COALESCE(live_stats.avg_protein, 0) AS global_protein,
+    COALESCE(live_stats.avg_carbs, 0) AS global_carbs,
+    COALESCE(live_stats.avg_fats, 0) AS global_fats,
+    COALESCE(live_stats.avg_calories, 0) AS global_calories
 FROM public.macro_maps m
 JOIN public.profiles p ON m.creator_id = p.id
-WHERE m.is_published = true OR m.is_live = true;
+LEFT JOIN (
+    SELECT 
+        map_id,
+        AVG((macro_payload->>'p')::numeric) AS avg_protein,
+        AVG((macro_payload->>'c')::numeric) AS avg_carbs,
+        AVG((macro_payload->>'f')::numeric) AS avg_fats,
+        AVG((macro_payload->>'calories')::numeric) AS avg_calories
+    FROM public.macro_map_live_events
+    GROUP BY map_id
+) live_stats ON live_stats.map_id = m.id
+WHERE m.is_published = true OR m.is_live = true
+ORDER BY sort_date DESC;
 
 GRANT SELECT ON public.public_discovery_maps TO authenticated;

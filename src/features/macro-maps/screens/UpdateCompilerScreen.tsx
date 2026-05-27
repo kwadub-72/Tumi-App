@@ -116,7 +116,7 @@ export function UpdateCompilerScreen({ onClose }: { onClose: () => void }) {
         if (!parsedCheckpoints || !trajectoryAverages || !userId) return;
 
         try {
-            // Save compiled retrospective map to macro_maps
+            // Save compiled historical map to macro_maps
             const { data: mapData, error: mapError } = await supabase
                 .from('macro_maps')
                 .insert({
@@ -132,7 +132,7 @@ export function UpdateCompilerScreen({ onClose }: { onClose: () => void }) {
                 .single();
 
             if (mapError || !mapData) {
-                Alert.alert('Database Error', mapError?.message || 'Failed to save retrospective map.');
+                Alert.alert('Database Error', mapError?.message || 'Failed to save historical map.');
                 return;
             }
 
@@ -166,7 +166,7 @@ export function UpdateCompilerScreen({ onClose }: { onClose: () => void }) {
                 return;
             }
 
-            Alert.alert('Success', 'Your retrospective map has been compiled and saved successfully!', [
+            Alert.alert('Success', 'Your historical map has been compiled and saved successfully!', [
                 { text: 'Awesome', onPress: onClose }
             ]);
         } catch (err) {
@@ -442,7 +442,7 @@ export function UpdateCompilerScreen({ onClose }: { onClose: () => void }) {
                             <Text style={styles.label}>Map Name</Text>
                             <TextInput
                                 style={styles.textInput}
-                                placeholder="e.g. My Retrospective Journey"
+                                placeholder="e.g. My Historical Journey"
                                 placeholderTextColor={Colors.theme.dust}
                                 value={mapName}
                                 onChangeText={setMapName}

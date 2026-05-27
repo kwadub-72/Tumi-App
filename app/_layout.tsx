@@ -7,8 +7,9 @@ import { useColorScheme } from 'react-native';
 import 'react-native-reanimated';
 
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useAuthStore } from '../store/AuthStore';
+import { useAuthStore, DbProfile } from '../store/AuthStore';
 import { useNetworkStore } from '@/src/store/NetworkStore';
+import { supabase } from '@/src/shared/services/supabase';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -21,6 +22,26 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         initialize();
     }, []);
+
+    useEffect(() => {
+        if (!session?.user?.id) return;
+
+        const channel = supabase.channel('realtime:profile-sync')
+            .on('postgres_changes', { 
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'profiles',
+                filter: `id=eq.${session.user.id}`
+            }, (payload) => { 
+                useAuthStore.setState({ profile: payload.new as DbProfile });
+            })
+            .subscribe();
+
+        // MANDATORY CLEANUP TO PREVENT SOCKET RACE CONDITIONS
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [session?.user?.id]);
 
     useEffect(() => {
         if (loading) return;

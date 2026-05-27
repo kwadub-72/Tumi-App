@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import { supabase } from '@/src/shared/services/supabase';
 import { MacroScalingService, ScaledMacros } from '@/src/shared/services/MacroScalingService';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { useAuthStore } from '@/store/AuthStore';
+import { useUserStore } from '@/store/UserStore';
+import { router } from 'expo-router';
 
 export interface LiveMapSubscriberState {
     pendingLiveUpdate: any | null;
@@ -12,6 +15,7 @@ export interface LiveMapSubscriberState {
     catchUpLateJoiner: (mapId: string, subscriberTargetCals: number) => Promise<void>;
     clearPendingUpdate: () => void;
     disconnect: () => void;
+    subscribeToMap: (mapId: string) => Promise<void>;
 }
 
 export const useLiveMapSubscriberStore = create<LiveMapSubscriberState>((set, get) => ({
@@ -74,6 +78,66 @@ export const useLiveMapSubscriberStore = create<LiveMapSubscriberState>((set, ge
         if (currentChannel) {
             currentChannel.unsubscribe();
             set({ activeChannel: null });
+        }
+    },
+
+    subscribeToMap: async (mapId: string) => {
+        const userId = useAuthStore.getState().session?.user?.id;
+        if (!userId) return;
+
+        try {
+            // 1. Pause active subscriptions
+            await supabase
+                .from('macro_map_subscriptions')
+                .update({ status: 'PAUSED' })
+                .eq('user_id', userId)
+                .eq('status', 'ACTIVE');
+
+            // 2. Insert new subscription
+            const { error: subError } = await supabase
+                .from('macro_map_subscriptions')
+                .insert({
+                    map_id: mapId,
+                    user_id: userId,
+                    status: 'ACTIVE'
+                });
+                
+            if (subError) throw subError;
+
+            // 3. Fetch first checkpoint
+            const { data: checkpoint, error: cpError } = await supabase
+                .from('macro_map_checkpoints')
+                .select('protein_ratio, carbs_ratio, fats_ratio, calorie_delta_pct')
+                .eq('map_id', mapId)
+                .order('created_at', { ascending: true })
+                .limit(1)
+                .single();
+
+            if (cpError || !checkpoint) {
+                console.warn('[subscribeToMap] No initial checkpoint found. Subscription saved, but macros not updated.');
+                return;
+            }
+
+            // 4. Calculate day 1 macros
+            const targetCalories = useUserStore.getState().macroTargets.calories;
+            const scaled = MacroScalingService.scaleCheckpointMacros(targetCalories, checkpoint);
+
+            // 5. Provision the tracker (update Supabase profiles)
+            const { error: profileError } = await supabase
+                .from('profiles')
+                .update({ macro_targets: scaled })
+                .eq('id', userId);
+
+            if (profileError) throw profileError;
+
+            // 6. Update local Zustand state
+            useUserStore.getState().setProfile({ macroTargets: scaled });
+
+            // 7. Route to macro update
+            router.push('/macro-update');
+
+        } catch (error) {
+            console.error('[subscribeToMap] Failed:', error);
         }
     }
 }));

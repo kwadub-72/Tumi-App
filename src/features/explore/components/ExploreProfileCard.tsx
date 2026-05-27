@@ -1,8 +1,10 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View, Pressable } from 'react-native';
 import { User } from '@/src/shared/models/types';
 import { ACTIVITIES } from '@/src/shared/constants/Activities';
+import { useRouter } from 'expo-router';
+import { Colors } from '@/src/shared/theme/Colors';
 
 interface ExploreProfileCardProps {
     user: User;
@@ -26,6 +28,7 @@ export default function ExploreProfileCard({
     matchPercent = 68,
     isSelf = false,
 }: ExploreProfileCardProps) {
+    const router = useRouter();
     const [isExpanded, setIsExpanded] = useState(false);
     const isBulk = user.activity?.toLowerCase().includes('bulk');
     const isCut = user.activity?.toLowerCase().includes('cut');
@@ -156,6 +159,11 @@ export default function ExploreProfileCard({
                         <Text style={styles.metricValue}>{user.stats?.updates || 0}</Text>
                         <Text style={styles.metricLabel}>macros</Text>
                     </View>
+                    <Pressable style={styles.metricItem} onPress={() => router.push({ pathname: '/user/[handle]', params: { handle: user.handle, initialTab: 'maps' } } as any)}>
+                        <MaterialCommunityIcons name="map-legend" size={28} color={Colors.theme.harvestGold} />
+                        <Text style={styles.metricValue}>{(user.stats as any)?.published_maps_count || 0}</Text>
+                        <Text style={styles.metricLabel}>maps</Text>
+                    </Pressable>
                 </View>
             )}
         </TouchableOpacity>

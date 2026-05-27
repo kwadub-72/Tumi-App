@@ -2,7 +2,7 @@ export function formatTimeAgo(date: Date): string {
     const now = new Date();
     const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
-    if (seconds < 60) return `${seconds}s ago`;
+    if (seconds < 60) return `Just now`;
 
     const minutes = Math.floor(seconds / 60);
     if (minutes < 60) return `${minutes}m ago`;
@@ -11,8 +11,5 @@ export function formatTimeAgo(date: Date): string {
     if (hours < 24) return `${hours}h ago`;
 
     const days = Math.floor(hours / 24);
-    if (days < 7) return `${days}d ago`;
-
-    const weeks = Math.floor(days / 7);
-    return `${weeks}w ago`;
+    return `${days}d ago`;
 }

@@ -32,14 +32,15 @@ interface MacroMapPromptState {
     pendingLiveUpdate: MacroMapPromptPayload | null;
     is_live: boolean;
     activeLiveMapId: string | null;
+    activeBroadcast: { name: string } | null;
     enqueue: (prompt: MacroMapPromptPayload) => void;
     accept: () => Promise<void>;
     postpone: () => Promise<void>;
     rejectOrSkip: () => Promise<void>;
     revert: () => void;
     fetchActiveResolutions: (userId: string) => Promise<void>;
-    toggleLiveBroadcast: () => Promise<void>;
-    checkActiveBroadcast: () => Promise<void>;
+    toggleLiveBroadcast: (mapName: string, mapGoal: string) => Promise<void>;
+    checkActiveStream: (userId: string) => Promise<void>;
 }
 
 export const useMacroMapPromptStore = create<MacroMapPromptState>((set, get) => ({
@@ -49,6 +50,7 @@ export const useMacroMapPromptStore = create<MacroMapPromptState>((set, get) => 
     pendingLiveUpdate: null,
     is_live: false,
     activeLiveMapId: null,
+    activeBroadcast: null,
 
     fetchActiveResolutions: async (userId: string) => {
         try {
@@ -266,33 +268,38 @@ export const useMacroMapPromptStore = create<MacroMapPromptState>((set, get) => 
         });
     },
 
-    checkActiveBroadcast: async () => {
-        const userId = useAuthStore.getState().session?.user?.id;
-        if (!userId) return;
-
+    checkActiveStream: async (userId: string) => {
         try {
             const { data, error } = await supabase
                 .from('macro_maps')
-                .select('id, is_live')
+                .select('id, is_live, name')
                 .eq('creator_id', userId)
-                .eq('engine_type', 'LIVE')
+                .eq('is_live', true)
                 .limit(1)
                 .maybeSingle();
 
             if (error) {
-                console.error('[checkActiveBroadcast] Error fetching live map:', error);
+                console.error('[checkActiveStream] Error fetching live map:', error);
+                set({ is_live: false, activeLiveMapId: null, activeBroadcast: null });
                 return;
             }
 
             if (data) {
-                set({ is_live: data.is_live ?? false, activeLiveMapId: data.id });
+                set({ 
+                    is_live: data.is_live ?? false, 
+                    activeLiveMapId: data.id,
+                    activeBroadcast: data.name ? { name: data.name } : null
+                });
+            } else {
+                set({ is_live: false, activeLiveMapId: null, activeBroadcast: null });
             }
         } catch (err) {
-            console.error('[checkActiveBroadcast] Exception:', err);
+            console.error('[checkActiveStream] Exception:', err);
+            set({ is_live: false, activeLiveMapId: null, activeBroadcast: null });
         }
     },
 
-    toggleLiveBroadcast: async () => {
+    toggleLiveBroadcast: async (mapName: string, mapGoal: string) => {
         const userId = useAuthStore.getState().session?.user?.id;
         if (!userId) return;
 
@@ -300,34 +307,81 @@ export const useMacroMapPromptStore = create<MacroMapPromptState>((set, get) => 
         const mapId = get().activeLiveMapId;
 
         try {
-            if (mapId) {
-                // Update existing live map status
+            if (currentIsLive && mapId) {
+                // Strictly end the broadcast without overwriting generation mode
                 const { error } = await supabase
                     .from('macro_maps')
-                    .update({ is_live: !currentIsLive })
+                    .update({ 
+                        is_live: false,
+                        ended_at: new Date().toISOString()
+                    })
                     .eq('id', mapId);
 
                 if (error) throw error;
-                set({ is_live: !currentIsLive });
+                set({ 
+                    is_live: false,
+                    activeBroadcast: null,
+                    activeLiveMapId: null // Explicitly clear cached mapId
+                });
             } else {
-                // Create a new default LIVE map
+                // Global sweep to guarantee no ghost streams
+                await supabase
+                    .from('macro_maps')
+                    .update({ is_live: false })
+                    .eq('creator_id', userId)
+                    .eq('is_live', true);
+
+                // Always create a new LIVE map to prevent singleton overwrites
                 const { data, error } = await supabase
                     .from('macro_maps')
                     .insert({
                         creator_id: userId,
-                        name: 'My Live Broadcast',
+                        name: mapName,
                         engine_type: 'LIVE',
                         generation_type: 'update',
-                        goal_type: 'MAINTENANCE',
+                        goal_type: mapGoal.toUpperCase(),
                         total_duration_weeks: 12,
                         is_live: true,
-                        is_published: true
+                        is_published: true,
+                        created_at: new Date().toISOString()
                     })
                     .select('id')
                     .single();
 
                 if (error) throw error;
-                set({ is_live: true, activeLiveMapId: data.id });
+                const newMapId = data.id;
+
+                set({ 
+                    is_live: true, 
+                    activeLiveMapId: newMapId,
+                    activeBroadcast: { name: mapName }
+                });
+
+                // MINT THE ORIGIN CHECKPOINT
+                const profileMacros = useAuthStore.getState().profile?.macro_targets;
+                if (profileMacros) {
+                    const safeNewCal = profileMacros.calories > 0 ? profileMacros.calories : 1;
+                    const pRatio = Math.round(((profileMacros.p * 4) / safeNewCal) * 100) / 100;
+                    const cRatio = Math.round(((profileMacros.c * 4) / safeNewCal) * 100) / 100;
+                    const fRatio = Math.round(((profileMacros.f * 9) / safeNewCal) * 100) / 100;
+
+                    const { error: checkpointError } = await supabase.from('macro_map_checkpoints').insert({
+                        map_id: newMapId,
+                        sequence_index: 0,
+                        trigger_type: 'TIME_BASED',
+                        intent_tag: 'EVENT_MILESTONE',
+                        protein_ratio: pRatio,
+                        carbs_ratio: cRatio,
+                        fats_ratio: fRatio,
+                        calorie_delta_pct: 0,
+                        trigger_days_elapsed: 0,
+                        created_at: new Date().toISOString()
+                    });
+                    
+                    if (checkpointError) {
+                        console.error('[toggleLiveBroadcast] Origin checkpoint error:', checkpointError);
+                    }
+                }
             }
         } catch (err) {
             console.error('[toggleLiveBroadcast] Exception:', err);

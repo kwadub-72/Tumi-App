@@ -18,6 +18,7 @@ export interface MacroMap {
   is_live: boolean;
   is_published: boolean;
   created_at?: string;
+  ended_at?: string | null;
 }
 
 export interface MacroMapLiveEvent {
@@ -40,6 +41,7 @@ export interface MacroMapCheckpoint {
   intent_tag: IntentTag;
   trigger_weight_delta_pct: number | null;
   trigger_time_elapsed_days: number | null;
+  trigger_days_elapsed?: number | null;
   protein_ratio: number;
   carbs_ratio: number;
   fats_ratio: number;
@@ -62,12 +64,28 @@ export interface MacroMapSubscription {
   postponed_until: string | null;
 }
 
+export interface MapSubscription {
+  id: string;
+  subscriber_id: string;
+  map_id: string;
+  status: MapStatus;
+  current_checkpoint_index: number;
+  created_at?: string;
+}
+
 // Extensions for existing profiles table mapping
 export interface ProfileMacroExtensions {
   is_macro_locked: boolean;
   gender: 'male' | 'female' | string | null;
   height_cm: number | null;
   dob: string | null;
+}
+
+export interface ProfileStats {
+  meal_count: number;
+  workout_count: number;
+  update_count: number;
+  published_maps_count: number;
 }
 
 // Extensions for existing macro_history table mapping
@@ -81,17 +99,23 @@ export interface PublicDiscoveryMap {
   id: string;
   creator_id: string;
   map_name: string;
+  engine_type: EngineType;
   global_track: GoalType;
   generation_type: GenerationType;
   is_live: boolean;
   is_published: boolean;
   created_at: string;
+  sort_date: string;
   username: string;
   display_name: string;
   avatar_url: string | null;
   verified_bio: string | null;
   natural_status: string | null;
   activity_type: string | null;
+  global_protein: number;
+  global_carbs: number;
+  global_fats: number;
+  global_calories: number;
 }
 
 // RPC Return Types

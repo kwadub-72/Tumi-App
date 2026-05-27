@@ -42,6 +42,7 @@ import { CreateMapFromScratchScreen } from '@/src/features/macro-maps/screens/Cr
 import { useMacroMapPromptStore } from '@/src/features/macromaps/store/useMacroMapPromptStore';
 import { MacroMapInterceptor } from '@/src/features/macromaps/components/MacroMapInterceptor';
 import { useFeedStore } from '@/store/FeedStore';
+import { supabase } from '@/src/shared/services/supabase';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const SHEET_MIN_Y = SCREEN_HEIGHT - 145;
@@ -350,6 +351,45 @@ export default function MacroUpdateScreen() {
                     macroTargets: { p: newP, c: newC, f: newF, calories: newCal },
                     lastMacroUpdate: new Date().toLocaleDateString()
                 });
+
+                // THE LIVE UPDATE INTERCEPTOR
+                const activeMapId = useMacroMapPromptStore.getState().activeLiveMapId;
+                if (activeMapId) {
+                    const safeNewCal = newCal > 0 ? newCal : 1;
+                    const pRatio = Math.round(((newP * 4) / safeNewCal) * 100) / 100;
+                    const cRatio = Math.round(((newC * 4) / safeNewCal) * 100) / 100;
+                    const fRatio = Math.round(((newF * 9) / safeNewCal) * 100) / 100;
+                    const calDeltaPct = oldCal > 0 ? (newCal - oldCal) / oldCal : 0;
+
+                    const { data: existingCheckpoints } = await supabase
+                        .from('macro_map_checkpoints')
+                        .select('sequence_index')
+                        .eq('map_id', activeMapId)
+                        .order('sequence_index', { ascending: false })
+                        .limit(1);
+
+                    const nextIndex = existingCheckpoints && existingCheckpoints.length > 0 
+                        ? existingCheckpoints[0].sequence_index + 1 
+                        : 0;
+
+                    const { error } = await supabase.from('macro_map_checkpoints').insert({
+                        map_id: activeMapId,
+                        protein_ratio: pRatio,
+                        carbs_ratio: cRatio,
+                        fats_ratio: fRatio,
+                        calorie_delta_pct: calDeltaPct,
+                        sequence_index: nextIndex,
+                        trigger_type: 'TIME_BASED',
+                        intent_tag: 'EVENT_MILESTONE',
+                        trigger_days_elapsed: 0,
+                        trigger_weight_delta_pct: null,
+                        created_at: new Date().toISOString()
+                    });
+
+                    if (error) {
+                        console.error('[Live Interceptor Error]:', error);
+                    }
+                }
                 
                 useWorkoutLogStore.getState().setCapturedMedia(null);
                 router.replace('/(tabs)?tab=Following');

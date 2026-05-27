@@ -98,6 +98,8 @@ const formatDateLabel = (date: Date) => {
     return `${dayLabel} - ${month}/${dayOfMonth}`;
 };
 
+import { useIsSpectator } from '../../hooks/useTribeRoles';
+
 interface TradTribeBattleUserMatchupProps {
     tribeId: string;
     weekNumber?: number;
@@ -111,6 +113,8 @@ export const TradTribeBattleUserMatchup = ({
     const [modalInfo, setModalInfo] = useState<{ visible: boolean, title: string, description: string, iconName: any } | null>(null);
     const week = weekNumber ?? getCompetitionWeek();
     const { navigateToProfile } = useProfileNavigation();
+    
+    const { isSpectator } = useIsSpectator(tribeId);
 
     const { matchups, userMatchup, loading: matchupsLoading, isLocked } = useFaceoffMatchups(tribeId, week);
     const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
@@ -256,7 +260,16 @@ export const TradTribeBattleUserMatchup = ({
     if (!activeMatchup) {
         return (
             <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', height: 250 }]}>
-                <Text style={{ color: 'rgba(255,255,255,0.6)', fontStyle: 'italic' }}>No active matchups for Week {week}</Text>
+                {isSpectator ? (
+                    <>
+                        <MaterialCommunityIcons name="eye-outline" size={32} color="rgba(255,255,255,0.6)" style={{ marginBottom: 10 }} />
+                        <Text style={{ color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', textAlign: 'center' }}>
+                            You are observing this competition as a Spectator.{'\n'}Active matchups will appear here.
+                        </Text>
+                    </>
+                ) : (
+                    <Text style={{ color: 'rgba(255,255,255,0.6)', fontStyle: 'italic' }}>No active matchups for Week {week}</Text>
+                )}
             </View>
         );
     }

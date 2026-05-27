@@ -69,18 +69,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             if (session?.user) {
                 await get().refreshProfile();
 
-                // Subscribe to profile changes
-                supabase
-                    .channel('profile-sync')
-                    .on('postgres_changes', {
-                        event: 'UPDATE',
-                        schema: 'public',
-                        table: 'profiles',
-                        filter: `id=eq.${session.user.id}`,
-                    }, (payload) => {
-                        set({ profile: payload.new as DbProfile });
-                    })
-                    .subscribe();
+                // Note: profile-sync subscription has been moved to a useEffect hook in _layout.tsx
+                // to prevent race conditions during React double-invocations on mount.
             } else {
                 set({ profile: null });
             }
