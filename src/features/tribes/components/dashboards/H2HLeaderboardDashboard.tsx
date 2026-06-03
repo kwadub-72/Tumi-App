@@ -18,14 +18,18 @@ const getCompetitionWeek = () => {
     const weeks = Math.floor(diffDays / 7) + 1;
     return Math.max(1, weeks);
 };
-import { useIsSpectator } from '../../hooks/useTribeRoles';
+import { useIsSpectator, useIsChief } from '../../hooks/useTribeRoles';
+import { useRouter } from 'expo-router';
 
-export const H2HLeaderboardDashboard = ({ tribeId: propsTribeId }: { tribeId?: string }) => {
-    const tribeId = propsTribeId || 'b0000000-0000-0000-0000-000000000004'; // The Cut Squad ID
+export const H2HLeaderboardDashboard = ({ tribeId: propsTribeId, tribe }: { tribeId?: string; tribe?: any }) => {
+    const tribeId = propsTribeId || tribe?.id || 'b0000000-0000-0000-0000-000000000004'; // The Cut Squad ID
     const { loading, data, header, competition, mutateRecord } = useTribeScoreboard(tribeId);
     const { navigateToProfile } = useProfileNavigation();
     const { isSpectator } = useIsSpectator(tribeId);
     
+    const { isChief } = useIsChief(tribeId);
+    const router = useRouter();
+
     const [expanded, setExpanded] = useState(false);
     const [modalInfo, setModalInfo] = useState<{ visible: boolean, title: string, description: string, iconName: any } | null>(null);
     const week = getCompetitionWeek();
@@ -43,7 +47,7 @@ export const H2HLeaderboardDashboard = ({ tribeId: propsTribeId }: { tribeId?: s
     return (
         <View style={styles.container}>
             {/* Line 1 (Context Metadata) */}
-            <Text style={styles.dashboardType}>Head-to-Head · Faceoff · Habits</Text>
+            <Text style={styles.dashboardType}>Head-to-Head • Faceoff</Text>
 
             {/* Line 2 (Tribe Identifier) */}
             <View style={styles.header}>
@@ -171,26 +175,7 @@ export const H2HLeaderboardDashboard = ({ tribeId: propsTribeId }: { tribeId?: s
                         </TouchableOpacity>
                     )}
 
-                    {/* QA Engineering Synthetic Testing Rig */}
-                    <View style={styles.qaRigContainer}>
-                        <Text style={styles.qaRigLabel}>QA ANIMATION TESTING RIG</Text>
-                        <View style={styles.qaActionRow}>
-                            <TouchableOpacity
-                                style={styles.qaPlusButton}
-                                activeOpacity={0.7}
-                                onPress={() => {
-                                    if (data.length === 0) return;
-                                    // Select random member and mutate record
-                                    const randomMember = data[Math.floor(Math.random() * data.length)];
-                                    const isWin = Math.random() > 0.5;
-                                    mutateRecord(randomMember.id, isWin ? 1 : 0, isWin ? 0 : 1);
-                                }}
-                            >
-                                <Ionicons name="add" size={16} color="#DAA520" />
-                                <Text style={styles.qaPlusText}>Mutate record</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
+
                 </>
             )}
 
@@ -442,5 +427,24 @@ const styles = StyleSheet.create({
         color: '#DAA520',
         fontSize: 11,
         fontWeight: 'bold',
+    },
+    chamberBtn: {
+        position: 'absolute',
+        top: 10,
+        right: 15,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#262525',
+        borderWidth: 1.5,
+        borderColor: '#DAA520',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 50,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 3,
+        elevation: 5,
     },
 });

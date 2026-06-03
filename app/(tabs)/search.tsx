@@ -1,7 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FlatList, Keyboard, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView, useWindowDimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/src/shared/theme/Colors';
 import { User } from '@/src/shared/models/types';
 import { ExploreService } from '@/src/features/explore/services/exploreService';
@@ -11,7 +11,7 @@ import FilterModal from '@/src/features/explore/components/FilterModal';
 import HammerModal from '@/components/HammerModal';
 import VerifiedModal from '@/components/VerifiedModal';
 import { useUserStore } from '@/store/UserStore';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useUserTribeStore } from '@/src/store/UserTribeStore';
 import { useExploreRankings } from '@/src/features/explore/hooks/useExploreRankings';
 import { RefreshControl } from 'react-native';
@@ -20,6 +20,7 @@ import { useNetworkStore } from '@/src/store/NetworkStore';
 import { DiscoveryTribe } from '@/src/features/explore/types';
 import { supabase } from '@/src/shared/services/supabase';
 import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
+import { useOnboardingStore } from '@/store/useOnboardingStore';
 
 
 // Helper to convert ft'in" or cm string to number (cm)
@@ -33,8 +34,11 @@ const parseHeightToCm = (h: string | number) => {
     return parseFloat(hStr) || 0;
 };
 
-export default function ExploreScreen() {
+export default function ExploreScreen(props: { isOnboarding?: boolean }) {
     const router = useRouter();
+    const params = useLocalSearchParams();
+    const isOnboarding = props.isOnboarding || params.isOnboarding === 'true';
+    const insets = useSafeAreaInsets();
     const session = useAuthStore(state => state.session);
     const networkStore = useNetworkStore();
     const userStore = useUserStore();
@@ -43,7 +47,9 @@ export default function ExploreScreen() {
     // Stored handle may or may not include the '@' prefix, so strip it for comparison.
     const currentUserHandle = userStore.handle?.replace('@', '').toLowerCase() ?? '';
     const currentUserId = session?.user?.id ?? '';
+    const effectiveUserId = currentUserId || '00000000-0000-0000-0000-000000000000';
     const { joinTribe, leaveTribe, myTribes, pendingTribes, isMember, isRequested, init: initTribes } = useUserTribeStore();
+    const { selectedTribeIds, setSelectedTribeIds } = useOnboardingStore();
     const { width } = useWindowDimensions();
     const scrollViewRef = useRef<ScrollView>(null);
     
@@ -52,6 +58,9 @@ export default function ExploreScreen() {
             initTribes(currentUserId);
         }
     }, [currentUserId]);
+
+    // Welcome Banner State
+    const [showWelcome, setShowWelcome] = useState(true);
 
     // Filters
     const [activeFilters, setActiveFilters] = useState<any>(null);
@@ -103,12 +112,21 @@ export default function ExploreScreen() {
     } = useExploreRankings(formattedDiscoveryFilters);
 
     const [searchQuery, setSearchQuery] = useState('');
-    const [activeTab, setActiveTab] = useState('Users');
+    const isSearchEmpty = !searchQuery || searchQuery.trim() === '';
+    const [activeTab, setActiveTab] = useState(isOnboarding ? 'Tribes' : 'Users');
 
     // Scroll to active tab
     useEffect(() => {
-        scrollViewRef.current?.scrollTo({ x: activeTab === 'Users' ? 0 : width, animated: true });
-    }, [activeTab, width]);
+        if (isOnboarding) {
+            setActiveTab('Tribes');
+        }
+    }, [isOnboarding]);
+
+    useEffect(() => {
+        if (!isOnboarding) {
+            scrollViewRef.current?.scrollTo({ x: activeTab === 'Users' ? 0 : width, animated: true });
+        }
+    }, [activeTab, width, isOnboarding]);
 
     // Users State
     const [users, setUsers] = useState<User[]>([]);
@@ -116,8 +134,44 @@ export default function ExploreScreen() {
 
     // Tribes State
     const [tribes, setTribes] = useState<DiscoveryTribe[]>([]);
+    const [defaultTribes, setDefaultTribes] = useState<DiscoveryTribe[]>([]);
     const [isLoadingTribes, setIsLoadingTribes] = useState(false);
     const [pendingTribesData, setPendingTribesData] = useState<DiscoveryTribe[]>([]);
+    const [pendingTribesLocal, setPendingTribesLocal] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (!isOnboarding || !selectedTribeIds || selectedTribeIds.length === 0) {
+            setPendingTribesLocal([]);
+            return;
+        }
+        const fetchPending = async () => {
+            const { data } = await supabase.from('tribes').select('*').in('id', selectedTribeIds);
+            if (data) {
+                setPendingTribesLocal(data.map(row => ({
+                    id: row.id,
+                    name: row.name,
+                    avatarUrl: row.avatar_url,
+                    themeColor: row.theme_color || '#DAA520',
+                    privacy: row.privacy || 'public',
+                    memberCount: row.member_count || 0,
+                    joinStatus: row.privacy === 'private' ? 'pending' : 'member'
+                })));
+            }
+        };
+        fetchPending();
+    }, [selectedTribeIds, isOnboarding]);
+
+    // Fetch default 5 tribes for warm start empty state
+    useEffect(() => {
+        const fetchDefaultTribes = async () => {
+            const results = await ExploreService.searchTribes(effectiveUserId, '');
+            const sortedResults = results
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .slice(0, 5);
+            setDefaultTribes(sortedResults);
+        };
+        fetchDefaultTribes();
+    }, [effectiveUserId]);
 
     // Modals
     const [filterVisible, setFilterVisible] = useState(false);
@@ -177,15 +231,18 @@ export default function ExploreScreen() {
 
     // Load tribes whenever query changes (debounced)
     useEffect(() => {
-        if (!currentUserId) return;
+        // Allow search if we have a real user, OR if we are in onboarding mode
+        if (!currentUserId && !isOnboarding) return;
+        
         const timer = setTimeout(async () => {
             setIsLoadingTribes(true);
-            const results = await ExploreService.searchTribes(currentUserId, searchQuery);
+            const results = await ExploreService.searchTribes(effectiveUserId, searchQuery);
             setTribes(results);
             setIsLoadingTribes(false);
         }, 300);
+        
         return () => clearTimeout(timer);
-    }, [currentUserId, searchQuery]);
+    }, [currentUserId, effectiveUserId, searchQuery, isOnboarding]);
 
     // User search effect (debounced, only when Users tab active)
     useEffect(() => {
@@ -244,9 +301,6 @@ export default function ExploreScreen() {
                 }
                 return u;
             }));
-            // useExploreRankings data updates reactively if needed, 
-            // but for instant feedback we can manually refresh or let the store handle it if the cards use the store.
-            // Since cards receive props, we rely on parent refresh or store subscription.
         }
     };
 
@@ -295,92 +349,160 @@ export default function ExploreScreen() {
     };
 
     const renderTribesContent = () => {
-        const isSearching = searchQuery.length > 0;
+        const isSearchEmpty = searchQuery.trim() === '';
 
-        // Pre-typing: show joined + pending tribes from store, sorted alphabetically
-        if (!isSearching) {
-            const joined = myTribes
-                .slice()
-                .sort((a, b) => a.name.localeCompare(b.name));
-            const pending = pendingTribes;
+        // If isSearchEmpty is TRUE:
+        if (isSearchEmpty) {
+            const mergedDefaults = defaultTribes.map(t => {
+                const joined = isOnboarding ? (t.privacy === 'public' && selectedTribeIds.includes(t.id)) : isMember(t.id);
+                const pending = isOnboarding ? (t.privacy === 'private' && selectedTribeIds.includes(t.id)) : isRequested(t.id);
+                return {
+                    ...t,
+                    joinStatus: joined ? 'member' : (pending ? 'pending' : 'none')
+                } as DiscoveryTribe;
+            });
 
             return (
                 <FlatList
-                    data={joined}
+                    data={mergedDefaults}
                     keyExtractor={item => item.id}
-                    ListEmptyComponent={
-                        <View style={styles.emptyState}>
-                            <TabonoLogo size={56} color="rgba(218,165,32,0.3)" />
-                            <Text style={styles.tribeEmptyText}>
-                                It's better together. Find a tribe
-                            </Text>
-                        </View>
-                    }
                     ListHeaderComponent={
-                        joined.length > 0 ? (
-                            <Text style={styles.exploreSectionTitle}>My tribes</Text>
+                        mergedDefaults.length > 0 ? (
+                            <Text style={styles.exploreSectionTitle}>Featured Tribes</Text>
                         ) : null
                     }
                     ListFooterComponent={
                         <View style={{ marginBottom: 20 }}>
-                            <Text style={[styles.exploreSectionTitle, { marginTop: 16 }]}>Pending requests</Text>
-                            {pendingTribesData.length > 0 ? (
-                                pendingTribesData.map(tribe => (
-                                    <TribeCard
-                                        key={tribe.id}
-                                        tribe={tribe}
-                                        onPress={() => router.push(`/tribe/${tribe.id}` as any)}
-                                        onPressJoin={() => {
-                                            if (currentUserId) leaveTribe(currentUserId, tribe.id);
-                                        }}
-                                    />
-                                ))
-                            ) : (
-                                <View style={styles.pendingRow}>
-                                    <MaterialCommunityIcons name="clock-outline" size={18} color="#888" />
-                                    <Text style={styles.pendingText}>0 requests sent</Text>
-                                </View>
-                            )}
+                            {(() => {
+                                const sourceList = isOnboarding ? pendingTribesLocal : pendingTribesData;
+                                const joinedTribes = sourceList.filter(t => t.privacy === 'public');
+                                const requestedTribes = sourceList.filter(t => t.privacy === 'private');
+
+                                return (
+                                    <>
+                                        {joinedTribes.length > 0 && (
+                                            <>
+                                                <Text style={{ 
+                                                    color: Colors.theme.softWhite, 
+                                                    fontSize: 18, 
+                                                    fontWeight: 'bold', 
+                                                    marginTop: 20,
+                                                    marginLeft: 20,
+                                                    marginBottom: 10
+                                                }}>
+                                                    Your Tribes
+                                                </Text>
+                                                {joinedTribes.map(tribe => (
+                                                    <TribeCard
+                                                        key={tribe.id}
+                                                        tribe={tribe}
+                                                        onPress={() => router.push(`/tribe/${tribe.id}` as any)}
+                                                        onPressJoin={() => {
+                                                            if (isOnboarding) {
+                                                                setSelectedTribeIds(selectedTribeIds.filter(id => id !== tribe.id));
+                                                            } else {
+                                                                if (currentUserId) leaveTribe(currentUserId, tribe.id);
+                                                            }
+                                                        }}
+                                                    />
+                                                ))}
+                                            </>
+                                        )}
+
+                                        {requestedTribes.length > 0 && (
+                                            <>
+                                                <Text style={{ 
+                                                    color: Colors.theme.burntSienna, 
+                                                    fontSize: 18, 
+                                                    fontWeight: 'bold', 
+                                                    marginTop: 20,
+                                                    marginLeft: 20,
+                                                    marginBottom: 10
+                                                }}>
+                                                    Pending Requests
+                                                </Text>
+                                                {requestedTribes.map(tribe => (
+                                                    <TribeCard
+                                                        key={tribe.id}
+                                                        tribe={tribe}
+                                                        onPress={() => router.push(`/tribe/${tribe.id}` as any)}
+                                                        onPressJoin={() => {
+                                                            if (isOnboarding) {
+                                                                setSelectedTribeIds(selectedTribeIds.filter(id => id !== tribe.id));
+                                                            } else {
+                                                                if (currentUserId) leaveTribe(currentUserId, tribe.id);
+                                                            }
+                                                        }}
+                                                    />
+                                                ))}
+                                            </>
+                                        )}
+
+                                        {joinedTribes.length === 0 && requestedTribes.length === 0 && (
+                                            <>
+                                                <Text style={{ 
+                                                    color: Colors.theme.burntSienna, 
+                                                    fontSize: 18, 
+                                                    fontWeight: 'bold', 
+                                                    marginTop: 20,
+                                                    marginLeft: 20,
+                                                    marginBottom: 10
+                                                }}>
+                                                    Pending Requests
+                                                </Text>
+                                                <View style={styles.pendingRow}>
+                                                    <MaterialCommunityIcons name="clock-outline" size={18} color="#888" />
+                                                    <Text style={styles.pendingText}>No pending requests</Text>
+                                                </View>
+                                            </>
+                                        )}
+                                    </>
+                                );
+                            })()}
                         </View>
                     }
                     renderItem={({ item }) => (
                         <TribeCard
-                            tribe={{
-                                id: item.id,
-                                name: item.name,
-                                avatarUrl: item.avatar,
-                                themeColor: item.themeColor ?? '#DAA520',
-                                tribeType: (item.type ?? 'accountability') as any,
-                                privacy: item.privacy as any,
-                                description: item.description ?? '',
-                                tags: item.tags ?? [],
-                                memberCount: item.memberCount ?? 0,
-                                naturalStatus: item.naturalStatus ?? null,
-                                activityType: item.activityType,
-                                activityIcon: item.activityIcon,
-                                focusType: (item.type ?? 'accountability') as any,
-                                joinStatus: 'member',
-                            }}
+                            tribe={item}
                             onPress={() => router.push(`/tribe/${item.id}` as any)}
                             onPressJoin={() => {
-                                if (currentUserId) leaveTribe(currentUserId, item.id);
+                                if (isOnboarding) {
+                                    if (selectedTribeIds.includes(item.id)) {
+                                        setSelectedTribeIds(selectedTribeIds.filter(id => id !== item.id));
+                                    } else {
+                                        setSelectedTribeIds([...selectedTribeIds, item.id]);
+                                    }
+                                    return;
+                                }
+                                if (item.joinStatus === 'member' || item.joinStatus === 'pending') {
+                                    if (currentUserId) leaveTribe(currentUserId, item.id);
+                                } else {
+                                    const asTribe = {
+                                        ...item,
+                                        avatar: item.avatarUrl,
+                                        type: item.tribeType,
+                                        joinStatus: 'none' as any,
+                                        chief: {} as any,
+                                    };
+                                    if (currentUserId) joinTribe(currentUserId, asTribe as any);
+                                }
                             }}
                         />
                     )}
-                    contentContainerStyle={styles.listContent}
+                    contentContainerStyle={[styles.listContent, isOnboarding && { paddingBottom: 190 }]}
                     showsVerticalScrollIndicator={false}
                     onScrollBeginDrag={Keyboard.dismiss}
                 />
             );
         }
 
-        // While typing: show search results from DB, merged with store memberships
+        // If isSearchEmpty is FALSE:
         const mergedTribes = tribes.map(t => {
-            const joined = isMember(t.id);
-            const pending = isRequested(t.id);
+            const joined = isOnboarding ? (t.privacy === 'public' && selectedTribeIds.includes(t.id)) : isMember(t.id);
+            const pending = isOnboarding ? (t.privacy === 'private' && selectedTribeIds.includes(t.id)) : isRequested(t.id);
             return {
                 ...t,
-                joinStatus: joined ? 'member' : (pending ? 'pending' : t.joinStatus)
+                joinStatus: joined ? 'member' : (pending ? 'pending' : 'none')
             } as DiscoveryTribe;
         });
 
@@ -393,6 +515,14 @@ export default function ExploreScreen() {
                         tribe={item}
                         onPress={() => router.push(`/tribe/${item.id}` as any)}
                         onPressJoin={() => {
+                            if (isOnboarding) {
+                                if (selectedTribeIds.includes(item.id)) {
+                                    setSelectedTribeIds(selectedTribeIds.filter(id => id !== item.id));
+                                } else {
+                                    setSelectedTribeIds([...selectedTribeIds, item.id]);
+                                }
+                                return;
+                            }
                             if (item.joinStatus === 'member' || item.joinStatus === 'pending') {
                                 if (currentUserId) leaveTribe(currentUserId, item.id);
                             } else {
@@ -415,7 +545,7 @@ export default function ExploreScreen() {
                         </View>
                     ) : null
                 }
-                contentContainerStyle={styles.listContent}
+                contentContainerStyle={[styles.listContent, isOnboarding && { paddingBottom: 190 }]}
                 showsVerticalScrollIndicator={false}
                 onScrollBeginDrag={Keyboard.dismiss}
             />
@@ -577,9 +707,9 @@ export default function ExploreScreen() {
     };
 
     return (
-        <SafeAreaView style={styles.container} edges={['top']}>
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             <View style={styles.header}>
-                {activeTab === 'Tribes' && (
+                {activeTab === 'Tribes' && !isOnboarding && (
                     <TouchableOpacity
                         style={styles.createTribeBtn}
                         onPress={() => router.push('/create-tribe')}
@@ -613,47 +743,69 @@ export default function ExploreScreen() {
                 </TouchableOpacity>
             </View>
 
-            {/* Tabs */}
-            <View style={styles.tabContainer}>
-                <View style={styles.tabBackground}>
+            {/* Welcome Banner Render (Task 1) */}
+            {showWelcome && isOnboarding && (
+                <View style={styles.welcomeBanner}>
                     <TouchableOpacity 
-                        style={[styles.tabButton, activeTab === 'Users' && styles.activeTabButton]}
-                        onPress={() => setActiveTab('Users')}
+                        style={styles.welcomeCloseBtn} 
+                        onPress={() => setShowWelcome(false)}
                     >
-                        <Text style={[styles.tabText, activeTab === 'Users' && styles.activeTabText]}>Users</Text>
+                        <Ionicons name="close" size={20} color={Colors.theme.softWhite} />
                     </TouchableOpacity>
-                    <TouchableOpacity 
-                        style={[styles.tabButton, activeTab === 'Tribes' && styles.activeTabButton]}
-                        onPress={() => setActiveTab('Tribes')}
-                    >
-                        <Text style={[styles.tabText, activeTab === 'Tribes' && styles.activeTabText]}>Tribes</Text>
-                    </TouchableOpacity>
+                    <Text style={styles.welcomeTitle}>It's better together. Find a tribe.</Text>
+                    <Text style={styles.welcomeBody}>Search for a tribe that aligns with your goals and activities, or skip for now.</Text>
                 </View>
-            </View>
+            )}
 
-            <ScrollView
-                ref={scrollViewRef}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onMomentumScrollEnd={(e) => {
-                    const offsetX = e.nativeEvent.contentOffset.x;
-                    const page = Math.round(offsetX / width);
-                    if (page === 0) {
-                        setActiveTab('Users');
-                    } else {
-                        setActiveTab('Tribes');
-                    }
-                }}
-                style={{ flex: 1 }}
-            >
-                <View style={{ width }}>
-                    {renderUsersContent()}
+            {/* Tabs */}
+            {!isOnboarding && (
+                <View style={styles.tabContainer}>
+                    <View style={styles.tabBackground}>
+                        <TouchableOpacity 
+                            style={[styles.tabButton, activeTab === 'Users' && styles.activeTabButton]}
+                            onPress={() => setActiveTab('Users')}
+                        >
+                            <Text style={[styles.tabText, activeTab === 'Users' && styles.activeTabText]}>Users</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            style={[styles.tabButton, activeTab === 'Tribes' && styles.activeTabButton]}
+                            onPress={() => setActiveTab('Tribes')}
+                        >
+                            <Text style={[styles.tabText, activeTab === 'Tribes' && styles.activeTabText]}>Tribes</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
-                <View style={{ width }}>
+            )}
+
+            {isOnboarding ? (
+                <View style={{ flex: 1 }}>
                     {renderTribesContent()}
                 </View>
-            </ScrollView>
+            ) : (
+                <ScrollView 
+                    ref={scrollViewRef}
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    onMomentumScrollEnd={(e) => {
+                        const offsetX = e.nativeEvent.contentOffset.x;
+                        const page = Math.round(offsetX / width);
+                        if (page === 0) {
+                            setActiveTab('Users');
+                        } else {
+                            setActiveTab('Tribes');
+                        }
+                    }}
+                    style={{ flex: 1 }}
+                >
+                    <View style={{ width }}>
+                        {renderUsersContent()}
+                    </View>
+                    <View style={{ width }}>
+                        {renderTribesContent()}
+                    </View>
+                </ScrollView>
+            )}
 
             <FilterModal
                 visible={filterVisible}
@@ -674,6 +826,44 @@ export default function ExploreScreen() {
                 onClose={() => setVerifiedVisible(false)}
                 status={selectedUserForModal?.status || 'none'}
             />
+
+            {isOnboarding && (
+                <View style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    padding: 20,
+                    paddingBottom: 40,
+                    backgroundColor: Colors.theme.matteBlack,
+                    borderTopWidth: 1,
+                    borderTopColor: 'rgba(255,255,255,0.05)',
+                    zIndex: 100,
+                }}>
+                    <TouchableOpacity 
+                        style={{
+                            backgroundColor: Colors.theme.harvestGold,
+                            paddingVertical: 16,
+                            borderRadius: 12,
+                            alignItems: 'center'
+                        }}
+                        onPress={() => router.push('/onboarding/privacy')}
+                    >
+                        <Text style={{ color: Colors.theme.matteBlack, fontSize: 16, fontWeight: 'bold' }}>Finish Setup</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        style={{
+                            marginTop: 15,
+                            alignItems: 'center',
+                            paddingVertical: 10,
+                        }}
+                        onPress={() => router.push('/onboarding/privacy')}
+                    >
+                        <Text style={{ color: Colors.theme.dust, fontSize: 16, fontWeight: '600' }}>Skip for now</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
         </SafeAreaView>
     );
 }
@@ -681,7 +871,7 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: Colors.background,
+        backgroundColor: Colors.theme.matteBlack,
     },
     header: {
         flexDirection: 'row',
@@ -709,12 +899,10 @@ const styles = StyleSheet.create({
     filterBtn: {
         width: 50,
         height: 50,
-        borderRadius: 25,
+        borderRadius: 12,
         backgroundColor: Colors.theme.charcoal,
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 1.5,
-        borderColor: Colors.theme.harvestGold,
     },
     tabContainer: {
         alignItems: 'center',
@@ -811,6 +999,33 @@ const styles = StyleSheet.create({
         color: 'white',
         fontWeight: 'bold',
         fontSize: 14,
-    }
+    },
+    welcomeBanner: {
+        backgroundColor: Colors.theme.charcoal,
+        borderRadius: 16,
+        padding: 16,
+        marginHorizontal: 20,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: Colors.theme.harvestGold,
+        position: 'relative',
+    },
+    welcomeCloseBtn: {
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        zIndex: 10,
+    },
+    welcomeTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: Colors.theme.harvestGold,
+        paddingRight: 24,
+    },
+    welcomeBody: {
+        fontSize: 14,
+        color: Colors.theme.softWhite,
+        marginTop: 4,
+        lineHeight: 18,
+    },
 });
-

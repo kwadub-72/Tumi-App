@@ -234,10 +234,16 @@ export default function EditProfileScreen() {
                 {/* Avatar Section */}
                 <View style={styles.avatarSection}>
                     <TouchableOpacity onPress={pickImage} style={styles.avatarContainer}>
-                        <Image
-                            source={avatarUrl ? { uri: avatarUrl } : require('../assets/images/kwadub.jpg')}
-                            style={styles.avatar}
-                        />
+                        {avatarUrl ? (
+                            <Image
+                                source={{ uri: avatarUrl }}
+                                style={styles.avatar}
+                            />
+                        ) : (
+                            <View style={[styles.avatar, styles.placeholderAvatar]}>
+                                <Ionicons name="person" size={60} color={Colors.theme.dust} />
+                            </View>
+                        )}
                     </TouchableOpacity>
                     <TouchableOpacity onPress={pickImage}>
                         <Text style={styles.editPhotoText}>Edit photo</Text>
@@ -483,6 +489,13 @@ const styles = StyleSheet.create({
     avatar: {
         width: '100%',
         height: '100%',
+    },
+    placeholderAvatar: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: Colors.theme.charcoal,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
     },
     editPhotoText: {
         color: Colors.primary,

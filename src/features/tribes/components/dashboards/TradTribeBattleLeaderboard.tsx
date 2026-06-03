@@ -23,14 +23,18 @@ const generateDummyLeaderboard = () => [
     { id: '6', rank: 6, name: 'Peteyboy', handle: '@CheterMesservy4', avatar: 'https://i.pravatar.cc/100?img=59', logged: false, trend: 0, trendDir: 'none', record: '6-2', leaf: true, activity: 'hammer' },
 ];
 
-import { useIsSpectator } from '../../hooks/useTribeRoles';
+import { useIsSpectator, useIsChief } from '../../hooks/useTribeRoles';
+import { useRouter } from 'expo-router';
 
-export const TradTribeBattleLeaderboard = ({ tribeId }: { tribeId?: string }) => {
+export const TradTribeBattleLeaderboard = ({ tribeId, tribe }: { tribeId?: string; tribe?: any }) => {
+    const resolvedTribeId = tribeId || tribe?.id || '';
+    const { isChief } = useIsChief(resolvedTribeId);
+    const router = useRouter();
     const [expanded, setExpanded] = useState(false);
     const [modalInfo, setModalInfo] = useState<{ visible: boolean, title: string, description: string, iconName: any } | null>(null);
     const week = getCompetitionWeek();
     const users = generateDummyLeaderboard();
-    const { isSpectator } = useIsSpectator(tribeId);
+    const { isSpectator } = useIsSpectator(resolvedTribeId);
 
     const visibleUsers = expanded ? users : users.slice(0, 5);
 
@@ -41,7 +45,7 @@ export const TradTribeBattleLeaderboard = ({ tribeId }: { tribeId?: string }) =>
 
     return (
         <View style={styles.container}>
-            <Text style={styles.dashboardType}>Face-off • Tribe Battle • Habits</Text>
+            <Text style={styles.dashboardType}>Tribe vs Tribe • Faceoff</Text>
 
             <View style={styles.header}>
                 <Text style={styles.leagueName}>Team flex</Text>
@@ -329,5 +333,24 @@ const styles = StyleSheet.create({
         fontSize: 10,
         color: Colors.primary,
         opacity: 0.7,
-    }
+    },
+    chamberBtn: {
+        position: 'absolute',
+        top: 10,
+        right: 15,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#262525',
+        borderWidth: 1.5,
+        borderColor: '#DAA520',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 50,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 3,
+        elevation: 5,
+    },
 });

@@ -1,16 +1,15 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Image, PanResponder, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Animated, Dimensions, LayoutAnimation, PanResponder, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { FeedPost } from '../../src/shared/models/types';
 import { NutritionService } from '../../src/shared/services/NutritionService';
 import { Colors } from '../../src/shared/theme/Colors';
 import { PostStore } from '../../store/PostStore';
 import { WeightEntry, WeightStore } from '../../store/WeightStore';
 import { useUserStore } from '../../store/UserStore';
-import { useUserTribeStore } from '../../src/store/UserTribeStore';
-import { LayoutAnimation } from 'react-native';
+import { useAuthStore } from '../../store/AuthStore';
+import { SupabasePostService } from '../../src/shared/services/SupabasePostService';
 import { CalendarModal } from '../../src/features/feed/components/CalendarModal';
 import { TabonoLogo } from '../../src/shared/components/TabonoLogo';
 
@@ -36,11 +35,13 @@ export default function DashboardScreen() {
     const [isCalendarVisible, setIsCalendarVisible] = useState(false);
     const [chartWidth, setChartWidth] = useState(320);
 
-    const TARGET_WEIGHT = 236;
+    const { profile } = useAuthStore();
 
-    // Sync with UserStore
-    const goals = userInfo.macroTargets;
-    const calorieGoal = (goals.p * 4) + (goals.c * 4) + (goals.f * 9);
+    const TARGET_WEIGHT = profile?.weight_lbs || userInfo.weight || 200;
+
+    // Sync with AuthStore / UserStore
+    const goals = profile?.macro_targets || userInfo.macroTargets;
+    const calorieGoal = goals.calories || (goals.p * 4) + (goals.c * 4) + (goals.f * 9);
 
     const getWeekDates = (start: Date) => {
         return Array.from({ length: 7 }, (_, i) => {
@@ -85,21 +86,43 @@ export default function DashboardScreen() {
     const topGridPct    = 0.125; 
     const bottomGridPct = 0.875; 
 
-    useEffect(() => {
-        const fetchAndCalculate = async () => {
-            const posts = await PostStore.loadPosts();
-            calculate(posts);
-        };
+    const fetchTodayMacros = useCallback(async () => {
+        const userId = useAuthStore.getState().session?.user?.id;
+        if (!userId) return;
 
-        const calculate = (posts: FeedPost[]) => {
-            const userPosts = posts.filter(p => p.user.handle === userInfo.handle);
-            const meals = userPosts.map(p => p.meal).filter(m => m !== undefined);
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+        try {
+            const posts = await SupabasePostService.getFeed({
+                userId,
+                feedType: 'diary',
+                date: start,
+            });
+            const meals = posts.map(p => p.meal).filter(m => m !== undefined);
             const totals = NutritionService.sumMacros(meals as any);
             setDailyTotals(totals);
-        };
 
-        fetchAndCalculate();
+            // Fetch and set weight data from Supabase
+            const weightData = await WeightStore.loadWeights();
+            setWeights(weightData);
+            const est = await WeightStore.getEstimatedWeight();
+            setEstimatedWeight(est);
+        } catch (error) {
+            console.error('Failed to fetch today macros & weights:', error);
+        }
+    }, []);
 
+    useFocusEffect(
+        useCallback(() => {
+            fetchTodayMacros();
+        }, [fetchTodayMacros])
+    );
+
+    useEffect(() => {
+        fetchTodayMacros();
+    }, [profile?.id, fetchTodayMacros]);
+
+    useEffect(() => {
         const loadWeights = async () => {
             const data = await WeightStore.loadWeights();
             setWeights(data);
@@ -108,7 +131,6 @@ export default function DashboardScreen() {
         };
         loadWeights();
 
-        const unsubPosts = PostStore.subscribe(calculate);
         const unsubWeights = WeightStore.subscribe(async (newData) => {
             setWeights(newData);
             const est = await WeightStore.getEstimatedWeight();
@@ -116,15 +138,14 @@ export default function DashboardScreen() {
         });
 
         return () => {
-            unsubPosts();
             unsubWeights();
         };
-    }, [userInfo.handle]);
+    }, []);
 
     const handleReset = async () => {
         await PostStore.clearPosts();
         await WeightStore.clearWeights();
-        await PostStore.clearPostLikes(userInfo.handle);
+        await PostStore.clearPostLikes(profile?.handle || userInfo.handle);
         userInfo.setStatus('none');
     };
 
@@ -181,7 +202,27 @@ export default function DashboardScreen() {
         return (
             <View style={styles.macroRowRow}>
                 <View style={styles.macroIconBox}>
-                    <MaterialCommunityIcons name={icon as any} size={24} color={Colors.theme.harvestGold} />
+                    {icon === 'fire' ? (
+                        <MaterialCommunityIcons name="fire" size={30} color={Colors.theme.harvestGold} />
+                    ) : (
+                        <View style={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: 12,
+                            backgroundColor: Colors.theme.harvestGold,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                        }}>
+                            <Text style={{
+                                color: Colors.theme.matteBlack,
+                                fontSize: 13,
+                                fontWeight: 'bold',
+                                lineHeight: 15,
+                            }}>
+                                {icon === 'food-drumstick' ? 'P' : icon === 'barley' ? 'C' : 'F'}
+                            </Text>
+                        </View>
+                    )}
                 </View>
                 <View style={styles.macroTrackWrap}>
                     <View style={styles.macroHeaderRow}>
@@ -228,7 +269,7 @@ export default function DashboardScreen() {
                             label="Calories"
                             consumed={dailyTotals.cals}
                             goal={calorieGoal}
-                            unit="kcal"
+                            unit="cals"
                         />
                         <MacroRow
                             icon="food-drumstick"
@@ -287,7 +328,7 @@ export default function DashboardScreen() {
                             
                             <View style={styles.weightBadge}>
                                 <Text style={styles.weightBadgeText}>
-                                    {estimatedWeight ? `${estimatedWeight.toFixed(1)} lbs` : '236.0 lbs'}
+                                    {estimatedWeight ? `${estimatedWeight.toFixed(1)} lbs` : `${TARGET_WEIGHT.toFixed(1)} lbs`}
                                 </Text>
                             </View>
 

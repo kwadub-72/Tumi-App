@@ -235,7 +235,7 @@ export const TradTribeBattleUserMatchup = ({
     if (isLocked) {
         return (
             <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', minHeight: 280, gap: 15 }]}>
-                <Text style={styles.dashboardType}>Head-to-Head • Faceoff • Habits</Text>
+                <Text style={styles.dashboardType}>Head-to-Head • Faceoff</Text>
                 <View style={{ backgroundColor: '#262525', width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: Colors.theme.harvestGold }}>
                     <MaterialCommunityIcons name="lock" size={32} color={Colors.theme.harvestGold} />
                 </View>
@@ -374,7 +374,7 @@ export const TradTribeBattleUserMatchup = ({
 
     return (
         <View style={styles.container}>
-            <Text style={styles.dashboardType}>Head-to-Head • Faceoff • Habits</Text>
+            <Text style={styles.dashboardType}>Head-to-Head • Faceoff</Text>
             <Text style={styles.weekText}>Week {week}</Text>
 
             {/* Matchup Selector Dropdown */}

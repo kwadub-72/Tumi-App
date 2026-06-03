@@ -455,7 +455,7 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
                 showsVerticalScrollIndicator={false}
                 ListEmptyComponent={
                     <View style={styles.emptyState}>
-                        <Ionicons name="journal" size={60} color={Colors.primary + '33'} />
+                        <Ionicons name="journal" size={60} color={Colors.theme.dust + '44'} />
                         <Text style={styles.emptyTitle}>No entries yet.</Text>
                         <Text style={styles.emptySubtitle}>Log a workout or meal on this date to see it here.</Text>
                     </View>
@@ -472,8 +472,20 @@ const styles = StyleSheet.create({
     title: { fontSize: 24, fontWeight: 'bold', color: Colors.white },
     subtitle: { color: Colors.textDim, marginTop: 4, fontSize: 14 },
     emptyState: { padding: 60, alignItems: 'center', justifyContent: 'center' },
-    emptyTitle: { color: Colors.white, fontSize: 18, fontWeight: '700', marginTop: 16 },
-    emptySubtitle: { color: Colors.theme.dust + 'CC', fontSize: 13, marginTop: 6, textAlign: 'center' },
+    emptyTitle: {
+        color: Colors.theme.dust,
+        fontSize: 16,
+        opacity: 0.6,
+        marginTop: 20,
+        textAlign: 'center',
+    },
+    emptySubtitle: {
+        color: Colors.theme.dust,
+        fontSize: 13,
+        opacity: 0.4,
+        marginTop: 6,
+        textAlign: 'center',
+    },
     list: { paddingHorizontal: 8, paddingVertical: 16, paddingBottom: 100 },
     toastContainer: {
         position: 'absolute',

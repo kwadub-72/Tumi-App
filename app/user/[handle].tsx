@@ -338,10 +338,16 @@ export default function OtherUserProfileScreen() {
             {/* Profile Info */}
             <View style={styles.profileInfo}>
                 <View style={styles.avatarContainer}>
-                    <Image
-                        source={targetProfile.avatar_url ? { uri: targetProfile.avatar_url } as any : { uri: 'https://i.pravatar.cc/150?u=default' } as any}
-                        style={styles.avatar}
-                    />
+                    {targetProfile.avatar_url ? (
+                        <Image
+                            source={{ uri: targetProfile.avatar_url } as any}
+                            style={styles.avatar}
+                        />
+                    ) : (
+                        <View style={[styles.avatar, styles.placeholderAvatar]}>
+                            <Ionicons name="person" size={50} color={Colors.theme.dust} />
+                        </View>
+                    )}
                 </View>
 
                 <View style={styles.textInfo}>
@@ -364,6 +370,7 @@ export default function OtherUserProfileScreen() {
                                     activity={targetProfile.activity} 
                                     icon={targetProfile.activity_icon} 
                                     size={18} 
+                                    color={Colors.theme.harvestGold}
                                 />
                             </TouchableOpacity>
                         )}
@@ -695,6 +702,13 @@ const styles = StyleSheet.create({
         height: 100,
         borderRadius: 50,
         backgroundColor: 'rgba(0,0,0,0.05)',
+    },
+    placeholderAvatar: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: Colors.theme.charcoal,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
     },
     textInfo: {
         flex: 1,

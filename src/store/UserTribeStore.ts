@@ -22,6 +22,7 @@ interface UserTribeState {
     // Initialization — fetches real DB state
     init: (userId?: string) => Promise<void>;
     refreshMyTribes: (userId: string) => Promise<void>;
+    fetchTribe: (tribeId: string) => Promise<void>;
 }
 
 export const useUserTribeStore = create<UserTribeState>()(
@@ -38,6 +39,26 @@ export const useUserTribeStore = create<UserTribeState>()(
                 }
             },
 
+            fetchTribe: async (tribeId: string) => {
+                try {
+                    const freshTribe = await SupabaseTribeService.getTribe(tribeId);
+                    if (freshTribe) {
+                        const { myTribes, selectedTribe } = get();
+                        
+                        // Replace the stale tribe inside myTribes array
+                        const updatedTribes = myTribes.map(t => t.id === tribeId ? freshTribe : t);
+                        set({ myTribes: updatedTribes });
+                        
+                        // Update selectedTribe with fresh data if active
+                        if (selectedTribe?.id === tribeId) {
+                            set({ selectedTribe: freshTribe });
+                        }
+                    }
+                } catch (err) {
+                    console.error('[UserTribeStore.fetchTribe]', err);
+                }
+            },
+
             refreshMyTribes: async (userId: string) => {
                 try {
                     const [tribes, memberships] = await Promise.all([
@@ -51,11 +72,16 @@ export const useUserTribeStore = create<UserTribeState>()(
 
                     set({ myTribes: tribes, memberships, pendingTribes: pendingIds });
 
-                    // Keep selectedTribe valid
+                    // Keep selectedTribe valid and hydrated with fresh data
                     const currentSelected = get().selectedTribe;
-                    if (currentSelected && !tribes.find(t => t.id === currentSelected.id)) {
-                        set({ selectedTribe: tribes.length > 0 ? tribes[0] : null });
-                    } else if (!currentSelected && tribes.length > 0) {
+                    if (currentSelected) {
+                        const freshSelected = tribes.find(t => t.id === currentSelected.id);
+                        if (freshSelected) {
+                            set({ selectedTribe: freshSelected });
+                        } else {
+                            set({ selectedTribe: tribes.length > 0 ? tribes[0] : null });
+                        }
+                    } else if (tribes.length > 0) {
                         set({ selectedTribe: tribes[0] });
                     }
                 } catch (err) {

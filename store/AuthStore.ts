@@ -1,7 +1,7 @@
 import { Session, User } from '@supabase/supabase-js';
 import { create } from 'zustand';
 import { supabase } from '../src/shared/services/supabase';
-import { UserStatus } from './UserStore';
+import { UserStatus, useUserStore } from './UserStore';
 
 export interface DbProfile {
     id: string;
@@ -91,7 +91,42 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     signOut: async () => {
         await supabase.auth.signOut();
+        
+        // Wipe the primary Auth Store
         set({ session: null, profile: null });
+        
+        // Forcefully wipe the legacy Profile Store so stale data doesn't ghost
+        if (useUserStore && useUserStore.setState) {
+            useUserStore.setState({ 
+                name: '', 
+                handle: '', 
+                avatar: '', 
+                email: '',
+                height: '',
+                weight: 0,
+                bfs: '',
+                tribe: '',
+                tribeAvatar: '',
+                followers: 0,
+                following: 0,
+                units: 'imperial',
+                status: 'none',
+                macroTargets: { p: 0, c: 0, f: 0, calories: 0 },
+                lastMacroUpdate: '',
+                trainingTarget: '',
+                activity: '',
+                activityIcon: '',
+                bio: '',
+                isPrivate: false,
+                showMeals: false,
+                showWorkouts: false,
+                showMacros: false,
+                showLikes: false,
+                showMeasurements: false,
+                instagramLink: '',
+                tiktokLink: ''
+            }); 
+        }
     },
 
     refreshProfile: async () => {

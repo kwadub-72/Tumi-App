@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, FlatList, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
+import { Colors } from '@/src/shared/theme/Colors';
 
 interface HeightRolodexProps {
     minFt?: number;
@@ -134,7 +135,7 @@ export default function HeightRolodex({ minFt = 1, maxFt = 9, selectedFt, select
 const styles = StyleSheet.create({
     container: {
         height: CONTAINER_HEIGHT,
-        backgroundColor: '#1E251E',
+        backgroundColor: Colors.theme.matteBlack,
         flexDirection: 'row',
         paddingHorizontal: 20,
     },
@@ -143,14 +144,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     colHeader: {
-        color: '#8FA88F',
+        color: Colors.theme.harvestGold,
         marginTop: 10,
         marginBottom: 5,
         fontWeight: 'bold',
     },
     divider: {
         width: 1,
-        backgroundColor: '#2F3A27',
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
         marginVertical: 20,
     },
     item: {
@@ -158,19 +159,22 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         width: '100%',
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255, 255, 255, 0.02)',
     },
     selectedItem: {
-        backgroundColor: '#2F3A27',
+        backgroundColor: Colors.theme.charcoal,
         borderRadius: 10,
         width: '80%',
+        borderBottomWidth: 0,
     },
     itemText: {
         fontSize: 20,
-        color: 'rgba(255,255,255,0.4)',
+        color: Colors.theme.dust,
         fontWeight: '600',
     },
     selectedItemText: {
-        color: 'white',
+        color: Colors.theme.harvestGold,
         fontWeight: 'bold',
         fontSize: 24,
     }

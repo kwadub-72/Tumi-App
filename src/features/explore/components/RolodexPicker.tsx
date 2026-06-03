@@ -1,6 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useRef, useEffect } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, FlatList, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
+import { Colors } from '@/src/shared/theme/Colors';
 
 interface ActivityOption {
     name: string;
@@ -62,13 +63,13 @@ export default function RolodexPicker({ options, selected, onSelect, showAll = t
                         <MaterialCommunityIcons
                             name={item.icon}
                             size={20}
-                            color={isSelected ? '#F5F5DC' : 'rgba(255,255,255,0.5)'}
+                            color={isSelected ? Colors.theme.harvestGold : Colors.theme.dust}
                         />
                         {item.modifier && (
                             <MaterialCommunityIcons
                                 name={item.modifier === '+' ? 'plus' : 'minus'}
                                 size={20}
-                                color={isSelected ? '#F5F5DC' : 'rgba(255,255,255,0.5)'}
+                                color={isSelected ? Colors.theme.harvestGold : Colors.theme.dust}
                             />
                         )}
                     </View>
@@ -105,7 +106,7 @@ export default function RolodexPicker({ options, selected, onSelect, showAll = t
 const styles = StyleSheet.create({
     container: {
         height: CONTAINER_HEIGHT,
-        backgroundColor: '#1E251E',
+        backgroundColor: Colors.theme.matteBlack,
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
         overflow: 'hidden',
@@ -116,21 +117,24 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255, 255, 255, 0.05)',
     },
     selectedItem: {
-        backgroundColor: '#2F3A27',
+        backgroundColor: Colors.theme.charcoal,
         marginHorizontal: 15,
         borderRadius: 15,
+        borderBottomWidth: 0,
     },
     itemText: {
         fontSize: 16,
-        color: 'rgba(255,255,255,0.4)',
+        color: Colors.theme.dust,
         fontWeight: '600',
         maxWidth: '80%', // Forces early wrapping to keep icon closer
         textAlign: 'center', // Centers wrapped multi-line text cleanly
     },
     selectedItemText: {
-        color: 'white',
+        color: Colors.theme.harvestGold,
         fontWeight: 'bold',
         fontSize: 18,
     },

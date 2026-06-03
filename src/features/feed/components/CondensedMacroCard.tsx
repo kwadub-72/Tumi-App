@@ -157,17 +157,68 @@ export function CondensedMacroCard({
                 </View>
                 
                 <View style={styles.metricItem}>
-                    <MaterialCommunityIcons name="food-drumstick" size={16} color={pColor} />
+                    <View style={{
+                        backgroundColor: Colors.theme.harvestGold,
+                        borderRadius: 8,
+                        width: 16,
+                        height: 16,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        marginRight: 4
+                    }}>
+                        <Text style={{
+                            color: Colors.theme.matteBlack,
+                            fontWeight: 'bold',
+                            fontSize: 9,
+                            lineHeight: 11,
+                        }}>
+                            P
+                        </Text>
+                    </View>
                     <Text style={[styles.metricValue, { color: pColor }]}>{formatVal(protein)}</Text>
                 </View>
                 
                 <View style={styles.metricItem}>
-                    <MaterialCommunityIcons name="barley" size={16} color={cColor} />
+                    <View style={{
+                        backgroundColor: Colors.theme.harvestGold,
+                        borderRadius: 8,
+                        width: 16,
+                        height: 16,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        marginRight: 4
+                    }}>
+                        <Text style={{
+                            color: Colors.theme.matteBlack,
+                            fontWeight: 'bold',
+                            fontSize: 9,
+                            lineHeight: 11,
+                        }}>
+                            C
+                        </Text>
+                    </View>
                     <Text style={[styles.metricValue, { color: cColor }]}>{formatVal(carbs)}</Text>
                 </View>
                 
                 <View style={styles.metricItem}>
-                    <Ionicons name="water" size={16} color={fColor} />
+                    <View style={{
+                        backgroundColor: Colors.theme.harvestGold,
+                        borderRadius: 8,
+                        width: 16,
+                        height: 16,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        marginRight: 4
+                    }}>
+                        <Text style={{
+                            color: Colors.theme.matteBlack,
+                            fontWeight: 'bold',
+                            fontSize: 9,
+                            lineHeight: 11,
+                        }}>
+                            F
+                        </Text>
+                    </View>
                     <Text style={[styles.metricValue, { color: fColor }]}>{formatVal(fats)}</Text>
                 </View>
             </View>

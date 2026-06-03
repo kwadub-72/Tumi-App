@@ -107,9 +107,14 @@ export const ExploreService = {
   },
 
   async searchTribes(userId: string, query: string = ''): Promise<DiscoveryTribe[]> {
+    // 1. Format query for PostgreSQL ILIKE matching
+    const formattedQuery = query && query.trim() !== '' ? `%${query.trim()}%` : '';
+
+    // 2. Execute RPC with formatted query
+    console.log("SEARCH PAYLOAD:", { p_user_id: userId, p_query: formattedQuery });
     const { data, error } = await supabase.rpc('search_tribes', {
       p_user_id: userId,
-      p_query: query,
+      p_query: formattedQuery,
       p_limit: 25,
     });
 
@@ -128,7 +133,7 @@ export const ExploreService = {
       description: row.description ?? '',
       tags: row.tags ?? [],
       memberCount: row.member_count ?? 0,
-      naturalStatus: row.natural_status ?? null,   // null = not specified
+      naturalStatus: row.natural_status ?? null,
       activityType: row.activity_type ?? undefined,
       activityIcon: row.activity_icon ?? undefined,
       focusType: (row.focus_type ?? row.tribe_type ?? 'accountability') as any,

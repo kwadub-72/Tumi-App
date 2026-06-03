@@ -1,364 +1,355 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, LayoutAnimation } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { Colors } from '../../../../shared/theme/Colors';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import TribeInfoModal from '../TribeInfoModal';
+import { useAuthStore } from '@/store/AuthStore';
+import { useProfileNavigation } from '@/src/shared/hooks/useProfileNavigation';
+import { useTribeScoreboard } from '../../hooks/useTribeScoreboard';
+import { resolveActivityIcon } from '@/src/shared/constants/Activities';
+import * as Haptics from 'expo-haptics';
+import Reanimated, { LinearTransition } from 'react-native-reanimated';
 
-const getCompetitionWeek = () => {
-    const START_DATE = new Date('2026-03-22T00:00:00Z');
-    const now = new Date();
-    const diffMs = now.getTime() - START_DATE.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    const weeks = Math.floor(diffDays / 7) + 1;
-    return Math.max(1, weeks);
+// Helper to determine top 3 rank medal coloring
+const getRankColor = (rank: number) => {
+    if (rank === 1) return '#DAA520'; // Gold
+    if (rank === 2) return '#C0C0C0'; // Silver
+    if (rank === 3) return '#CD7F32'; // Bronze
+    return 'rgba(237, 232, 213, 0.6)'; // Soft Dust
 };
 
-const mockMatchupData = {
-    leftTribe: {
-        name: 'Team Flex',
-        avatar: 'https://i.pravatar.cc/100?img=33',
-        score: 100,
-        loggedPct: 80,
-    },
-    rightTribe: {
-        name: 'Harvard alums',
-        avatar: 'https://i.pravatar.cc/100?img=60',
-        score: 100,
-        loggedPct: 60,
-    },
-    activeMatchups: [
-        { id: 1, leftUser: { name: 'Kwaku', handle: '@kwadub', avatar: 'https://i.pravatar.cc/100?img=33', leaf: true, activity: 'hammer' }, leftScore: 10, rightUser: { name: 'Matthew', handle: '@BigBoiMatt', avatar: 'https://i.pravatar.cc/100?img=11', leaf: true, activity: 'hammer' }, rightScore: 10 },
-        { id: 2, leftUser: { name: 'Kwaku', handle: '@kwadub', avatar: 'https://i.pravatar.cc/100?img=33', leaf: true, activity: 'hammer' }, leftScore: 10, rightUser: { name: 'Michael', handle: '@MikeyMike123', avatar: 'https://i.pravatar.cc/100?img=60', leaf: true, activity: 'hammer' }, rightScore: 10 },
-        { id: 3, leftUser: { name: 'Kwaku', handle: '@kwadub', avatar: 'https://i.pravatar.cc/100?img=33', leaf: true, activity: 'hammer' }, leftScore: 10, rightUser: { name: 'Michael', handle: '@MikeyMike123', avatar: 'https://i.pravatar.cc/100?img=60', leaf: true, activity: 'hammer' }, rightScore: 10 },
-        { id: 4, leftUser: { name: 'Kwaku', handle: '@kwadub', avatar: 'https://i.pravatar.cc/100?img=33', leaf: true, activity: 'hammer' }, leftScore: 10, rightUser: { name: 'Michael', handle: '@MikeyMike123', avatar: 'https://i.pravatar.cc/100?img=60', leaf: true, activity: 'hammer' }, rightScore: 10 },
-    ]
-};
+export const TradTribeBattleDashboard = ({ tribeId }: { tribeId?: string }) => {
+    const { session } = useAuthStore();
+    const { navigateToProfile } = useProfileNavigation();
+    
+    const { loading, data } = useTribeScoreboard(tribeId || '');
+    const [infoModalVisible, setInfoModalVisible] = useState(false);
+    const [infoModalConfig, setInfoModalConfig] = useState<any>({});
 
-export const TradTribeBattleDashboard = () => {
-    const [expanded, setExpanded] = useState(false);
-    const [modalInfo, setModalInfo] = useState<{ visible: boolean, title: string, description: string, iconName: any } | null>(null);
-    const week = getCompetitionWeek();
-
-    const toggleExpand = () => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setExpanded(!expanded);
+    const openInfoModal = (config: any) => {
+        setInfoModalConfig(config);
+        setInfoModalVisible(true);
     };
 
-    const renderIcons = (user: any) => (
-        <>
-            {user.leaf && (
-                <TouchableOpacity onPress={() => setModalInfo({
-                    visible: true, title: 'Natural Athlete', description: 'This user is verified as a natural athlete by the tribe.', iconName: 'leaf'
-                })}>
-                    <MaterialCommunityIcons name="leaf" size={14} color="#1BB607" style={styles.icon} />
-                </TouchableOpacity>
-            )}
-            {user.activity && (
-                <TouchableOpacity onPress={() => setModalInfo({
-                    visible: true, 
-                    title: user.activity === 'hammer' ? 'Bodybuilding' : (user.activity === 'weight-lifter' ? 'Powerlifting' : 'Activity'), 
-                    description: '', 
-                    iconName: user.activity as any
-                })}>
-                    <MaterialCommunityIcons name={user.activity as any} size={14} color={Colors.primary} style={styles.icon} />
-                </TouchableOpacity>
-            )}
-        </>
-    );
+    const handleRowPress = (member: any) => {
+        if (!member.id) return;
+        navigateToProfile({ id: member.id, handle: member.handle || '' });
+    };
+
+    if (loading) {
+        return (
+            <View style={styles.loaderContainer}>
+                <ActivityIndicator size="large" color={Colors.theme.harvestGold} />
+                <Text style={styles.loadingText}>Syncing Scoreboard...</Text>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
-            <Text style={styles.dashboardType}>Face-off • Tribe Battle • Habits</Text>
-
-            <View style={styles.header}>
-                <Text style={styles.leagueName}>Team flex</Text>
-                <Image source={{ uri: 'https://i.pravatar.cc/100?img=26' }} style={styles.leagueImage} />
-            </View>
-            <Text style={styles.weekText}>Week {week}</Text>
-
-            <View style={styles.matchupContainer}>
-                {/* Left Tribe */}
-                <View style={styles.tribeCol}>
-                    <Image source={{ uri: mockMatchupData.leftTribe.avatar }} style={styles.bigAvatar} />
-                    <Text style={styles.tribeName}>{mockMatchupData.leftTribe.name}</Text>
-
-                    <View style={styles.loggedBarContainer}>
-                        <View style={styles.loggedCircle}>
-                            <MaterialCommunityIcons name="check" size={14} color="white" />
-                        </View>
-                        <View style={styles.loggedBarBg}>
-                            <View style={[styles.loggedBarFill, { width: `${mockMatchupData.leftTribe.loggedPct}%` }]} />
-                        </View>
-                    </View>
-                </View>
-
-                {/* Score */}
-                <View style={styles.scoreCol}>
-                    <Text style={styles.bigScore}>{mockMatchupData.leftTribe.score}-{mockMatchupData.rightTribe.score}</Text>
-                </View>
-
-                {/* Right Tribe */}
-                <View style={styles.tribeCol}>
-                    <Image source={{ uri: mockMatchupData.rightTribe.avatar }} style={styles.bigAvatarRight} />
-                    <Text style={styles.tribeName}>{mockMatchupData.rightTribe.name}</Text>
-
-                    <View style={styles.loggedBarContainer}>
-                        <View style={styles.loggedCircle}>
-                            <MaterialCommunityIcons name="check" size={14} color="white" />
-                        </View>
-                        <View style={styles.loggedBarBg}>
-                            <View style={[styles.loggedBarFill, { width: `${mockMatchupData.rightTribe.loggedPct}%` }]} />
-                        </View>
-                    </View>
-                </View>
+            <View style={styles.tableHeaderRow}>
+                <Text style={[styles.columnHeader, styles.colIdentityCompetitive]}>MEMBER</Text>
+                <Text style={[styles.columnHeader, styles.colLoggedCompetitive, { textAlign: 'center' }]} numberOfLines={1} adjustsFontSizeToFit>LOGGED</Text>
+                <Text style={[styles.columnHeader, styles.colTrendCompetitive, { textAlign: 'center' }]}>TREND</Text>
+                <Text style={[styles.columnHeader, styles.colPointsCompetitive, { textAlign: 'center' }]}>RECORD</Text>
             </View>
 
-            <TouchableOpacity style={styles.expandButton} onPress={toggleExpand}>
-                <MaterialCommunityIcons name="dots-horizontal" size={24} color="white" />
-            </TouchableOpacity>
+            {data.map((member) => {
+                const isCurrentUser = session?.user?.id === member.id;
+                
+                return (
+                    <Reanimated.View 
+                        key={member.id} 
+                        layout={LinearTransition.duration(400)}
+                        style={isCurrentUser && styles.currentUserRowWrapper}
+                    >
+                        <TouchableOpacity
+                            style={[
+                                styles.memberRow,
+                                isCurrentUser && styles.currentUserHighlightRow
+                            ]}
+                            activeOpacity={0.85}
+                            onPress={() => handleRowPress(member)}
+                        >
+                            <View style={[styles.memberCell, styles.colIdentityCompetitive, styles.identityContainer]}>
+                                <View style={styles.rankContainer}>
+                                    <Text style={[styles.rankNumberText, { color: getRankColor(member.rank) }]}>{member.rank}</Text>
+                                </View>
+                                <Image source={member.avatar ? { uri: member.avatar } : require('@/assets/images/react-logo.png')} style={styles.avatar} />
+                                <View style={styles.nameContainer}>
+                                    <Text style={styles.displayName} numberOfLines={1}>{member.name}</Text>
+                                    <Text style={styles.userHandle} numberOfLines={1}>{member.handle}</Text>
+                                    <View style={styles.metaIndicatorRow}>
+                                        {member.status && member.status !== 'none' && (
+                                            <TouchableOpacity
+                                                activeOpacity={0.7}
+                                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                                style={styles.metaIndicatorPill}
+                                                onPress={() => {
+                                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                                    const isNatural = member.status !== 'enhanced';
+                                                    openInfoModal({
+                                                        title: isNatural ? 'Natural' : 'Enhanced',
+                                                        description: isNatural
+                                                            ? `${member.name} is verified as 100% Natural.`
+                                                            : `${member.name} is verified as Enhanced.`,
+                                                        iconName: isNatural ? 'leaf' : 'lightning-bolt',
+                                                        iconColor: isNatural ? Colors.natural : Colors.theme.harvestGold,
+                                                    });
+                                                }}
+                                            >
+                                                <MaterialCommunityIcons
+                                                    name={member.status === 'enhanced' ? 'lightning-bolt' : 'leaf'}
+                                                    size={14}
+                                                    color={member.status === 'enhanced' ? Colors.theme.harvestGold : Colors.natural}
+                                                />
+                                            </TouchableOpacity>
+                                        )}
+                                        {member.activity && (
+                                            (() => {
+                                                    const actLower = member.activity.toLowerCase();
+                                                    const isBulk = actLower.includes('bulk') || actLower.includes('increase');
+                                                    const isCut = actLower.includes('cut') || actLower.includes('decrease');
+                                                    const modifier = isBulk ? '+' : (isCut ? '-' : '');
+                                                    const activeIconName = resolveActivityIcon(member.activity, member.activityIcon);
 
-            {expanded && (
-                <View style={styles.expandedContent}>
-                    {mockMatchupData.activeMatchups.map((matchup) => (
-                        <View key={matchup.id} style={styles.matchupRow}>
-                            <View style={styles.matchupUserLeft}>
-                                <Image source={{ uri: matchup.leftUser.avatar }} style={styles.smallAvatar} />
-                                <View style={styles.historyNameCol}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Text style={styles.historyName}>{matchup.leftUser.name}</Text>
-                                        {renderIcons(matchup.leftUser)}
+                                                    return (
+                                                        <TouchableOpacity
+                                                            activeOpacity={0.7}
+                                                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                                            style={[styles.metaIndicatorPill, styles.activityPill]}
+                                                            onPress={() => {
+                                                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                                                openInfoModal({
+                                                                    title: member.activity || 'Activity',
+                                                                    description: '',
+                                                                    iconName: activeIconName,
+                                                                    modifier: modifier || undefined,
+                                                                });
+                                                            }}
+                                                        >
+                                                            <MaterialCommunityIcons name={activeIconName as any} size={14} color={Colors.theme.dust} />
+                                                            {modifier ? <Text style={styles.mathModifierText}>{modifier}</Text> : null}
+                                                        </TouchableOpacity>
+                                                    );
+                                            })()
+                                        )}
                                     </View>
-                                    <Text style={styles.historyHandle}>{matchup.leftUser.handle}</Text>
                                 </View>
                             </View>
 
-                            <View style={styles.historyScoreBox}>
-                                <View style={styles.historyScoreRow}>
-                                    <Text style={[styles.historyScore, { color: 'white', opacity: 0.8 }]}>{matchup.leftScore}</Text>
-                                    <View style={styles.historyDividerHoriz} />
-                                    <Text style={[styles.historyScore, { color: 'white', opacity: 0.8 }]}>{matchup.rightScore}</Text>
-                                </View>
+                            <View style={[styles.memberCell, styles.colLoggedCompetitive, styles.centerCell]}>
+                                {member.logged ? (
+                                    <Ionicons name="checkmark-circle" size={24} color={Colors.theme.harvestGold} />
+                                ) : (
+                                    <View style={styles.unloggedCircle} />
+                                )}
                             </View>
 
-                            <View style={styles.matchupUserRight}>
-                                <View style={[styles.historyNameCol, { alignItems: 'flex-end' }]}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Text style={styles.historyName}>{matchup.rightUser.name}</Text>
-                                        {renderIcons(matchup.rightUser)}
+                            <View style={[styles.memberCell, styles.colTrendCompetitive, styles.centerCell]}>
+                                {member.rankChange > 0 ? (
+                                    <View style={styles.trendRow}>
+                                        <Text style={styles.trendUpArrow}>▲</Text>
+                                        <Text style={styles.trendUpText}>{member.rankChange}</Text>
                                     </View>
-                                    <Text style={styles.historyHandle}>{matchup.rightUser.handle}</Text>
-                                </View>
-                                <Image source={{ uri: matchup.rightUser.avatar }} style={styles.smallAvatar} />
+                                ) : member.rankChange < 0 ? (
+                                    <View style={styles.trendRow}>
+                                        <Text style={styles.trendDownArrow}>▼</Text>
+                                        <Text style={styles.trendDownText}>{Math.abs(member.rankChange)}</Text>
+                                    </View>
+                                ) : (
+                                    <Text style={styles.trendStagnant}>—</Text>
+                                )}
                             </View>
-                        </View>
-                    ))}
-                </View>
-            )}
 
-            <Text style={styles.timestamp}>Just now</Text>
+                            <View style={[styles.memberCell, styles.colPointsCompetitive, styles.centerCell]}>
+                                <Text style={styles.recordText}>
+                                    {`${member.wins ?? 0}-${member.losses ?? 0}`}
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
+                    </Reanimated.View>
+                );
+            })}
 
-            {modalInfo && (
-                <TribeInfoModal
-                    visible={modalInfo.visible}
-                    onClose={() => setModalInfo(null)}
-                    title={modalInfo.title}
-                    description={modalInfo.description}
-                    type="icon-title"
-                    iconName={modalInfo.iconName}
-                />
-            )}
+            <TribeInfoModal
+                visible={infoModalVisible}
+                onClose={() => setInfoModalVisible(false)}
+                type="icon-title"
+                {...infoModalConfig}
+            />
         </View>
     );
 };
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: Colors.card,
-        borderRadius: 35,
-        padding: 20,
-        paddingTop: 15,
-        borderWidth: 1,
-        borderColor: 'rgba(79, 99, 82, 0.4)',
-        position: 'relative',
+        flex: 1,
     },
-    dashboardType: {
-        textAlign: 'center',
-        color: Colors.primary,
-        fontWeight: 'bold',
+    loaderContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 40,
+    },
+    loadingText: {
+        color: Colors.theme.dust,
         fontSize: 14,
-        marginBottom: 5,
+        fontWeight: '600',
+        marginTop: 12,
     },
-    header: {
+    tableHeaderRow: {
+        flexDirection: 'row',
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(237, 232, 213, 0.12)',
+        marginBottom: 8,
+        paddingHorizontal: 8,
+    },
+    columnHeader: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: '#8B4513',
+        letterSpacing: 1,
+    },
+    currentUserRowWrapper: {
+        borderRadius: 16,
+    },
+    memberRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(237, 232, 213, 0.08)',
+        minHeight: 52,
+        borderRadius: 16,
+        paddingHorizontal: 8,
+        marginVertical: 1,
+    },
+    currentUserHighlightRow: {
+        backgroundColor: 'rgba(218, 165, 32, 0.12)',
+        borderWidth: 1,
+        borderColor: 'rgba(218, 165, 32, 0.35)',
+    },
+    memberCell: {
         justifyContent: 'center',
-        gap: 10,
     },
-    leagueName: {
-        fontSize: 26,
-        fontWeight: 'bold',
-        color: 'white',
+    centerCell: {
+        alignItems: 'center',
     },
-    leagueImage: {
+    colIdentityCompetitive: {
+        flex: 2.5,
+    },
+    colLoggedCompetitive: {
+        flex: 0.8,
+    },
+    colTrendCompetitive: {
+        flex: 1.0,
+    },
+    colPointsCompetitive: {
+        flex: 1.2,
+        alignItems: 'flex-end',
+    },
+    identityContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        minHeight: 44,
+    },
+    rankContainer: {
+        width: 22,
+        marginRight: 6,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    rankNumberText: {
+        fontSize: 14,
+        fontWeight: '900',
+    },
+    avatar: {
         width: 32,
         height: 32,
         borderRadius: 16,
+        borderWidth: 1.5,
+        borderColor: '#DAA520', 
+        marginRight: 10,
     },
-    weekText: {
-        textAlign: 'center',
-        color: 'white',
-        fontStyle: 'italic',
+    nameContainer: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    displayName: {
+        color: '#FFFFFF',
+        fontSize: 14,
+        fontWeight: '700',
+        marginBottom: 1,
+    },
+    userHandle: {
+        color: '#EDE8D5',
+        fontSize: 11,
+        opacity: 0.65,
+    },
+    unloggedCircle: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        borderWidth: 2,
+        borderColor: '#EDE8D5', 
+        backgroundColor: 'transparent',
+    },
+    trendRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+    },
+    trendUpArrow: {
+        fontSize: 11,
+        color: '#AEDD63', 
+    },
+    trendUpText: {
         fontSize: 12,
-        marginBottom: 15,
-        opacity: 0.8,
+        fontWeight: '800',
+        color: '#AEDD63',
     },
-    matchupContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
+    trendDownArrow: {
+        fontSize: 11,
+        color: '#8B2613', 
     },
-    tribeCol: {
-        flex: 1,
-        alignItems: 'center',
+    trendDownText: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#8B2613',
     },
-    scoreCol: {
-        width: 120,
-        height: 80,
-        alignItems: 'center',
-        justifyContent: 'center',
+    trendStagnant: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#EDE8D5',
+        opacity: 0.5,
     },
-    bigScore: {
-        fontSize: 60,
-        fontWeight: 'bold',
-        color: 'rgba(255,255,255,0.7)',
+    recordText: {
+        color: '#FFFFFF', 
+        fontSize: 14,
+        fontWeight: '900',
     },
-    bigAvatar: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        borderWidth: 3,
-        borderColor: Colors.primary,
-        marginBottom: 10,
-    },
-    bigAvatarRight: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        borderWidth: 3,
-        borderColor: '#FCA5A5',
-        marginBottom: 10,
-    },
-    tribeName: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 22,
-        textAlign: 'center',
-        marginBottom: 15,
-    },
-    loggedBarContainer: {
+    metaIndicatorRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        width: '100%',
-        paddingHorizontal: 5,
-        gap: 5,
-    },
-    loggedCircle: {
-        width: 20,
-        height: 20,
-        borderRadius: 10,
-        backgroundColor: Colors.primary,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    loggedBarBg: {
-        flex: 1,
-        height: 24,
-        backgroundColor: Colors.primary,
-        borderRadius: 12,
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.2)',
-    },
-    loggedBarFill: {
-        height: '100%',
-        backgroundColor: '#789370',
-    },
-    expandButton: {
-        alignItems: 'center',
-        marginTop: 15,
-        padding: 5,
-        zIndex: 2,
-    },
-    expandedContent: {
-        marginTop: 10,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(255,255,255,0.2)',
-        paddingTop: 15,
+        marginTop: 4,
         gap: 12,
     },
-    matchupRow: {
+    metaIndicatorPill: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: 5,
-    },
-    matchupUserLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-        gap: 6,
-    },
-    matchupUserRight: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-        justifyContent: 'flex-end',
-        gap: 6,
-    },
-    smallAvatar: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-    },
-    historyNameCol: {
         justifyContent: 'center',
     },
-    historyName: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 14,
-    },
-    historyHandle: {
-        color: 'rgba(255,255,255,0.6)',
-        fontSize: 10,
-    },
-    icon: {
-        marginLeft: 2,
-    },
-    historyScoreBox: {
-        alignItems: 'center',
-        width: 60,
-    },
-    historyScoreRow: {
+    activityPill: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
     },
-    historyScore: {
-        fontSize: 22,
-        fontWeight: 'bold',
+    mathModifierText: {
+        color: '#EDE8D5',
+        fontSize: 11,
+        fontWeight: '900',
+        marginLeft: 1.5,
+        marginTop: -3,
     },
-    historyDividerHoriz: {
-        width: 12,
-        height: 3,
-        backgroundColor: 'rgba(255,255,255,0.4)',
-    },
-    timestamp: {
-        position: 'absolute',
-        bottom: 15,
-        right: 20,
-        fontSize: 10,
-        color: Colors.primary,
-        opacity: 0.7,
-    }
 });

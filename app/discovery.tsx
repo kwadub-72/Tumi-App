@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Image, ActivityIndicator, TextInput, Modal, Pressable, TouchableWithoutFeedback, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '@/src/shared/theme/Colors';
 import { useMarketplaceStore, GoalFilter, EngineFilter, StatusFilter, ActivityFilter, DiscoveryMap } from '@/src/features/macromaps/store/useMarketplaceStore';
@@ -9,9 +9,14 @@ import { useProfileNavigation } from '@/src/shared/hooks/useProfileNavigation';
 import { ACTIVITIES, resolveActivityIcon } from '@/src/shared/constants/Activities';
 import { ActivityIcon } from '@/src/shared/components/ActivityIcon';
 import { DiscoveryMapCard } from '@/src/features/macromaps/components/DiscoveryMapCard';
+import { useOnboardingStore } from '@/store/useOnboardingStore';
 
 export default function DiscoveryFeedScreen() {
     const router = useRouter();
+    const params = useLocalSearchParams();
+    const isOnboarding = params.isOnboarding === 'true';
+    const { selectedMapIds } = useOnboardingStore();
+    const hasSelectedMap = selectedMapIds && selectedMapIds.length > 0;
     const [isFilterModalVisible, setFilterModalVisible] = useState(false);
     const [isActivitySectionExpanded, setIsActivitySectionExpanded] = useState(false);
     const { 
@@ -191,10 +196,10 @@ export default function DiscoveryFeedScreen() {
                     <ActivityIndicator size="large" color={Colors.theme.harvestGold} />
                 </View>
             ) : (
-                <ScrollView contentContainerStyle={styles.feedContent}>
+                <ScrollView contentContainerStyle={[styles.feedContent, isOnboarding && { paddingBottom: 190 }]}>
                     {filteredMaps.length > 0 ? (
                         filteredMaps.map(map => (
-                            <DiscoveryMapCard key={map.id} map={map} />
+                            <DiscoveryMapCard key={map.id} map={map} isOnboarding={isOnboarding} />
                         ))
                     ) : (
                         <View style={styles.emptyState}>
@@ -204,6 +209,24 @@ export default function DiscoveryFeedScreen() {
                         </View>
                     )}
                 </ScrollView>
+            )}
+
+            {isOnboarding && (
+                <View style={styles.footer}>
+                    <TouchableOpacity 
+                        style={[styles.subscribeButton, !hasSelectedMap && styles.disabledButton]}
+                        onPress={() => router.push('/onboarding/tribe')}
+                        disabled={!hasSelectedMap}
+                    >
+                        <Text style={styles.subscribeText}>Continue</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        style={styles.skipButton}
+                        onPress={() => router.push('/onboarding/tribe')}
+                    >
+                        <Text style={styles.skipText}>Skip for now</Text>
+                    </TouchableOpacity>
+                </View>
             )}
         </SafeAreaView>
     );
@@ -647,5 +670,42 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         marginBottom: 12,
         paddingHorizontal: 8,
+    },
+    footer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 100,
+        padding: 20,
+        paddingBottom: 40,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255, 255, 255, 0.05)',
+        backgroundColor: Colors.theme.matteBlack,
+    },
+    subscribeButton: {
+        backgroundColor: Colors.theme.harvestGold,
+        padding: 18,
+        borderRadius: 16,
+        alignItems: 'center',
+    },
+    subscribeText: {
+        color: Colors.theme.matteBlack,
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    disabledButton: {
+        opacity: 0.5,
+        backgroundColor: 'rgba(218, 165, 32, 0.3)',
+    },
+    skipButton: {
+        paddingVertical: 14,
+        alignItems: 'center',
+        marginTop: 8,
+    },
+    skipText: {
+        color: Colors.theme.dust,
+        fontSize: 16,
+        fontWeight: '600',
     }
 });

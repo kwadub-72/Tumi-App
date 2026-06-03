@@ -5,6 +5,8 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '@/src/shared/theme/Colors';
 import { supabase } from '@/src/shared/services/supabase';
 
+import { useOnboardingStore } from '@/store/useOnboardingStore';
+
 interface CheckpointNode {
     id: string;
     sequence_index: number;
@@ -18,9 +20,12 @@ interface CheckpointNode {
     created_at: string;
 }
 
-export default function MapPreviewScreen() {
-    const { map_id } = useLocalSearchParams();
+export default function MapPreviewScreen(props: { isOnboarding?: boolean }) {
+    const params = useLocalSearchParams();
+    const map_id = params.map_id;
+    const isOnboarding = props.isOnboarding || params.isOnboarding === 'true';
     const router = useRouter();
+    const { selectedMapIds, setSelectedMapIds } = useOnboardingStore();
     
     const [checkpoints, setCheckpoints] = useState<CheckpointNode[]>([]);
     const [mapData, setMapData] = useState<{ engine_type: string; is_live: boolean } | null>(null);
@@ -61,6 +66,20 @@ export default function MapPreviewScreen() {
         }
     };
 
+    const handleSubscribe = () => {
+        if (isOnboarding) {
+            if (map_id && typeof map_id === 'string') {
+                const currentIds = selectedMapIds || [];
+                if (!currentIds.includes(map_id)) {
+                    setSelectedMapIds([...currentIds, map_id]);
+                }
+            }
+            router.back();
+        } else {
+            Alert.alert("Subscription", "You have successfully subscribed to this map!");
+        }
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
@@ -68,7 +87,13 @@ export default function MapPreviewScreen() {
                     <Ionicons name="arrow-back" size={28} color={Colors.theme.harvestGold} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Review Map</Text>
-                <View style={{ width: 28 }} />
+                {isOnboarding ? (
+                    <TouchableOpacity onPress={() => router.push('/onboarding/tribe')}>
+                        <Text style={{ color: Colors.theme.harvestGold, fontSize: 16, fontWeight: 'bold' }}>Skip for now</Text>
+                    </TouchableOpacity>
+                ) : (
+                    <View style={{ width: 28 }} />
+                )}
             </View>
 
             {mapData?.engine_type === 'LIVE' && (
@@ -196,7 +221,10 @@ export default function MapPreviewScreen() {
 
             {!loading && checkpoints.length > 0 && (
                 <View style={styles.footer}>
-                    <TouchableOpacity style={styles.subscribeButton}>
+                    <TouchableOpacity 
+                        style={styles.subscribeButton}
+                        onPress={handleSubscribe}
+                    >
                         <Text style={styles.subscribeText}>Subscribe to Map</Text>
                     </TouchableOpacity>
                 </View>
@@ -395,6 +423,7 @@ const styles = StyleSheet.create({
     },
     footer: {
         padding: 20,
+        paddingBottom: 40,
         borderTopWidth: 1,
         borderTopColor: 'rgba(255, 255, 255, 0.05)',
         backgroundColor: Colors.theme.matteBlack,

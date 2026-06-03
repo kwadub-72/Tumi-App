@@ -4,12 +4,12 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
+import { Colors } from '@/src/shared/theme/Colors';
+import { supabase } from '@/src/shared/services/supabase';
+import { useAuthStore } from '@/store/AuthStore';
+import { useOnboardingStore } from '@/store/useOnboardingStore';
 
 const { width } = Dimensions.get('window');
-
-// Colors
-const CREAM_COLOR = '#EAE8D9';
-const BG_COLOR = '#435D4C'; // Matches the greenish background in Image 1
 
 export default function WelcomeScreen() {
     const router = useRouter();
@@ -18,8 +18,18 @@ export default function WelcomeScreen() {
         router.push('/login');
     };
 
-    const handleCreateAccount = () => {
-        router.push('/signup'); // Route to signup flow
+    const handleCreateAccount = async () => {
+        // 1. Destroy any surviving Supabase sessions
+        await supabase.auth.signOut();
+        
+        // 2. Wipe the global auth store
+        useAuthStore.getState().signOut();
+        
+        // 3. Reset the transient onboarding store
+        useOnboardingStore.getState().reset();
+        
+        // 4. Proceed to onboarding safely
+        router.push('/onboarding/profile');
     };
 
     return (
@@ -28,7 +38,7 @@ export default function WelcomeScreen() {
 
             <View style={styles.content}>
                 <View style={styles.logoContainer}>
-                    <TabonoLogo size={width * 0.5} color={CREAM_COLOR} />
+                    <TabonoLogo size={width * 0.5} color={Colors.theme.harvestGold} />
                     <Text style={styles.title}>Tribe</Text>
                 </View>
 
@@ -38,7 +48,7 @@ export default function WelcomeScreen() {
                     </TouchableOpacity>
 
                     <TouchableOpacity style={[styles.button, styles.loginButton]} onPress={handleLogin}>
-                        <Text style={styles.buttonText}>Log in</Text>
+                        <Text style={[styles.buttonText, styles.loginButtonText]}>Log in</Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -49,7 +59,7 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: BG_COLOR,
+        backgroundColor: Colors.background,
     },
     content: {
         flex: 1,
@@ -64,8 +74,8 @@ const styles = StyleSheet.create({
     },
     title: {
         fontSize: 64,
-        fontWeight: '400',
-        color: CREAM_COLOR,
+        fontWeight: 'bold',
+        color: Colors.theme.softWhite,
         letterSpacing: 2,
         fontFamily: 'System',
         marginTop: 20,
@@ -77,7 +87,7 @@ const styles = StyleSheet.create({
         bottom: 80,
     },
     button: {
-        backgroundColor: CREAM_COLOR,
+        backgroundColor: Colors.theme.harvestGold,
         paddingVertical: 18,
         borderRadius: 30, // Pill shape
         alignItems: 'center',
@@ -89,11 +99,16 @@ const styles = StyleSheet.create({
         elevation: 3,
     },
     loginButton: {
-        // Same style
+        backgroundColor: Colors.theme.charcoal,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderWidth: 1,
     },
     buttonText: {
-        color: '#2F3A27', // Dark green text
+        color: Colors.background, // Matte black for high contrast against gold
         fontSize: 18,
         fontWeight: '600',
+    },
+    loginButtonText: {
+        color: Colors.theme.softWhite,
     }
 });

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, ActivityIndicator, SafeAreaView } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../src/shared/theme/Colors';
 import { WeightStore, WeightEntry } from '../store/WeightStore';
@@ -17,40 +17,23 @@ export default function WeightTrendsDeepDiveScreen() {
     const [loading, setLoading] = useState(true);
     const [weights, setWeights] = useState<WeightEntry[]>([]);
 
-    useEffect(() => {
-        const fetchWeights = async () => {
-            setLoading(true);
-            try {
-                let data = await WeightStore.loadWeights();
-                if (!data || data.length === 0) {
-                    // Generate premium mock data trending downward
-                    const mockData: WeightEntry[] = [];
-                    const startWeight = 250;
-                    const endWeight = 236;
-                    const today = new Date();
-                    for (let i = 180; i >= 0; i--) {
-                        const date = new Date();
-                        date.setDate(today.getDate() - i);
-                        const progress = (180 - i) / 180;
-                        const fluctuation = Math.sin(i * 0.4) * 1.5;
-                        const weight = startWeight - (startWeight - endWeight) * progress + fluctuation;
-                        mockData.push({
-                            date: date.toISOString().split('T')[0],
-                            weight: Number(weight.toFixed(1)),
-                            timestamp: date.getTime(),
-                        });
-                    }
-                    data = mockData;
-                }
-                setWeights(data);
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchWeights();
+    const fetchWeights = useCallback(async () => {
+        setLoading(true);
+        try {
+            const data = await WeightStore.loadWeights();
+            setWeights(data || []);
+        } catch (err) {
+            console.error('Failed to fetch weights:', err);
+        } finally {
+            setLoading(false);
+        }
     }, []);
+
+    useFocusEffect(
+        useCallback(() => {
+            fetchWeights();
+        }, [fetchWeights])
+    );
 
     // Filter weights based on selection
     const getFilteredWeights = () => {

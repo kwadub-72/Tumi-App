@@ -1,27 +1,20 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useState, useEffect, useRef } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { ACTIVITIES } from '@/src/shared/constants/Activities';
 import { Colors } from '@/src/shared/theme/Colors';
-import RangeSlider from './RangeSlider';
-import RolodexPicker from './RolodexPicker';
 import HeightRolodex from './HeightRolodex';
 
-const TRIBE_FOCUS_OPTIONS = [
-    { name: 'Accountability', icon: 'calendar' },
-    { name: 'Head-to-Head', icon: 'shield-outline' },
-    { name: 'Tribe vs Tribe', icon: 'trophy-outline' }
-];
+const TRIBE_TYPE_OPTIONS = ['All', 'Accountability', 'Head-to-Head', 'Tribe vs Tribe'];
+const PRIVACY_OPTIONS = ['All', 'Public', 'Private'];
+const NATURAL_STATUS_OPTIONS = ['All', 'Natural', 'Enhanced', 'Undeclared'];
 
-const VISIBILITY_OPTIONS = [
-    { name: 'Public', icon: 'earth' },
-    { name: 'Private', icon: 'lock-outline' }
-];
-
-const STATUS_OPTIONS = [
-    { name: 'Natural', icon: 'leaf', color: '#1BB607' },
-    { name: 'Enhanced', icon: 'lightning-bolt', color: '#FFD700' },
-    { name: 'Undeclared', icon: 'help-circle-outline' }
+const FITNESS_ACTIVITIES = [
+    { name: 'All', icon: 'layers-outline' },
+    { name: 'Powerlifting', icon: 'weight-lifter' },
+    { name: 'Bodybuilding', icon: 'arm-flex' },
+    { name: 'CrossFit', icon: 'hammer' },
+    { name: 'Running', icon: 'run' },
+    { name: 'General Fitness', icon: 'heart-pulse' }
 ];
 
 interface FilterModalProps {
@@ -36,15 +29,14 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
     const isTribes = mode === 'Tribes';
     const isSimilar = mode === 'Similar';
 
-    const [status, setStatus] = useState('Undeclared');
-    const [activity, setActivity] = useState('All');
+    // Hybrid states
+    const [selectedTribeType, setSelectedTribeType] = useState<string | null>('All');
+    const [selectedPrivacy, setSelectedPrivacy] = useState<string | null>('All');
+    const [selectedNaturalStatus, setSelectedNaturalStatus] = useState<string | null>('Undeclared');
+    const [selectedActivity, setSelectedActivity] = useState<string | null>('All');
 
-    // Tribe Specific
-    const [tribeFocus, setTribeFocus] = useState('All');
-    const [visibility, setVisibility] = useState('All');
-    const [showTribeFocusRolodex, setShowTribeFocusRolodex] = useState(false);
-    const [showVisibilityRolodex, setShowVisibilityRolodex] = useState(false);
-    const [showStatusRolodex, setShowStatusRolodex] = useState(false);
+    // Accordion active dropdown (Only Activity and Height use roladexes)
+    const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
     // Height
     const [heightMode, setHeightMode] = useState<'Range3' | 'Range1'>('Range3');
@@ -55,7 +47,6 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
     const [ft, setFt] = useState<number | null>(null);
     const [inch, setInch] = useState<number | null>(null);
     const [cmVal, setCmVal] = useState('');
-    const [showHeightRolodex, setShowHeightRolodex] = useState(false);
 
     // Weight
     const [weightMode, setWeightMode] = useState<'Range15' | 'Range5'>('Range15');
@@ -65,26 +56,17 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
     const [bfMode, setBfMode] = useState<'Range3' | 'Range1'>('Range3');
     const [bfVal, setBfVal] = useState('');
 
-    // Stats
-    const [minMeals, setMinMeals] = useState('');
-    const [minWorkouts, setMinWorkouts] = useState('');
-    const [minUpdates, setMinUpdates] = useState('');
-
     const [isApplied, setIsApplied] = useState(false);
-    const [showActivityRolodex, setShowActivityRolodex] = useState(false);
     const [scrollEnabled, setScrollEnabled] = useState(true);
 
     // Refs for input focus
     const weightRef = useRef<TextInput>(null);
     const bfRef = useRef<TextInput>(null);
-    const mealsRef = useRef<TextInput>(null);
-    const workoutsRef = useRef<TextInput>(null);
-    const updatesRef = useRef<TextInput>(null);
 
     useEffect(() => {
         // Reset applied state on change
         setIsApplied(false);
-    }, [status, activity, tribeFocus, visibility, heightMode, heightVal, weightMode, weightVal, bfMode, bfVal, minMeals, minWorkouts, minUpdates]);
+    }, [selectedTribeType, selectedPrivacy, selectedNaturalStatus, selectedActivity, heightMode, heightVal, weightMode, weightVal, bfMode, bfVal]);
 
     useEffect(() => {
         // Sync string representation on change
@@ -99,25 +81,22 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
 
     const handleApply = () => {
         onApply({
-            status,
-            activity: isTribes ? undefined : activity,
-            tribeFocus: isTribes ? tribeFocus : undefined,
-            visibility: isTribes ? visibility : undefined,
+            status: selectedNaturalStatus || 'Undeclared',
+            activity: selectedActivity || 'All',
+            tribeFocus: isTribes ? (selectedTribeType || 'All') : undefined,
+            visibility: isTribes ? (selectedPrivacy || 'All') : undefined,
             height: isTribes ? undefined : { mode: heightMode, val: heightVal },
             weight: isTribes ? undefined : { mode: weightMode, val: weightVal },
             bodyFat: isTribes ? undefined : { mode: bfMode, val: bfVal },
-            minMeals,
-            minWorkouts,
-            minUpdates
         });
         setIsApplied(true);
     };
 
     const handleReset = () => {
-        setStatus('Undeclared');
-        setActivity('All');
-        setTribeFocus('All');
-        setVisibility('All');
+        setSelectedNaturalStatus('Undeclared');
+        setSelectedActivity('All');
+        setSelectedTribeType('All');
+        setSelectedPrivacy('All');
         setHeightMode('Range3');
         setHeightVal("..'..\""); // Default
         setFt(null);
@@ -128,22 +107,10 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
         setWeightVal('');
         setBfMode('Range3');
         setBfVal('');
-        setMinMeals('');
-        setMinWorkouts('');
-        setMinUpdates('');
         setIsApplied(false);
+        setActiveDropdown(null);
         onApply(null); // Clear filters
     };
-
-    const StatusPill = ({ label, value, icon, color }: any) => (
-        <TouchableOpacity
-            style={[styles.pill, status === value && styles.activePill]}
-            onPress={() => setStatus(value)}
-        >
-            <Text style={[styles.pillText, status === value && styles.activePillText]}>{label}</Text>
-            {icon && <MaterialCommunityIcons name={icon} size={16} color={color} style={{ marginLeft: 4 }} />}
-        </TouchableOpacity>
-    );
 
     // Determines if a section is disabled (e.g. for Similar tabs)
     const isSectionDisabled = (section: 'activity' | 'body') => {
@@ -164,7 +131,7 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
                     <View style={styles.header}>
                         <View style={{ width: 60 }} />
                         <View style={styles.filterTitleRow}>
-                            <Ionicons name="options" size={20} color="#F5F5DC" />
+                            <Ionicons name="options" size={20} color={Colors.theme.softWhite} />
                             <Text style={styles.title}>Filter</Text>
                         </View>
                         <TouchableOpacity onPress={handleReset}>
@@ -173,85 +140,126 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
                     </View>
 
                     <ScrollView style={styles.scrollContent} scrollEnabled={scrollEnabled}>
-                        {/* Natural / Enhanced */}
-                        <View style={[styles.inlineRow, isSectionDisabled('activity') && { opacity: 0.5 }]} pointerEvents={isSectionDisabled('activity') ? 'none' : 'auto'}>
-                            <Text style={[styles.label, { marginBottom: 0 }]}>Natural/Enhanced</Text>
-                            <TouchableOpacity
-                                style={styles.activityPill}
-                                onPress={() => setShowStatusRolodex(true)}
-                            >
-                                <Text style={styles.activityPillText}>{status}</Text>
-                                {status === 'Undeclared' || status === 'All' ? (
-                                    <MaterialCommunityIcons name="chevron-down" size={20} color="#2F3A27" style={{ marginLeft: 4 }} />
-                                ) : (
-                                    <MaterialCommunityIcons 
-                                        name={STATUS_OPTIONS.find(s => s.name === status)?.icon as any} 
-                                        size={18} 
-                                        color={STATUS_OPTIONS.find(s => s.name === status)?.color || "#2F3A27"} 
-                                        style={{ marginLeft: 6 }} 
-                                    />
-                                )}
-                            </TouchableOpacity>
-                        </View>
+                        
+                        {/* Tribe Filters */}
+                        {isTribes ? (
+                            <>
+                                {/* Tribe Type button group */}
+                                <View style={styles.row}>
+                                    <Text style={styles.label}>Tribe Type</Text>
+                                    <View style={styles.pillGroup}>
+                                        {TRIBE_TYPE_OPTIONS.map(opt => {
+                                            const isSelected = selectedTribeType === opt;
+                                            return (
+                                                <TouchableOpacity
+                                                    key={opt}
+                                                    style={[styles.buttonPill, isSelected && styles.activeButtonPill]}
+                                                    onPress={() => setSelectedTribeType(opt)}
+                                                >
+                                                    <Text style={[styles.buttonPillText, isSelected && styles.activeButtonPillText]}>
+                                                        {opt}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </View>
+                                </View>
+                                <View style={styles.divider} />
 
+                                {/* Privacy button group */}
+                                <View style={styles.row}>
+                                    <Text style={styles.label}>Privacy</Text>
+                                    <View style={styles.pillGroup}>
+                                        {PRIVACY_OPTIONS.map(opt => {
+                                            const isSelected = selectedPrivacy === opt;
+                                            return (
+                                                <TouchableOpacity
+                                                    key={opt}
+                                                    style={[styles.buttonPill, isSelected && styles.activeButtonPill]}
+                                                    onPress={() => setSelectedPrivacy(opt)}
+                                                >
+                                                    <Text style={[styles.buttonPillText, isSelected && styles.activeButtonPillText]}>
+                                                        {opt}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </View>
+                                </View>
+                                <View style={styles.divider} />
+                            </>
+                        ) : null}
+
+                        {/* Natural Status button group */}
+                        <View style={styles.row}>
+                            <Text style={styles.label}>Natural status</Text>
+                            <View style={styles.pillGroup}>
+                                {NATURAL_STATUS_OPTIONS.map(opt => {
+                                    const isSelected = selectedNaturalStatus === opt;
+                                    return (
+                                        <TouchableOpacity
+                                            key={opt}
+                                            style={[styles.buttonPill, isSelected && styles.activeButtonPill]}
+                                            onPress={() => setSelectedNaturalStatus(opt)}
+                                        >
+                                            <Text style={[styles.buttonPillText, isSelected && styles.activeButtonPillText]}>
+                                                {opt}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        </View>
                         <View style={styles.divider} />
 
-                        {/* Activity - Hide for Tribes */}
-                        {!isTribes && (
-                            <>
-                                <View style={[styles.inlineRow, isSectionDisabled('activity') && { opacity: 0.5 }]} pointerEvents={isSectionDisabled('activity') ? 'none' : 'auto'}>
-                                    <Text style={[styles.label, { marginBottom: 0 }]}>Activity</Text>
-                                    <TouchableOpacity
-                                        style={styles.activityPill}
-                                        onPress={() => setShowActivityRolodex(true)}
-                                    >
-                                        <Text style={styles.activityPillText}>{activity}</Text>
-                                        {activity === 'All' ? (
-                                            <MaterialCommunityIcons name="chevron-down" size={20} color="#2F3A27" style={{ marginLeft: 4 }} />
-                                        ) : (
-                                            <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginLeft: 6 }}>
-                                                <MaterialCommunityIcons name={ACTIVITIES.find(a => a.name === activity || a.displayName === activity)?.icon as any || "hammer"} size={16} color="#2F3A27" />
-                                                {ACTIVITIES.find(a => a.name === activity || a.displayName === activity)?.modifier && (
-                                                    <Text style={{ fontSize: 10, color: '#2F3A27', fontWeight: 'bold', lineHeight: 12 }}>{ACTIVITIES.find(a => a.name === activity || a.displayName === activity)?.modifier}</Text>
+                        {/* Activity dropdown section */}
+                        <View style={styles.row}>
+                            <Text style={styles.label}>Activity</Text>
+                            <TouchableOpacity
+                                style={styles.dropdownTrigger}
+                                onPress={() => setActiveDropdown(activeDropdown === 'activity' ? null : 'activity')}
+                            >
+                                <Text style={styles.dropdownTriggerText}>
+                                    {selectedActivity || 'All'}
+                                </Text>
+                                <MaterialCommunityIcons 
+                                    name={activeDropdown === 'activity' ? 'chevron-up' : 'chevron-down'} 
+                                    size={20} 
+                                    color={Colors.theme.softWhite} 
+                                />
+                            </TouchableOpacity>
+
+                            {activeDropdown === 'activity' && (
+                                <View style={styles.inlineRolodex}>
+                                    {FITNESS_ACTIVITIES.map((act) => {
+                                        const isSelected = act.name === selectedActivity;
+                                        return (
+                                            <TouchableOpacity
+                                                key={act.name}
+                                                style={[styles.rolodexItem, isSelected && styles.selectedRolodexItem]}
+                                                onPress={() => {
+                                                    setSelectedActivity(act.name);
+                                                    setActiveDropdown(null);
+                                                }}
+                                            >
+                                                <Text style={[styles.rolodexItemText, isSelected && styles.selectedRolodexItemText]}>
+                                                    {act.name}
+                                                </Text>
+                                                {act.icon && (
+                                                    <MaterialCommunityIcons 
+                                                        name={act.icon as any} 
+                                                        size={18} 
+                                                        color={isSelected ? Colors.theme.harvestGold : Colors.theme.dust} 
+                                                        style={{ marginLeft: 8 }}
+                                                    />
                                                 )}
-                                            </View>
-                                        )}
-                                    </TouchableOpacity>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
                                 </View>
-                                <View style={styles.divider} />
-                            </>
-                        )}
-
-                        {/* Tribe Filters */}
-                        {isTribes && (
-                            <>
-                                {/* Tribe Focus */}
-                                <View style={styles.row}>
-                                    <Text style={styles.label}>Tribe focus</Text>
-                                    <TouchableOpacity
-                                        style={[styles.pill, styles.activePill, { alignSelf: 'flex-start' }]}
-                                        onPress={() => setShowTribeFocusRolodex(true)}
-                                    >
-                                        <Text style={styles.activePillText}>{tribeFocus}</Text>
-                                        <MaterialCommunityIcons name="chevron-down" size={20} color="#F5F5DC" style={{ marginLeft: 4 }} />
-                                    </TouchableOpacity>
-                                </View>
-                                <View style={styles.divider} />
-
-                                {/* Visibility */}
-                                <View style={styles.row}>
-                                    <Text style={styles.label}>Visibility</Text>
-                                    <TouchableOpacity
-                                        style={[styles.pill, styles.activePill, { alignSelf: 'flex-start' }]}
-                                        onPress={() => setShowVisibilityRolodex(true)}
-                                    >
-                                        <Text style={styles.activePillText}>{visibility}</Text>
-                                        <MaterialCommunityIcons name="chevron-down" size={20} color="#F5F5DC" style={{ marginLeft: 4 }} />
-                                    </TouchableOpacity>
-                                </View>
-                                <View style={styles.divider} />
-                            </>
-                        )}
+                            )}
+                        </View>
+                        <View style={styles.divider} />
 
                         {/* Physical Stats - Hide for Tribes */}
                         {!isTribes && (
@@ -261,7 +269,7 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                                         <Text style={styles.label}>Height</Text>
                                         <TouchableOpacity onPress={() => setIsMetric(!isMetric)} style={{ paddingRight: 10 }}>
-                                            <Text style={{ color: '#F5F5DC', fontSize: 12, fontWeight: 'bold', textDecorationLine: 'underline' }}>
+                                            <Text style={{ color: Colors.theme.harvestGold, fontSize: 12, fontWeight: 'bold', textDecorationLine: 'underline' }}>
                                                 {isMetric ? 'Switch to ft/in' : 'Switch to cm'}
                                             </Text>
                                         </TouchableOpacity>
@@ -289,14 +297,14 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
                                                     onChangeText={setCmVal}
                                                     keyboardType="numeric"
                                                     placeholder="170"
-                                                    placeholderTextColor="rgba(47, 58, 39, 0.5)"
+                                                    placeholderTextColor="rgba(237, 232, 213, 0.4)"
                                                 />
                                                 <Text style={styles.suffix}>cm</Text>
                                             </View>
                                         ) : (
                                             <TouchableOpacity
                                                 style={styles.inputContainer}
-                                                onPress={() => setShowHeightRolodex(true)}
+                                                onPress={() => setActiveDropdown(activeDropdown === 'height' ? null : 'height')}
                                             >
                                                 <Text style={styles.inputValue}>{heightVal}</Text>
                                             </TouchableOpacity>
@@ -330,7 +338,7 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
                                                 ref={weightRef}
                                                 style={styles.textInput}
                                                 placeholder="..."
-                                                placeholderTextColor="rgba(47, 58, 39, 0.5)"
+                                                placeholderTextColor="rgba(237, 232, 213, 0.4)"
                                                 keyboardType="numeric"
                                                 value={weightVal}
                                                 onChangeText={setWeightVal}
@@ -366,7 +374,7 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
                                                 ref={bfRef}
                                                 style={styles.textInput}
                                                 placeholder="..."
-                                                placeholderTextColor="rgba(47, 58, 39, 0.5)"
+                                                placeholderTextColor="rgba(237, 232, 213, 0.4)"
                                                 keyboardType="numeric"
                                                 value={bfVal}
                                                 onChangeText={setBfVal}
@@ -379,158 +387,37 @@ export default function FilterModal({ visible, onClose, onApply, mode }: FilterM
                             </View>
                         )}
 
-                        {/* Meals */}
-                        <View style={styles.inlineRow}>
-                            <Text style={[styles.label, { marginBottom: 0 }]}>Meals</Text>
-                            <View style={styles.rightAlign}>
-                                <Pressable 
-                                    style={[styles.inputContainer, styles.wideInput]}
-                                    onPress={() => mealsRef.current?.focus()}
-                                >
-                                    <Text style={styles.prefix}>≥</Text>
-                                    <TextInput
-                                        ref={mealsRef}
-                                        style={styles.textInputInline}
-                                        placeholder="..."
-                                        placeholderTextColor="rgba(47, 58, 39, 0.5)"
-                                        keyboardType="numeric"
-                                        value={minMeals}
-                                        onChangeText={setMinMeals}
-                                    />
-                                    <Text style={styles.suffix}>posts</Text>
-                                </Pressable>
-                            </View>
-                        </View>
-
-                        <View style={styles.divider} />
-
-                        {/* Workouts */}
-                        <View style={styles.inlineRow}>
-                            <Text style={[styles.label, { marginBottom: 0 }]}>Workouts</Text>
-                            <View style={styles.rightAlign}>
-                                <Pressable 
-                                    style={[styles.inputContainer, styles.wideInput]}
-                                    onPress={() => workoutsRef.current?.focus()}
-                                >
-                                    <Text style={styles.prefix}>≥</Text>
-                                    <TextInput
-                                        ref={workoutsRef}
-                                        style={styles.textInputInline}
-                                        placeholder="..."
-                                        placeholderTextColor="rgba(47, 58, 39, 0.5)"
-                                        keyboardType="numeric"
-                                        value={minWorkouts}
-                                        onChangeText={setMinWorkouts}
-                                    />
-                                    <Text style={styles.suffix}>posts</Text>
-                                </Pressable>
-                            </View>
-                        </View>
-
-                        <View style={styles.divider} />
-
-                        {/* Macros */}
-                        <View style={styles.inlineRow}>
-                            <Text style={[styles.label, { marginBottom: 0 }]}>Macros</Text>
-                            <View style={styles.rightAlign}>
-                                <Pressable 
-                                    style={[styles.inputContainer, styles.wideInput]}
-                                    onPress={() => updatesRef.current?.focus()}
-                                >
-                                    <Text style={styles.prefix}>≥</Text>
-                                    <TextInput
-                                        ref={updatesRef}
-                                        style={styles.textInputInline}
-                                        placeholder="..."
-                                        placeholderTextColor="rgba(47, 58, 39, 0.5)"
-                                        keyboardType="numeric"
-                                        value={minUpdates}
-                                        onChangeText={setMinUpdates}
-                                    />
-                                    <Text style={styles.suffix}>posts</Text>
-                                </Pressable>
-                            </View>
-                        </View>
-
-                        <View style={{ height: 100 }} />
+                        <View style={{ height: 120 }} />
                     </ScrollView>
 
                     <View style={styles.footer}>
                         <TouchableOpacity style={[styles.addButton, isApplied && styles.appliedButton]} onPress={handleApply}>
-                            {isApplied ? (
-                                <Ionicons name="checkmark" size={32} color="white" />
-                            ) : (
-                                <Ionicons name="add" size={32} color="#A8C0A8" />
-                            )}
+                            <Text style={{ 
+                                color: isApplied ? Colors.theme.matteBlack : Colors.theme.harvestGold, 
+                                fontSize: 16, 
+                                fontWeight: 'bold' 
+                            }}>
+                                {isApplied ? 'Applied ✓' : 'Apply Filters'}
+                            </Text>
                         </TouchableOpacity>
                     </View>
                 </View>
             </View>
 
-            {showVisibilityRolodex && (
-                <RolodexPicker
-                    options={VISIBILITY_OPTIONS}
-                    selected={visibility}
-                    onSelect={setVisibility}
-                />
-            )}
-            {showTribeFocusRolodex && (
-                <RolodexPicker
-                    options={TRIBE_FOCUS_OPTIONS}
-                    selected={tribeFocus}
-                    onSelect={setTribeFocus}
-                />
-            )}
-            {(showActivityRolodex || showHeightRolodex || showVisibilityRolodex || showTribeFocusRolodex || showStatusRolodex) && (
+            {activeDropdown === 'height' && (
                 <View style={styles.rolodexContainer}>
                     <View style={styles.rolodexHeader}>
-                        <TouchableOpacity onPress={() => {
-                            setShowActivityRolodex(false);
-                            setShowHeightRolodex(false);
-                            setShowVisibilityRolodex(false);
-                            setShowTribeFocusRolodex(false);
-                            setShowStatusRolodex(false);
-                        }}>
+                        <TouchableOpacity onPress={() => setActiveDropdown(null)}>
                             <Text style={styles.doneText}>Done</Text>
                         </TouchableOpacity>
                     </View>
-                    {showActivityRolodex && (
-                        <RolodexPicker
-                            options={ACTIVITIES}
-                            selected={activity}
-                            onSelect={setActivity}
-                        />
-                    )}
-                    {showStatusRolodex && (
-                        <RolodexPicker
-                            options={STATUS_OPTIONS}
-                            selected={status}
-                            onSelect={setStatus}
-                        />
-                    )}
-                    {showHeightRolodex && (
-                        <HeightRolodex
-                            minFt={1}
-                            maxFt={9}
-                            selectedFt={ft || 5}
-                            selectedIn={inch || 0}
-                            onSelect={(f, i) => { setFt(f); setInch(i); }}
-                        />
-                    )}
-                    {showVisibilityRolodex && (
-                        <RolodexPicker
-                            options={VISIBILITY_OPTIONS}
-                            selected={visibility}
-                            onSelect={setVisibility}
-                        />
-                    )}
-                    {showTribeFocusRolodex && (
-                        <RolodexPicker
-                            options={TRIBE_FOCUS_OPTIONS}
-                            selected={tribeFocus}
-                            onSelect={setTribeFocus}
-                        />
-                    )}
+                    <HeightRolodex
+                        minFt={1}
+                        maxFt={9}
+                        selectedFt={ft || 5}
+                        selectedIn={inch || 0}
+                        onSelect={(f, i) => { setFt(f); setInch(i); }}
+                    />
                 </View>
             )}
         </Modal>
@@ -546,19 +433,19 @@ const styles = StyleSheet.create({
     },
     modalContent: {
         width: '90%',
-        height: '80%',
-        backgroundColor: '#A8C0A8', // Sage
+        height: '85%',
+        backgroundColor: Colors.theme.matteBlack,
         borderRadius: 30,
         overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: '#8FA88F',
+        borderWidth: 1.5,
+        borderColor: Colors.theme.charcoal,
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: 15,
-        backgroundColor: '#95AF95', // Slightly darker header
+        backgroundColor: Colors.theme.charcoal,
     },
     filterTitleRow: {
         flexDirection: 'row',
@@ -568,10 +455,10 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#F5F5DC',
+        color: Colors.theme.softWhite,
     },
     resetText: {
-        color: '#F5F5DC',
+        color: Colors.theme.harvestGold,
         fontSize: 14,
         fontWeight: '600',
     },
@@ -582,134 +469,140 @@ const styles = StyleSheet.create({
     row: {
         marginBottom: 10,
     },
-    inlineRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 10,
-    },
     label: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: '#2F3A27',
-        marginBottom: 8,
+        color: Colors.theme.softWhite,
+        marginBottom: 4,
     },
-    pillScroll: {
-        paddingRight: 20,
-        gap: 8,
-    },
-    pill: {
+    pillGroup: {
         flexDirection: 'row',
-        backgroundColor: '#F5F5DC',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
+        flexWrap: 'wrap',
+        gap: 10,
+        marginTop: 8,
+        marginBottom: 5,
+    },
+    buttonPill: {
+        backgroundColor: Colors.theme.charcoal,
         borderRadius: 20,
-        alignItems: 'center',
+        paddingVertical: 8,
+        paddingHorizontal: 16,
         borderWidth: 1,
-        borderColor: '#2F3A27',
+        borderColor: 'transparent',
     },
-    activePill: {
-        backgroundColor: '#2F3A27',
+    activeButtonPill: {
+        borderColor: Colors.theme.harvestGold,
     },
-    pillText: {
-        color: '#2F3A27',
+    buttonPillText: {
+        color: Colors.theme.softWhite,
         fontWeight: '600',
     },
-    activePillText: {
-        color: '#F5F5DC',
+    activeButtonPillText: {
+        color: Colors.theme.harvestGold,
     },
-    activityPill: {
+    dropdownTrigger: {
         flexDirection: 'row',
-        backgroundColor: '#F5F5DC',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
+        justifyContent: 'space-between',
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#2F3A27',
+        backgroundColor: Colors.theme.charcoal,
+        borderRadius: 20,
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderWidth: 1.5,
+        borderColor: Colors.theme.charcoal,
+        marginTop: 8,
     },
-    activityPillText: {
-        color: '#2F3A27',
+    dropdownTriggerText: {
+        color: Colors.theme.softWhite,
         fontWeight: 'bold',
         fontSize: 16,
     },
+    inlineRolodex: {
+        backgroundColor: Colors.theme.charcoal,
+        borderRadius: 15,
+        marginTop: 8,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.05)',
+    },
+    rolodexItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    },
+    selectedRolodexItem: {
+        backgroundColor: 'rgba(218, 165, 32, 0.05)',
+    },
+    rolodexItemText: {
+        color: Colors.theme.softWhite,
+        fontWeight: '500',
+        fontSize: 15,
+    },
+    selectedRolodexItemText: {
+        color: Colors.theme.harvestGold,
+        fontWeight: 'bold',
+    },
     divider: {
         height: 1,
-        backgroundColor: '#2F3A27',
-        opacity: 0.2,
-        marginVertical: 10,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        marginVertical: 12,
     },
     controlsRow: {
         flexDirection: 'row',
         gap: 10,
+        marginTop: 8,
     },
     toggleBtn: {
         flex: 1,
-        backgroundColor: '#F5F5DC',
+        backgroundColor: Colors.theme.charcoal,
         paddingVertical: 8,
         borderRadius: 20,
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: '#2F3A27',
+        borderColor: Colors.theme.charcoal,
     },
     activeToggle: {
-        backgroundColor: '#2F3A27',
+        backgroundColor: Colors.theme.harvestGold,
     },
     toggleText: {
-        color: '#2F3A27',
+        color: Colors.theme.softWhite,
         fontWeight: 'bold',
     },
     activeToggleText: {
-        color: '#F5F5DC',
+        color: Colors.theme.matteBlack,
     },
     inputContainer: {
         flex: 1,
         flexDirection: 'row',
-        backgroundColor: '#F5F5DC',
+        backgroundColor: Colors.theme.charcoal,
         borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: '#2F3A27',
+        borderColor: Colors.theme.charcoal,
         paddingHorizontal: 10,
         height: 38,
     },
     textInput: {
         flex: 1,
         textAlign: 'right',
-        color: '#2F3A27',
+        color: Colors.theme.softWhite,
         fontWeight: 'bold',
         fontSize: 16,
-    },
-    textInputInline: {
-        textAlign: 'center',
-        color: '#2F3A27',
-        fontWeight: 'bold',
-        fontSize: 16,
-        minWidth: 20,
-    },
-    prefix: {
-        color: '#2F3A27',
-        marginRight: 4,
-        fontWeight: '600',
-        fontStyle: 'italic',
     },
     suffix: {
-        color: '#2F3A27',
+        color: Colors.theme.dust,
         marginLeft: 4,
         fontWeight: '600',
         fontStyle: 'italic',
     },
     inputValue: {
-        color: '#2F3A27',
+        color: Colors.theme.softWhite,
         fontWeight: 'bold',
-    },
-    rightAlign: {
-        alignItems: 'flex-end',
-    },
-    wideInput: {
-        width: 150,
-        flex: undefined,
     },
     footer: {
         position: 'absolute',
@@ -719,10 +612,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     addButton: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        backgroundColor: 'white',
+        width: '90%',
+        height: 50,
+        borderRadius: 12,
+        backgroundColor: Colors.theme.charcoal,
+        borderWidth: 1.5,
+        borderColor: Colors.theme.harvestGold,
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: "#000",
@@ -732,16 +627,15 @@ const styles = StyleSheet.create({
         elevation: 5,
     },
     appliedButton: {
-        backgroundColor: '#2F3A27', // Dark Green
-        borderWidth: 2,
-        borderColor: 'white',
+        backgroundColor: Colors.theme.harvestGold,
+        borderColor: Colors.theme.harvestGold,
     },
     rolodexContainer: {
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        backgroundColor: '#1E251E',
+        backgroundColor: Colors.theme.matteBlack,
         zIndex: 100,
         elevation: 100,
         borderTopLeftRadius: 20,
@@ -756,12 +650,12 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
         paddingVertical: 10,
         paddingHorizontal: 20,
-        backgroundColor: '#2F3A27',
+        backgroundColor: Colors.theme.charcoal,
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
     },
     doneText: {
-        color: '#F5F5DC',
+        color: Colors.theme.harvestGold,
         fontWeight: 'bold',
         fontSize: 16,
     }

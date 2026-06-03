@@ -37,6 +37,7 @@ import { useUserTribeStore } from '@/src/store/UserTribeStore';
 import { WeightStore } from '@/store/WeightStore';
 import { useProfileStore } from '@/src/store/useProfileStore';
 import { DiscoveryMapCard } from '@/src/features/macromaps/components/DiscoveryMapCard';
+import { MetricNormalizer } from '@/src/shared/utils/MetricNormalizer';
 
 const { width, height } = Dimensions.get('window');
 
@@ -113,8 +114,8 @@ export default function ProfileScreen() {
                 activityIcon: profileData.activity_icon,
                 followers: counts.followers,
                 following: counts.following,
-                height: profileData.height,
-                weight: estimatedWeight ?? profileData.weight_lbs,
+                height: profileData.height_cm ? String(profileData.height_cm) : '',
+                weight: profileData.weight_lbs ?? estimatedWeight ?? 0,
                 bfs: profileData.body_fat_pct,
                 // tribe: profileData.tribe, // Prevent wiping until tribes are implemented in backend
                 bio: profileData.bio,
@@ -147,9 +148,15 @@ export default function ProfileScreen() {
         ? `${Math.round(userInfo.weight)} lbs`
         : `${Math.round(userInfo.weight * 0.453592)} kg`;
 
-    const displayHeight = units === 'imperial'
-        ? userInfo.height // e.g. "6'3"
-        : `${Math.round((6 * 12 + 3) * 2.54)} cm`; // Mock conversion
+    const heightCm = parseFloat(userInfo.height) || 0;
+    const displayHeight = heightCm > 0
+        ? (units === 'imperial'
+            ? (() => {
+                const { feet, inches } = MetricNormalizer.cmToImperial(heightCm);
+                return `${feet}'${inches}`;
+              })()
+            : `${Math.round(heightCm)} cm`)
+        : '--';
 
     const mealsCount = posts.filter(p => (p.meal && (p.user.handle === userInfo.handle))).length;
     const workoutsCount = posts.filter(p => (p.workout && (p.user.handle === userInfo.handle))).length;
@@ -225,6 +232,18 @@ export default function ProfileScreen() {
         loadData();
     };
 
+    const getAvatarSource = () => {
+        if (!userInfo.avatar) {
+            return require('../../assets/images/kwadub.jpg');
+        }
+        if (typeof userInfo.avatar === 'string') {
+            if (userInfo.avatar.startsWith('http') || userInfo.avatar.startsWith('file') || userInfo.avatar.startsWith('ph://') || userInfo.avatar.startsWith('assets-library://')) {
+                return { uri: userInfo.avatar };
+            }
+        }
+        return userInfo.avatar;
+    };
+
     // Split renderHeader to allow dynamic padding injection
     const renderHeaderContent = () => (
         <View pointerEvents="box-none" style={{ backgroundColor: TEST_COLORS.background, paddingTop: insets.top }}>
@@ -240,10 +259,16 @@ export default function ProfileScreen() {
             <View style={styles.profileInfo}>
                 {/* Avatar */}
                 <View style={styles.avatarContainer}>
-                    <Image
-                        source={userInfo.avatar && (userInfo.avatar.startsWith && userInfo.avatar.startsWith('http')) ? { uri: userInfo.avatar } : (typeof userInfo.avatar === 'string' ? { uri: userInfo.avatar } : userInfo.avatar)}
-                        style={styles.avatar}
-                    />
+                    {userInfo.avatar ? (
+                        <Image
+                            source={getAvatarSource()}
+                            style={styles.avatar}
+                        />
+                    ) : (
+                        <View style={[styles.avatar, styles.placeholderAvatar]}>
+                            <Ionicons name="person" size={50} color={Colors.theme.dust} />
+                        </View>
+                    )}
                 </View>
 
                 {/* Text Info */}
@@ -251,7 +276,7 @@ export default function ProfileScreen() {
                     <Text style={styles.name}>{userInfo.name}</Text>
 
                     <View style={styles.handleRow}>
-                        <Text style={styles.handle}>{userInfo.handle}</Text>
+                        <Text style={styles.handle}>@{userInfo.handle.replace(/^@/, '')}</Text>
                         {(userInfo.status === 'enhanced' || userInfo.status === 'natural') && (
                             <TouchableOpacity onPress={() => setVerifiedModalVisible(true)}>
                                 {userInfo.status === 'enhanced' ? (
@@ -261,13 +286,16 @@ export default function ProfileScreen() {
                                 )}
                             </TouchableOpacity>
                         )}
-                        <TouchableOpacity onPress={() => setHammerModalVisible(true)}>
-                            <ActivityIcon 
-                                activity={userInfo.activity} 
-                                icon={userInfo.activityIcon} 
-                                size={18} 
-                            />
-                        </TouchableOpacity>
+                        {!!userInfo.activity && (
+                            <TouchableOpacity onPress={() => setHammerModalVisible(true)}>
+                                <ActivityIcon 
+                                    activity={userInfo.activity} 
+                                    icon={userInfo.activityIcon} 
+                                    size={18} 
+                                    color={Colors.theme.harvestGold}
+                                />
+                            </TouchableOpacity>
+                        )}
                     </View>
 
                     {/* Stats */}
@@ -359,6 +387,8 @@ export default function ProfileScreen() {
                             {
                                 borderBottomWidth: 3,
                                 borderBottomColor: activeTab === tab ? Colors.theme.harvestGold : 'transparent',
+                                borderTopWidth: 2,
+                                borderTopColor: activeTab === tab ? Colors.theme.harvestGold : 'transparent',
                             }
                         ]} 
                         onPress={() => {
@@ -582,6 +612,15 @@ const styles = StyleSheet.create({
         height: 100,
         borderRadius: 50,
         backgroundColor: 'rgba(0,0,0,0.05)',
+        borderWidth: 2,
+        borderColor: Colors.theme.dust,
+    },
+    placeholderAvatar: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: Colors.theme.charcoal,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
     },
     textInfo: {
         flex: 1,
@@ -590,7 +629,7 @@ const styles = StyleSheet.create({
     name: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: TEST_COLORS.accent1, // Harvest Gold for headers
+        color: Colors.theme.softWhite,
         marginBottom: 2,
     },
     handleRow: {
@@ -600,7 +639,7 @@ const styles = StyleSheet.create({
     },
     handle: {
         fontSize: 16,
-        color: TEST_COLORS.accent2, // Burnt Sienna for handle
+        color: Colors.theme.dust,
         fontWeight: '600',
     },
     tribeRow: {
@@ -623,7 +662,7 @@ const styles = StyleSheet.create({
     },
     statsText: {
         fontSize: 14,
-        color: TEST_COLORS.accent2, // Burnt Sienna for stats
+        color: Colors.theme.dust,
         fontWeight: '600',
         marginBottom: 6,
     },
@@ -652,14 +691,16 @@ const styles = StyleSheet.create({
     },
     actionButton: {
         flex: 1,
-        backgroundColor: TEST_COLORS.surface,
+        backgroundColor: Colors.theme.charcoal,
+        borderWidth: 1,
+        borderColor: Colors.theme.harvestGold,
         paddingVertical: 12,
         borderRadius: 25,
         alignItems: 'center',
     },
     actionButtonText: {
         fontSize: 16,
-        color: TEST_COLORS.background,
+        color: Colors.theme.harvestGold,
         fontWeight: 'bold',
     },
     followStatsRow: {
@@ -677,7 +718,7 @@ const styles = StyleSheet.create({
     },
     followLabel: {
         fontSize: 14,
-        color: TEST_COLORS.accent2, // Burnt Sienna for subtitle/labels
+        color: Colors.theme.dust,
     },
     tabsContainer: {
         flexDirection: 'row',
@@ -688,6 +729,7 @@ const styles = StyleSheet.create({
     },
     tabItem: {
         alignItems: 'center',
+        paddingTop: 8,
         paddingBottom: 15,
         flex: 1, // Use flex instead of magic width to ensure centering and fit
     },

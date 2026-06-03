@@ -391,7 +391,7 @@ export default function AddExerciseScreen() {
                     </View>
                 ) : error ? (
                     <View style={styles.centered}>
-                        <Ionicons name="cloud-offline-outline" size={56} color={Colors.primary + '66'} />
+                        <Ionicons name="cloud-offline-outline" size={60} color={Colors.theme.dust + '44'} />
                         <Text style={styles.emptyText}>Couldn&apos;t load exercises</Text>
                         <Text style={styles.emptySubText}>{error}</Text>
                     </View>
@@ -399,8 +399,8 @@ export default function AddExerciseScreen() {
                     <View style={styles.centered}>
                         <MaterialCommunityIcons
                             name="dumbbell"
-                            size={56}
-                            color={Colors.primary + '44'}
+                            size={60}
+                            color={Colors.theme.dust + '44'}
                         />
                         <Text style={styles.emptyText}>No exercises found</Text>
                         <Text style={styles.emptySubText}>Try a different search term</Text>
@@ -419,7 +419,7 @@ export default function AddExerciseScreen() {
             case 'Recents':
                 return (
                     <View style={styles.centered}>
-                        <Ionicons name="time-outline" size={56} color={Colors.primary + '44'} />
+                        <Ionicons name="time-outline" size={60} color={Colors.theme.dust + '44'} />
                         <Text style={styles.emptyText}>No recent exercises</Text>
                         <Text style={styles.emptySubText}>Exercises you log will appear here</Text>
                     </View>
@@ -434,7 +434,7 @@ export default function AddExerciseScreen() {
                     </View>
                 ) : liftBookLifts.length === 0 ? (
                     <View style={styles.centered}>
-                        <Ionicons name="book-outline" size={56} color={Colors.primary + '44'} />
+                        <Ionicons name="book-outline" size={60} color={Colors.theme.dust + '44'} />
                         <Text style={styles.emptyText}>Lift book is empty</Text>
                         <Text style={styles.emptySubText}>
                             Add exercises from posts to see them here
@@ -646,26 +646,26 @@ const styles = StyleSheet.create({
     // Tabs
     tabsRow: {
         flexDirection: 'row',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        gap: 8,
+        backgroundColor: Colors.theme.charcoal,
+        borderRadius: 25,
+        padding: 5,
+        marginHorizontal: 16,
+        marginVertical: 10,
+        justifyContent: 'space-between',
     },
     tabPill: {
         flex: 1,
-        height: 34,
-        borderRadius: 17,
-        justifyContent: 'center',
+        paddingVertical: 10,
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: 'transparent',
+        borderRadius: 20,
     },
     tabPillActive: {
         backgroundColor: Colors.primary,
     },
     tabText: {
-        color: Colors.textDark,
-        fontSize: 12,
-        fontWeight: '500',
+        fontSize: 14,
+        color: Colors.theme.dust,
+        fontWeight: 'bold',
     },
     tabTextActive: {
         color: 'white',
@@ -812,14 +812,16 @@ const styles = StyleSheet.create({
         padding: 40,
     },
     emptyText: {
-        color: Colors.textDark,
-        fontSize: 18,
-        fontWeight: '700',
-        marginTop: 16,
+        color: Colors.theme.dust,
+        fontSize: 16,
+        opacity: 0.6,
+        marginTop: 20,
+        textAlign: 'center',
     },
     emptySubText: {
-        color: Colors.textDark + '99',
+        color: Colors.theme.dust,
         fontSize: 13,
+        opacity: 0.4,
         marginTop: 6,
         textAlign: 'center',
     },

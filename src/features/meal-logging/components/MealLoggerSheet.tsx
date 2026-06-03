@@ -46,6 +46,7 @@ export interface MealLoggerSheetProps {
     onPressItem?: (item: Ingredient) => void;
     capturedImage?: string | null;
     mediaType?: 'image' | 'video';
+    forceTucked?: boolean;
 }
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Custom'];
@@ -131,11 +132,13 @@ export default function MealLoggerSheet({
     onPressItem,
     capturedImage: externalImage,
     mediaType: externalType,
+    forceTucked,
 }: MealLoggerSheetProps) {
     const listRef = useRef<FlatList>(null);
     const translateY = useSharedValue(HIDDEN_Y);
     const context = useSharedValue({ y: 0 });
     const isTucked = useSharedValue(false);
+    const isSheetInputFocused = useRef(false);
 
     const [caption, setCaption] = useState('');
     const [selectedType, setSelectedType] = useState('Meal');
@@ -186,14 +189,24 @@ export default function MealLoggerSheet({
     }, [visible]);
 
     useEffect(() => {
+        if (forceTucked && visible) {
+            translateY.value = withTiming(TUCKED_Y, { duration: 250 });
+            isTucked.value = true;
+        } else if (forceTucked === false && visible && translateY.value >= TUCKED_Y - 10) {
+            translateY.value = withTiming(BASE_Y, { duration: 250 });
+            isTucked.value = false;
+        }
+    }, [forceTucked, visible]);
+
+    useEffect(() => {
         const showSubscription = Keyboard.addListener('keyboardDidShow', () => {
-            if (visible) {
+            if (visible && isSheetInputFocused.current) {
                 translateY.value = withTiming(EXPANDED_Y, { duration: 300 });
                 isTucked.value = false;
             }
         });
         const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
-            if (visible) {
+            if (visible && isSheetInputFocused.current) {
                 translateY.value = withTiming(BASE_Y, { duration: 300 });
                 isTucked.value = false;
             }
@@ -291,6 +304,8 @@ export default function MealLoggerSheet({
                                         onChangeText={setCaption}
                                         multiline
                                         maxLength={140}
+                                        onFocus={() => { isSheetInputFocused.current = true; }}
+                                        onBlur={() => { isSheetInputFocused.current = false; }}
                                     />
                                 </View>
                                 <TouchableOpacity style={styles.publishBtn} onPress={handlePublish}>
@@ -423,7 +438,12 @@ export default function MealLoggerSheet({
                                         placeholderTextColor="#444"
                                         value={customType}
                                         onChangeText={setCustomType}
-                                        onSubmitEditing={() => setShowTypePicker(false)}
+                                        onSubmitEditing={() => {
+                                            setShowTypePicker(false);
+                                            isSheetInputFocused.current = false;
+                                        }}
+                                        onFocus={() => { isSheetInputFocused.current = true; }}
+                                        onBlur={() => { isSheetInputFocused.current = false; }}
                                         autoFocus
                                     />
                                 )}

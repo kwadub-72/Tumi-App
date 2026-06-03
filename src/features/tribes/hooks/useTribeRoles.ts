@@ -1,34 +1,16 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/src/shared/services/supabase';
 import { useAuthStore } from '@/store/AuthStore';
+import { useUserTribeStore } from '@/src/store/UserTribeStore';
 
 export function useIsChief(tribeId?: string) {
-    const { session } = useAuthStore();
-    const userId = session?.user?.id;
-    const [isChief, setIsChief] = useState(false);
-    const [loading, setLoading] = useState(true);
+    const authUser = useAuthStore(state => state.session?.user);
+    const tribe = useUserTribeStore(state => state.myTribes.find(t => t.id === tribeId));
 
-    useEffect(() => {
-        if (!tribeId || !userId) {
-            setIsChief(false);
-            setLoading(false);
-            return;
-        }
+    const chiefId = (tribe as any)?.chief_id || tribe?.chief?.id;
+    const isChief = Boolean(authUser?.id && chiefId && authUser.id === chiefId);
 
-        const fetchRole = async () => {
-            const { data } = await supabase
-                .from('tribes')
-                .select('chief_id')
-                .eq('id', tribeId)
-                .single();
-            
-            setIsChief(data?.chief_id === userId);
-            setLoading(false);
-        };
-        fetchRole();
-    }, [tribeId, userId]);
-
-    return { isChief, loading };
+    return { isChief, loading: false };
 }
 
 export function useIsSpectator(tribeId?: string) {

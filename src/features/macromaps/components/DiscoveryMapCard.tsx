@@ -10,7 +10,7 @@ import { ACTIVITIES, resolveActivityIcon } from '@/src/shared/constants/Activiti
 import { ActivityIcon } from '@/src/shared/components/ActivityIcon';
 import { formatTimeAgo } from '@/utils/time';
 
-export function DiscoveryMapCard({ map }: { map: DiscoveryMap }) {
+export function DiscoveryMapCard({ map, isOnboarding }: { map: DiscoveryMap; isOnboarding?: boolean }) {
     const router = useRouter();
     const { navigateToProfile } = useProfileNavigation();
     const [heartbeatDays, setHeartbeatDays] = useState<number>(0);
@@ -55,14 +55,15 @@ export function DiscoveryMapCard({ map }: { map: DiscoveryMap }) {
     return (
         <TouchableOpacity 
             activeOpacity={0.8}
-            onPress={() => router.push(`/map-preview?map_id=${map.id}` as any)}
+            onPress={() => router.push({ pathname: '/map-preview', params: { map_id: map.id, isOnboarding: isOnboarding ? 'true' : undefined } } as any)}
             style={styles.card}
         >
             {/* Creator Metadata */}
             <View style={styles.cardHeader}>
                 <Pressable 
                     style={styles.creatorInfo} 
-                    onPress={() => navigateToProfile({ id: map.creator_id, handle: map.username || map.creator_handle || '' })}
+                    onPress={isOnboarding ? undefined : () => navigateToProfile({ id: map.creator_id, handle: map.username || map.creator_handle || '' })}
+                    disabled={isOnboarding}
                 >
                     {map.avatar_url ? (
                         <Image 

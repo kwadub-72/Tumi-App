@@ -17,6 +17,7 @@ import CompetitionWinnerOverlay from '../components/CompetitionWinnerOverlay';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUserTribeStore } from '@/src/store/UserTribeStore';
 import { useAuthStore } from '@/store/AuthStore';
+import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { resolveActivityIcon } from '@/src/shared/constants/Activities';
 import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
 
@@ -74,6 +75,7 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
     }, [tribeId]);
 
     const { isMember, isRequested, isChief, joinTribe, leaveTribe } = useUserTribeStore();
+    const { selectedTribeIds, setSelectedTribeIds } = useOnboardingStore();
 
     const [tribe, setTribe] = useState<Tribe | null>(null);
     const [posts, setPosts] = useState<FeedPost[]>([]);
@@ -114,8 +116,10 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
     }, [tribeId]);
 
     const fetchPosts = useCallback(async (days: number) => {
-        if (!currentUserId) return;
-        const data = await SupabaseTribeService.getTribeFeed(currentUserId, tribeId, days);
+        // Use a zero-UUID for onboarding users so the backend feed query executes,
+        // and secondary like/bookmark queries safely return empty arrays.
+        const effectiveUserId = currentUserId || '00000000-0000-0000-0000-000000000000';
+        const data = await SupabaseTribeService.getTribeFeed(effectiveUserId, tribeId, days);
         setPosts(data);
     }, [tribeId, currentUserId]);
 
@@ -307,7 +311,8 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
                 { event: '*', schema: 'public', table: 'likes' },
                 async () => {
                     // Re-fetch posts to get updated like counts
-                    const fresh = await SupabaseTribeService.getTribeFeed(currentUserId, tribeId, daysBack);
+                    const effectiveUserId = currentUserId || '00000000-0000-0000-0000-000000000000';
+                    const fresh = await SupabaseTribeService.getTribeFeed(effectiveUserId, tribeId, daysBack);
                     setPosts(fresh);
                 }
             );
@@ -330,9 +335,9 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
         setIsLoadingMore(false);
     }, [isLoadingMore, daysBack, fetchPosts]);
 
-    const isUserChief     = tribe ? (isChief(tribe.id) || currentUserId === tribe.chief?.id) : false;
-    const isUserMember    = tribe ? isMember(tribe.id) : false;
-    const isUserRequested = tribe ? isRequested(tribe.id) : false;
+    const isUserChief     = tribe ? (!!currentUserId && (isChief(tribe.id) || currentUserId === tribe.chief?.id)) : false;
+    const isUserMember    = tribe ? (currentUserId ? isMember(tribe.id) : (tribe.privacy === 'public' && selectedTribeIds.includes(tribe.id))) : false;
+    const isUserRequested = tribe ? (currentUserId ? isRequested(tribe.id) : (tribe.privacy === 'private' && selectedTribeIds.includes(tribe.id))) : false;
     const isPrivate       = tribe ? tribe.privacy === 'private' : false;
     const canView         = !isPrivate || isUserMember || isUserChief;
 
@@ -353,7 +358,22 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
     }, [currentUserId]);
 
     const handleJoinPress = useCallback(async () => {
-        if (!currentUserId || !tribe) return;
+        if (!tribe) return;
+
+        if (!currentUserId) {
+            if (selectedTribeIds.includes(tribe.id)) {
+                // "Leave" behavior
+                setSelectedTribeIds(selectedTribeIds.filter(id => id !== tribe.id));
+            } else {
+                // "Join" behavior
+                setSelectedTribeIds([...selectedTribeIds, tribe.id]);
+                if (tribe.privacy === 'private') {
+                    Alert.alert('Requested', 'Your join request has been saved for when you complete setup.');
+                }
+            }
+            return;
+        }
+
         if (isUserMember) {
             Alert.alert('Leave Tribe', 'Are you sure you want to leave this tribe?', [
                 { text: 'Cancel', style: 'cancel' },
@@ -383,7 +403,7 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
         await joinTribe(currentUserId, tribe);
         await fetchTribe();
         if (isPrivate) Alert.alert('Requested', 'Your join request has been sent.');
-    }, [currentUserId, isUserMember, isUserRequested, isPrivate, tribe, joinTribe, leaveTribe, fetchTribe]);
+    }, [currentUserId, isUserMember, isUserRequested, isPrivate, tribe, joinTribe, leaveTribe, fetchTribe, selectedTribeIds, setSelectedTribeIds]);
 
 
 

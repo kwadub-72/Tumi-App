@@ -1,0 +1,170 @@
+import React from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '@/src/shared/theme/Colors';
+import { useOnboardingStore } from '@/store/useOnboardingStore';
+import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
+
+export default function PrivacyScreen() {
+    const router = useRouter();
+    const { is_private, setIsPrivate } = useOnboardingStore();
+
+    return (
+        <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                    <Ionicons name="arrow-back" size={28} color={Colors.theme.harvestGold} />
+                </TouchableOpacity>
+                <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }} pointerEvents="none">
+                    <TabonoLogo size={32} color={Colors.theme.harvestGold} />
+                </View>
+                <View style={{ width: 28 }} pointerEvents="none" />
+            </View>
+
+            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                <Text style={styles.title}>Choose privacy settings</Text>
+                <Text style={styles.subtitle}>Decide who can see your profile and posts</Text>
+
+                <View style={styles.cardsContainer}>
+                    <TouchableOpacity 
+                        style={[styles.card, !is_private && styles.cardSelected]}
+                        onPress={() => setIsPrivate(false)}
+                    >
+                        <View style={styles.cardHeader}>
+                            <Ionicons name="earth-outline" size={32} color={!is_private ? Colors.theme.harvestGold : Colors.theme.dust} />
+                            {!is_private && <Ionicons name="checkmark-circle" size={24} color={Colors.theme.harvestGold} />}
+                        </View>
+                        <Text style={[styles.cardTitle, !is_private && styles.cardTitleSelected]}>Open</Text>
+                        <Text style={styles.cardDescription}>Maps, meals, workouts, and updates are public—Share your journey with others, and let them take inspiration</Text>
+                        <View style={styles.recommendedBadge}>
+                            <Text style={styles.recommendedText}>RECOMMENDED</Text>
+                        </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                        style={[styles.card, is_private && styles.cardSelected]}
+                        onPress={() => setIsPrivate(true)}
+                    >
+                        <View style={styles.cardHeader}>
+                            <Ionicons name="lock-closed-outline" size={32} color={is_private ? Colors.theme.harvestGold : Colors.theme.dust} />
+                            {is_private && <Ionicons name="checkmark-circle" size={24} color={Colors.theme.harvestGold} />}
+                        </View>
+                        <Text style={[styles.cardTitle, is_private && styles.cardTitleSelected]}>Private</Text>
+                        <Text style={styles.cardDescription}>Only approved followers can see your maps, meals, workouts, and updates.</Text>
+                    </TouchableOpacity>
+                </View>
+            </ScrollView>
+
+            <View style={styles.footer}>
+                <TouchableOpacity 
+                    style={styles.button}
+                    onPress={() => router.push('/onboarding/welcome')}
+                >
+                    <Text style={styles.buttonText}>Continue</Text>
+                </TouchableOpacity>
+            </View>
+        </SafeAreaView>
+    );
+}
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: Colors.background,
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingVertical: 15,
+    },
+    backButton: {
+        padding: 5,
+        marginLeft: -5,
+    },
+    content: {
+        flex: 1,
+        paddingHorizontal: 24,
+        paddingTop: 10,
+    },
+    title: {
+        fontSize: 32,
+        fontWeight: '900',
+        color: Colors.theme.softWhite,
+        marginBottom: 8,
+    },
+    subtitle: {
+        fontSize: 16,
+        color: Colors.theme.dust,
+        marginBottom: 32,
+    },
+    cardsContainer: {
+        gap: 16,
+        paddingBottom: 20,
+    },
+    card: {
+        backgroundColor: Colors.theme.charcoal,
+        borderRadius: 16,
+        padding: 20,
+        borderWidth: 2,
+        borderColor: 'rgba(255, 255, 255, 0.05)',
+        position: 'relative',
+    },
+    cardSelected: {
+        borderColor: Colors.theme.harvestGold,
+        backgroundColor: 'rgba(218, 165, 32, 0.05)',
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    cardTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: Colors.theme.softWhite,
+        marginBottom: 8,
+    },
+    cardTitleSelected: {
+        color: Colors.theme.harvestGold,
+    },
+    cardDescription: {
+        fontSize: 14,
+        color: Colors.theme.dust,
+        lineHeight: 20,
+    },
+    recommendedBadge: {
+        position: 'absolute',
+        top: -12,
+        right: 20,
+        backgroundColor: Colors.theme.harvestGold,
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    recommendedText: {
+        color: Colors.theme.matteBlack,
+        fontSize: 10,
+        fontWeight: '900',
+        letterSpacing: 1,
+    },
+    footer: {
+        padding: 24,
+        paddingBottom: 40,
+    },
+    button: {
+        backgroundColor: Colors.theme.harvestGold,
+        paddingVertical: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    buttonText: {
+        color: Colors.theme.matteBlack,
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+});

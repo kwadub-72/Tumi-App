@@ -1,4 +1,6 @@
 import { MacroNutrients } from '../models/types';
+import { Alert } from 'react-native';
+import { supabase } from './supabase';
 
 export interface USDAServingUnit {
     label: string;
@@ -152,21 +154,21 @@ export class USDAFoodService {
         if (!query.trim()) return [];
 
         try {
-            const url =
-                `${this.BASE}/foods/search` +
-                `?query=${encodeURIComponent(query)}` +
-                `&api_key=${this.KEY}` +
-                `&dataType=${this.DATA_TYPES}` +
-                `&pageSize=${pageSize}`;
+            console.log('Outgoing USDA Edge Function Request:', { query, pageSize });
 
-            const res = await fetch(url);
-            if (!res.ok) {
-                console.warn('[USDAFoodService] search failed', res.status);
-                return [];
+            const { data, error } = await supabase.functions.invoke('usda-food-search', {
+                body: { 
+                    query, 
+                    pageSize,
+                    dataType: ['Branded', 'Foundation', 'SR Legacy']
+                }
+            });
+
+            if (error) {
+                throw new Error(error.message || 'Edge Function execution failed');
             }
 
-            const json = await res.json();
-            const foods: any[] = json.foods ?? [];
+            const foods: any[] = data?.foods ?? [];
             
             // If the user wants branded first, we can sort them
             const sortedFoods = [...foods].sort((a, b) => {
@@ -176,8 +178,9 @@ export class USDAFoodService {
             });
 
             return sortedFoods.map(mapFood);
-        } catch (err) {
+        } catch (err: any) {
             console.error('[USDAFoodService] search error', err);
+            Alert.alert('USDA Search Error', err?.message || 'Failed to fetch USDA food details');
             return [];
         }
     }
@@ -197,24 +200,28 @@ export class USDAFoodService {
      */
     static async findByBarcode(barcode: string): Promise<USDAFoodItem | null> {
         try {
-            const url =
-                `${this.BASE}/foods/search` +
-                `?query=${barcode}` +
-                `&api_key=${this.KEY}` +
-                `&dataType=${this.DATA_TYPES}` +
-                `&pageSize=1`;
+            console.log('Outgoing USDA Edge Function Barcode Request:', { barcode });
 
-            const res = await fetch(url);
-            if (!res.ok) return null;
+            const { data, error } = await supabase.functions.invoke('usda-food-search', {
+                body: { 
+                    query: barcode, 
+                    pageSize: 1,
+                    dataType: ['Branded', 'Foundation', 'SR Legacy']
+                }
+            });
 
-            const json = await res.json();
-            const foods = json.foods ?? [];
+            if (error) {
+                throw new Error(error.message || 'Edge Function barcode execution failed');
+            }
+
+            const foods = data?.foods ?? [];
             if (foods.length > 0) {
                 return mapFood(foods[0]);
             }
             return null;
-        } catch (err) {
+        } catch (err: any) {
             console.error('[USDAFoodService] barcode search error', err);
+            Alert.alert('USDA Search Error', err?.message || 'Failed to fetch USDA food barcode details');
             return null;
         }
     }

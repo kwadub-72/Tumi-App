@@ -197,6 +197,26 @@ export default function TribeChatScreen() {
         );
     }
 
+    if (!currentUserId || !userRole) {
+        const isOnboardingLocked = !currentUserId;
+        return (
+            <View style={[styles.container, styles.centered, { padding: 20 }]}>
+                <Ionicons name="lock-closed" size={64} color={C.gold} />
+                <Text style={{ marginTop: 20, fontSize: 16, fontWeight: 'bold', color: C.white }}>
+                    {isOnboardingLocked ? 'Finish Setup to Chat' : 'Members Only'}
+                </Text>
+                <Text style={{ marginTop: 8, fontSize: 14, color: C.dust, textAlign: 'center' }}>
+                    {isOnboardingLocked 
+                        ? 'You must complete your account setup to enter the chat room and connect with your tribe.' 
+                        : 'You must join this tribe to view and participate in the chat.'}
+                </Text>
+                <TouchableOpacity style={{ marginTop: 24, padding: 12 }} onPress={() => router.back()}>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: C.gold }}>Go Back</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
     const title = isLargePublicTribe ? "Tribe Announcements" : "Tribe Chat";
 
     return (

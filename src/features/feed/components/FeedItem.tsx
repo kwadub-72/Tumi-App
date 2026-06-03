@@ -7,6 +7,7 @@ import Animated from 'react-native-reanimated';
 import { FeedPost, Snapshot, Meal, Workout, MacroUpdate } from '@/src/shared/models/types';
 import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
 import { Colors } from '@/src/shared/theme/Colors';
+import { resolveActivityIcon } from '@/src/shared/constants/Activities';
 import VerifiedModal from '@/components/VerifiedModal';
 import { useMealLogStore } from '@/src/store/useMealLogStore';
 import { useWorkoutLogStore } from '@/src/store/useWorkoutLogStore';
@@ -532,9 +533,32 @@ export default function FeedItem({
         const unitColor = isTribeFeed ? '#FFFFFF' : (textColorOverride || colorOverride || 'white');
         const iconColor = isTribeFeed ? '#DAA520' : (colorOverride || Colors.theme.softWhite);
 
+        const isBubble = icon === 'food-drumstick' || icon === 'barley' || icon === 'water';
+        const bubbleLetter = icon === 'food-drumstick' ? 'P' : icon === 'barley' ? 'C' : 'F';
+
         return (
             <View style={[styles.macroValueItem, width ? { width, justifyContent: 'flex-start' } : {}]}>
-                <MaterialCommunityIcons name={icon} size={scale === 'small' ? 14 : 18} color={iconColor} />
+                {isBubble ? (
+                    <View style={{
+                        backgroundColor: Colors.theme.harvestGold,
+                        borderRadius: 8,
+                        width: 16,
+                        height: 16,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        marginRight: 4
+                    }}>
+                        <Text style={{
+                            color: Colors.theme.matteBlack,
+                            fontWeight: 'bold',
+                            fontSize: 9
+                        }}>
+                            {bubbleLetter}
+                        </Text>
+                    </View>
+                ) : (
+                    <MaterialCommunityIcons name={icon} size={scale === 'small' ? 14 : 18} color={iconColor} />
+                )}
                 <Text style={[
                     styles.macroValueText, 
                     scale === 'small' && { fontSize: 13, fontWeight: '500' }
@@ -609,8 +633,8 @@ export default function FeedItem({
                     </Text>
                 </View>
                 <View style={styles.macroValuesRow}>
-                    <View style={{ width: 80 }}>
-                        {renderMacroValue('fire', Math.abs(vals.calories), ' cals', colors.calories, false, 'small', 80)}
+                    <View style={{ width: 70, marginRight: 24 }}>
+                        {renderMacroValue('fire', Math.abs(vals.calories), ' cals', colors.calories, false, 'small', 70)}
                     </View>
                     <View style={styles.macroSubRow}>
                         <View style={styles.macroCol}>
@@ -716,8 +740,8 @@ export default function FeedItem({
                     </Text>
                 </View>
                 <View style={styles.macroValuesRow}>
-                    <View style={{ width: 80 }}>
-                        {renderMacroValue('fire', vals.calories, ' cals', colors.calories, isDelta, 'small', 80)}
+                    <View style={{ width: 70, marginRight: 24 }}>
+                        {renderMacroValue('fire', vals.calories, ' cals', colors.calories, isDelta, 'small', 70)}
                     </View>
                     <View style={styles.macroSubRow}>
                         <View style={styles.macroCol}>
@@ -1060,8 +1084,7 @@ export default function FeedItem({
         <Animated.View 
             style={[
                 styles.card, 
-                cardColor ? { backgroundColor: cardColor } : {},
-                isTribeFeed && { borderColor: '#DAA520', borderWidth: 1 }
+                cardColor ? { backgroundColor: cardColor } : {}
             ]}
             // @ts-ignore
             sharedTransitionTag={sharedTransitionTag}
@@ -1103,7 +1126,13 @@ export default function FeedItem({
             <VerifiedModal visible={isVerifiedVisible} onClose={() => setIsVerifiedVisible(false)} status={post.user.status} />
             <View style={[styles.header, { zIndex: 1 }]}>
                 <TouchableOpacity onPress={() => navigateToProfile(post.user)}>
-                    <Image source={typeof post.user.avatar === 'string' ? { uri: post.user.avatar } : post.user.avatar} style={styles.avatar} />
+                    {post.user.avatar ? (
+                        <Image source={typeof post.user.avatar === 'string' ? { uri: post.user.avatar } : post.user.avatar} style={styles.avatar} />
+                    ) : (
+                        <View style={[styles.avatar, styles.placeholderAvatar]}>
+                            <Ionicons name="person" size={24} color={Colors.theme.dust} />
+                        </View>
+                    )}
                 </TouchableOpacity>
                 <View style={styles.headerText}>
                     <View style={styles.nameRow}>
@@ -1119,17 +1148,19 @@ export default function FeedItem({
                                 />
                             </TouchableOpacity>
                         )}
-                        {post.user.activityIcon && (() => {
-                            const activity = (post.user as any).activity || '';
+                        {(post.user.activityIcon || post.user.activity) && (() => {
+                            const activity = post.user.activity || '';
+                            const activityIcon = resolveActivityIcon(activity, post.user.activityIcon);
+                            if (!activityIcon) return null;
                             const isPositive = activity.toLowerCase().includes('bulk') || activity.toLowerCase().includes('increase');
                             const isNegative = activity.toLowerCase().includes('cut') || activity.toLowerCase().includes('decrease');
                             const mathIndicator = isPositive ? '+' : (isNegative ? '-' : '');
-                            const color = Colors.theme.dust;
+                            const color = Colors.theme.harvestGold;
                             
                             return (
                                 <TouchableOpacity onPress={onPressHammer} style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 6 }}>
                                     <MaterialCommunityIcons
-                                        name={post.user.activityIcon as any}
+                                        name={activityIcon as any}
                                         size={16}
                                         color={color}
                                     />
@@ -1141,7 +1172,7 @@ export default function FeedItem({
                         })()}
                     </View>
                     <TouchableOpacity onPress={() => navigateToProfile(post.user)}>
-                        <Text style={styles.handle}>{post.user.handle}</Text>
+                        <Text style={styles.handle}>@{post.user.handle}</Text>
                     </TouchableOpacity>
                 </View>
                 <TouchableOpacity onPress={onPressOptions}><Ionicons name="ellipsis-horizontal" size={20} color={Colors.theme.softWhite} /></TouchableOpacity>
@@ -1247,8 +1278,11 @@ const styles = StyleSheet.create({
         borderRadius: 45,
         padding: 20,
         marginBottom: 20,
-        borderWidth: 1,
-        borderColor: '#DAA520', // Harvest Gold border
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
+        elevation: 6,
     },
     header: {
         flexDirection: 'row',
@@ -1263,6 +1297,11 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.theme.dust, // Tertiary (Dust)
     },
+    placeholderAvatar: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: Colors.theme.charcoal,
+    },
     headerText: {
         flex: 1,
     },
@@ -1272,16 +1311,16 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     name: {
-        color: Colors.theme.harvestGold, // Harvest Gold for headers
+        color: Colors.theme.softWhite,
         fontSize: 18,
         fontWeight: 'bold',
     },
     handle: {
-        color: Colors.theme.burntSienna, // Burnt Sienna for handle
+        color: Colors.theme.dust,
         fontSize: 14,
     },
     titleText: {
-        color: Colors.theme.dust, // Dust instead of soft white for less stark text
+        color: Colors.theme.softWhite,
         fontSize: 24,
         fontWeight: 'bold',
         marginBottom: 12,
@@ -1345,7 +1384,7 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     macroCol: {
-        width: 46,
+        width: 54,
         alignItems: 'flex-end',
     },
     macroValues: {
@@ -1378,7 +1417,7 @@ const styles = StyleSheet.create({
         paddingLeft: 10,
     },
     mealType: {
-        color: Colors.theme.harvestGold,
+        color: Colors.theme.dust,
         fontSize: 20,
         fontWeight: 'bold',
         width: 85,
@@ -1410,7 +1449,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
     },
     workoutHeaderTitle: {
-        color: 'white',
+        color: Colors.theme.dust,
         fontSize: 20,
         fontWeight: 'bold',
     },
@@ -1440,7 +1479,7 @@ const styles = StyleSheet.create({
         flexDirection: 'column',
     },
     exerciseFeedRowTitle: {
-        color: 'white',
+        color: Colors.theme.softWhite,
         fontSize: 16,
         fontWeight: 'bold',
     },
@@ -1519,7 +1558,7 @@ const styles = StyleSheet.create({
         position: 'absolute',
         right: 0,
         bottom: 0,
-        color: 'rgba(255,255,255,0.5)',
+        color: Colors.theme.dust,
         fontSize: 11,
     },
     dimOverlay: {
@@ -1587,7 +1626,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     ingName: {
-        color: 'white',
+        color: Colors.theme.softWhite,
         fontSize: 15,
         fontWeight: 'bold',
         flexWrap: 'wrap',

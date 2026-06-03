@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { FeedPost, Comment, Ingredient } from '../models/types';
+import { resolveActivityIcon } from '../constants/Activities';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -30,7 +31,7 @@ function rowToFeedPost(row: any, currentUserId: string): FeedPost {
             status: row.author_status ?? 'none',
             verified: true,
             activity: row.author_activity,
-            activityIcon: row.author_activity_icon,
+            activityIcon: row.author_activity_icon || (row.author_activity ? resolveActivityIcon(row.author_activity, row.author_activity_icon) : undefined),
             macroTargets: row.author_macro_targets,
         },
         timeAgo: formatTimeAgo(row.created_at),
@@ -203,7 +204,7 @@ export const SupabasePostService = {
             supabase.from('comments')
                 .select(`
                     id, body, created_at, author_id, like_count,
-                    profiles!comments_author_id_fkey (id, handle, name, avatar_url, status, activity_icon)
+                    profiles!comments_author_id_fkey (id, handle, name, avatar_url, status, activity_icon, activity)
                 `)
                 .eq('post_id', postId)
                 .order('created_at', { ascending: false }) // newest comments first? Or true for oldest first. Let's use false to get newest.
@@ -237,7 +238,8 @@ export const SupabasePostService = {
                 avatar: row.profiles.avatar_url ?? 'https://i.pravatar.cc/150?u=default',
                 status: row.profiles.status ?? 'none',
                 verified: true,
-                activityIcon: row.profiles.activity_icon,
+                activity: row.profiles.activity,
+                activityIcon: row.profiles.activity_icon || (row.profiles.activity ? resolveActivityIcon(row.profiles.activity, row.profiles.activity_icon) : undefined),
             },
         }));
 
@@ -352,7 +354,7 @@ export const SupabasePostService = {
                 author_id,
                 like_count,
                 profiles!comments_author_id_fkey (
-                    id, handle, name, avatar_url, status, activity_icon
+                    id, handle, name, avatar_url, status, activity_icon, activity
                 )
             `)
             .eq('post_id', postId)
@@ -376,6 +378,8 @@ export const SupabasePostService = {
                 avatar: row.profiles.avatar_url ?? 'https://i.pravatar.cc/150?u=default',
                 status: row.profiles.status ?? 'none',
                 verified: true,
+                activity: row.profiles.activity,
+                activityIcon: row.profiles.activity_icon || (row.profiles.activity ? resolveActivityIcon(row.profiles.activity, row.profiles.activity_icon) : undefined),
             },
         }));
 
@@ -406,7 +410,7 @@ export const SupabasePostService = {
                 created_at,
                 like_count,
                 profiles!comments_author_id_fkey (
-                    id, handle, name, avatar_url, status
+                    id, handle, name, avatar_url, status, activity_icon, activity
                 )
             `)
             .single();
@@ -431,6 +435,8 @@ export const SupabasePostService = {
                 avatar: profile.avatar_url ?? 'https://i.pravatar.cc/150?u=default',
                 status: profile.status ?? 'none',
                 verified: true,
+                activity: profile.activity,
+                activityIcon: profile.activity_icon || (profile.activity ? resolveActivityIcon(profile.activity, profile.activity_icon) : undefined),
             },
         };
     },

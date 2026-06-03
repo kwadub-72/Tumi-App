@@ -27,7 +27,13 @@ const generateDummyLeaderboard = () => [
     { id: '11', rank: 11, name: 'Peteyboy', handle: '@CheterMesservy9', avatar: 'https://i.pravatar.cc/100?img=59', logged: false, trend: 0, trendDir: 'none', points: 120, leaf: true, activity: 'hammer' },
 ];
 
-export const PremierH2HLeaderboardDashboard = () => {
+import { useIsSpectator, useIsChief } from '../../hooks/useTribeRoles';
+import { useRouter } from 'expo-router';
+
+export const PremierH2HLeaderboardDashboard = ({ tribeId, tribe }: { tribeId?: string; tribe?: any }) => {
+    const resolvedTribeId = tribeId || tribe?.id || '';
+    const { isChief } = useIsChief(resolvedTribeId);
+    const router = useRouter();
     const [expanded, setExpanded] = useState(false);
     const [modalInfo, setModalInfo] = useState<{ visible: boolean, title: string, description: string, iconName: any } | null>(null);
     const week = getCompetitionWeek();
@@ -42,7 +48,7 @@ export const PremierH2HLeaderboardDashboard = () => {
 
     return (
         <View style={styles.container}>
-            <Text style={styles.dashboardType}>Premier • Head-to-Head • Habits</Text>
+            <Text style={styles.dashboardType}>Head-to-Head • Premier</Text>
 
             <View style={styles.header}>
                 <Text style={styles.leagueName}>Team flex</Text>
@@ -307,5 +313,24 @@ const styles = StyleSheet.create({
         fontSize: 10,
         color: Colors.primary,
         opacity: 0.7,
-    }
+    },
+    chamberBtn: {
+        position: 'absolute',
+        top: 10,
+        right: 15,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#262525',
+        borderWidth: 1.5,
+        borderColor: '#DAA520',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 50,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 3,
+        elevation: 5,
+    },
 });

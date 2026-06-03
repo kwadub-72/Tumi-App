@@ -60,7 +60,29 @@ const MacroUpdateRow = ({ icon, oldVal, value, onChange, diff, editable = true }
 
     return (
         <View style={styles.macroRow}>
-            <MaterialCommunityIcons name={icon} size={28} color={Colors.primary} style={styles.macroIconSmall} />
+            {icon === 'fire' ? (
+                <MaterialCommunityIcons name="fire" size={28} color={Colors.primary} style={styles.macroIconSmall} />
+            ) : (
+                <View style={[styles.macroIconSmall, { alignItems: 'center', justifyContent: 'center' }]}>
+                    <View style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 14,
+                        backgroundColor: Colors.primary,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                    }}>
+                        <Text style={{
+                            color: Colors.theme.matteBlack,
+                            fontSize: 14,
+                            fontWeight: 'bold',
+                            lineHeight: 16,
+                        }}>
+                            {icon === 'food-drumstick' ? 'P' : icon === 'barley' ? 'C' : 'F'}
+                        </Text>
+                    </View>
+                </View>
+            )}
             <TouchableOpacity 
                 activeOpacity={1} 
                 onPress={() => editable && inputRef.current?.focus()}
@@ -136,7 +158,29 @@ const MacroProgressBar = ({ icon, target, consumed }: any) => {
 
     return (
         <View style={styles.progressRow}>
-            <MaterialCommunityIcons name={icon} size={32} color={Colors.primary} style={styles.progressIcon} />
+            {icon === 'fire' ? (
+                <MaterialCommunityIcons name="fire" size={32} color={Colors.primary} style={styles.progressIcon} />
+            ) : (
+                <View style={[styles.progressIcon, { alignItems: 'center', justifyContent: 'center' }]}>
+                    <View style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 14,
+                        backgroundColor: Colors.primary,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                    }}>
+                        <Text style={{
+                            color: Colors.theme.matteBlack,
+                            fontSize: 14,
+                            fontWeight: 'bold',
+                            lineHeight: 16,
+                        }}>
+                            {icon === 'food-drumstick' ? 'P' : icon === 'barley' ? 'C' : 'F'}
+                        </Text>
+                    </View>
+                </View>
+            )}
             <View style={styles.progressTrackWrapper}>
                 <View style={styles.progressTrack}>
                     {renderSegment(logged, Colors.primary, 'white')}
@@ -568,17 +612,65 @@ export default function MacroUpdateScreen() {
                                                         <Text style={styles.targetUnit}>cals</Text>
                                                     </View>
                                                     <View style={styles.targetIconGroup}>
-                                                        <MaterialCommunityIcons name="food-drumstick" size={24} color={Colors.primary} />
+                                                        <View style={{
+                                                            width: 24,
+                                                            height: 24,
+                                                            borderRadius: 12,
+                                                            backgroundColor: Colors.primary,
+                                                            justifyContent: 'center',
+                                                            alignItems: 'center',
+                                                        }}>
+                                                            <Text style={{
+                                                                color: Colors.theme.matteBlack,
+                                                                fontSize: 13,
+                                                                fontWeight: 'bold',
+                                                                lineHeight: 15,
+                                                            }}>
+                                                                P
+                                                            </Text>
+                                                        </View>
                                                         <Text style={styles.targetVal}>{oldP}</Text>
                                                         <Text style={styles.targetUnit}>g</Text>
                                                     </View>
                                                     <View style={styles.targetIconGroup}>
-                                                        <MaterialCommunityIcons name="barley" size={24} color={Colors.primary} />
+                                                        <View style={{
+                                                            width: 24,
+                                                            height: 24,
+                                                            borderRadius: 12,
+                                                            backgroundColor: Colors.primary,
+                                                            justifyContent: 'center',
+                                                            alignItems: 'center',
+                                                        }}>
+                                                            <Text style={{
+                                                                color: Colors.theme.matteBlack,
+                                                                fontSize: 13,
+                                                                fontWeight: 'bold',
+                                                                lineHeight: 15,
+                                                            }}>
+                                                                C
+                                                            </Text>
+                                                        </View>
                                                         <Text style={styles.targetVal}>{oldC}</Text>
                                                         <Text style={styles.targetUnit}>g</Text>
                                                     </View>
                                                     <View style={styles.targetIconGroup}>
-                                                        <MaterialCommunityIcons name="water" size={24} color={Colors.primary} />
+                                                        <View style={{
+                                                            width: 24,
+                                                            height: 24,
+                                                            borderRadius: 12,
+                                                            backgroundColor: Colors.primary,
+                                                            justifyContent: 'center',
+                                                            alignItems: 'center',
+                                                        }}>
+                                                            <Text style={{
+                                                                color: Colors.theme.matteBlack,
+                                                                fontSize: 13,
+                                                                fontWeight: 'bold',
+                                                                lineHeight: 15,
+                                                            }}>
+                                                                F
+                                                            </Text>
+                                                        </View>
                                                         <Text style={styles.targetVal}>{oldF}</Text>
                                                         <Text style={styles.targetUnit}>g</Text>
                                                     </View>

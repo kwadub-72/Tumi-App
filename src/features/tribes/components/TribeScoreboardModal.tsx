@@ -20,9 +20,15 @@ import { useAuthStore } from '@/store/AuthStore';
 import { useProfileNavigation } from '@/src/shared/hooks/useProfileNavigation';
 import { useTribeScoreboard, ScoreboardMember } from '../hooks/useTribeScoreboard';
 import { resolveActivityIcon } from '@/src/shared/constants/Activities';
+import { useIsChief } from '../hooks/useTribeRoles';
+import { useRouter } from 'expo-router';
 import TribeInfoModal from './TribeInfoModal';
 import { DashboardCarousel } from './dashboards/DashboardCarousel';
 import { H2HUserMatchupDashboard } from './dashboards/H2HUserMatchupDashboard';
+import { AccountabilityDashboard } from './dashboards/AccountabilityDashboard';
+import { PremierTribeBattleDashboard } from './dashboards/PremierTribeBattleDashboard';
+import { TradTribeBattleDashboard } from './dashboards/TradTribeBattleDashboard';
+import { Tribe } from '@/src/shared/models/types';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_HEIGHT = SCREEN_HEIGHT * 0.84; 
@@ -32,6 +38,7 @@ interface TribeScoreboardModalProps {
     onClose: () => void;
     tribeId?: string;
     tribeName?: string;
+    tribe?: Tribe | null;
 }
 
 // Helper to determine top 3 rank medal coloring
@@ -42,88 +49,11 @@ const getRankColor = (rank: number) => {
     return 'rgba(237, 232, 213, 0.6)'; // Soft Dust
 };
 
-// Self-contained component for points scaling pop and inline delta indicators
-const PointsColumnCell = React.memo(({ points }: { points: number }) => {
-    const [currentPoints, setCurrentPoints] = useState(points);
-    const [delta, setDelta] = useState<number | null>(null);
-
-    const scaleAnim = useRef(new Animated.Value(1)).current;
-    const translateYAnim = useRef(new Animated.Value(0)).current;
-    const opacityAnim = useRef(new Animated.Value(0)).current;
-
-    useEffect(() => {
-        if (points !== currentPoints) {
-            const diff = points - currentPoints;
-            setDelta(diff);
-            setCurrentPoints(points);
-
-            // Scale text pop animation (1.0 -> 1.3 -> 1.0)
-            Animated.sequence([
-                Animated.timing(scaleAnim, {
-                    toValue: 1.3,
-                    duration: 120,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(scaleAnim, {
-                    toValue: 1.0,
-                    duration: 150,
-                    useNativeDriver: true,
-                })
-            ]).start();
-
-            // Floating upward delta animation
-            translateYAnim.setValue(0);
-            opacityAnim.setValue(1);
-
-            Animated.parallel([
-                Animated.timing(translateYAnim, {
-                    toValue: -28,
-                    duration: 900,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(opacityAnim, {
-                    toValue: 0,
-                    duration: 900,
-                    useNativeDriver: true,
-                })
-            ]).start(() => {
-                setDelta(null);
-            });
-        }
-    }, [points]);
-
-    const isPositive = delta && delta > 0;
-    const deltaText = isPositive ? `+${delta}` : `${delta}`;
-    const deltaColor = isPositive ? '#AEDD63' : '#8B2613'; // Soft Green vs Deep Crimson
-
-    return (
-        <View style={[styles.memberCell, styles.colPointsCompetitive, styles.pointsCellContainer]}>
-            <Animated.Text style={[styles.pointsText, { transform: [{ scale: scaleAnim }] }]}>
-                {currentPoints}
-            </Animated.Text>
-            {delta !== null && (
-                <Animated.Text
-                    style={[
-                        styles.floatingDeltaText,
-                        {
-                            color: deltaColor,
-                            transform: [{ translateY: translateYAnim }],
-                            opacity: opacityAnim,
-                        }
-                    ]}
-                >
-                    {deltaText}
-                </Animated.Text>
-            )}
-        </View>
-    );
-});
-PointsColumnCell.displayName = 'PointsColumnCell';
-
-export default function TribeScoreboardModal({ visible, onClose, tribeId, tribeName = "Tribe Scoreboard" }: TribeScoreboardModalProps) {
+export default function TribeScoreboardModal({ visible, onClose, tribeId, tribeName = "Tribe Scoreboard", tribe }: TribeScoreboardModalProps) {
     const { session } = useAuthStore();
     const { navigateToProfile } = useProfileNavigation();
-    
+    const { isChief } = useIsChief(tribeId || '');
+    const router = useRouter();
     // Connect points management state hook
     const { loading, data, header, competition, mutatePoints, simulateDailyReset, simulateTripleTie } = useTribeScoreboard(tribeId);
     
@@ -184,259 +114,23 @@ export default function TribeScoreboardModal({ visible, onClose, tribeId, tribeN
         );
     };
 
-    // Style checks to detect competitive tribes (Team Flex is always H2H)
-    const isHeadToHead = tribeName === 'Team Flex' || tribeId === 'b0000000-0000-0000-0000-000000000003' || tribeName === 'The Cut Squad' || tribeId === 'b0000000-0000-0000-0000-000000000004';
-    const isFaceoff = competition?.style === 'faceoff' || tribeName === 'The Cut Squad' || tribeId === 'b0000000-0000-0000-0000-000000000004';
+    // Style checks to detect competitive tribes using the ultimate source of truth: the tribe object
+    const compStatus = tribe?.comp_status || tribe?.tribe_type;
+    const isHeadToHead = compStatus === 'premier' || compStatus === 'faceoff';
+    const isFaceoff = compStatus === 'faceoff';
 
-    const renderScoreboardBody = () => {
-        return (
-            <>
-                {/* Columns header labels */}
-                {isHeadToHead ? (
-                    <View style={styles.tableHeaderRow}>
-                        <Text style={[styles.columnHeader, styles.colIdentityCompetitive]}>MEMBER</Text>
-                        <Text 
-                            style={[styles.columnHeader, styles.colLoggedCompetitive, { textAlign: 'center' }]}
-                            numberOfLines={1}
-                            adjustsFontSizeToFit
-                        >
-                            LOGGED
-                        </Text>
-                        <Text style={[styles.columnHeader, styles.colTrendCompetitive, { textAlign: 'center' }]}>TREND</Text>
-                        <Text style={[styles.columnHeader, styles.colPointsCompetitive, { textAlign: isFaceoff ? 'center' : 'right', paddingRight: isFaceoff ? 0 : 8 }]}>
-                            {isFaceoff ? 'RECORD' : 'POINTS'}
-                        </Text>
-                    </View>
-                ) : (
-                    <View style={styles.tableHeaderRow}>
-                        <Text style={[styles.columnHeader, styles.colIdentity]}>MEMBER</Text>
-                        <Text style={[styles.columnHeader, styles.colLogged, { textAlign: 'center' }]}>LOGGED</Text>
-                        <Text style={[styles.columnHeader, styles.colStreak]}>STREAK</Text>
-                        <Text style={[styles.columnHeader, styles.colProgress, { paddingLeft: 8 }]}>PROGRESS</Text>
-                    </View>
-                )}
-
-                {/* Main Leaderboard list */}
-                {loading ? (
-                    <View style={styles.loaderContainer}>
-                        <ActivityIndicator size="large" color={Colors.theme.harvestGold} />
-                        <Text style={styles.loadingText}>Syncing Scoreboard...</Text>
-                    </View>
-                ) : (
-                    <>
-                        <ScrollView 
-                            style={styles.scrollView}
-                            showsVerticalScrollIndicator={false}
-                            contentContainerStyle={styles.scrollContent}
-                        >
-                            {data.map((member) => {
-                                const isCurrentUser = session?.user?.id === member.id;
-                                
-                                return (
-                                    <Reanimated.View 
-                                        key={member.id} 
-                                        layout={LinearTransition.duration(400)}
-                                        style={isCurrentUser && styles.currentUserRowWrapper}
-                                    >
-                                        <TouchableOpacity
-                                            style={[
-                                                styles.memberRow,
-                                                isCurrentUser && styles.currentUserHighlightRow
-                                            ]}
-                                            activeOpacity={0.85}
-                                            onPress={() => handleRowPress(member)}
-                                        >
-                                            {/* Column 1: Identity (Rank + Avatar + Details) */}
-                                            <View style={[styles.memberCell, isHeadToHead ? styles.colIdentityCompetitive : styles.colIdentity, styles.identityContainer]}>
-                                                
-                                                {/* Competitive Rank Badge */}
-                                                {isHeadToHead && (
-                                                    <View style={styles.rankContainer}>
-                                                        <Text style={[styles.rankNumberText, { color: getRankColor(member.rank) }]}>
-                                                            {member.rank}
-                                                        </Text>
-                                                    </View>
-                                                )}
-
-                                                <Image 
-                                                    source={member.avatar ? { uri: member.avatar } : require('@/assets/images/react-logo.png')} 
-                                                    style={styles.avatar} 
-                                                />
-                                                <View style={styles.nameContainer}>
-                                                    <Text style={styles.displayName} numberOfLines={1}>
-                                                        {member.name}
-                                                    </Text>
-                                                    <Text style={styles.userHandle} numberOfLines={1}>
-                                                        {member.handle}
-                                                    </Text>
-                                                    {/* Compact status descriptors */}
-                                                    <View style={styles.metaIndicatorRow}>
-                                                        {member.status && member.status !== 'none' && (
-                                                            <TouchableOpacity
-                                                                activeOpacity={0.7}
-                                                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                                                style={styles.metaIndicatorPill}
-                                                                onPress={() => {
-                                                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                                                    const isNatural = member.status !== 'enhanced';
-                                                                    const statusStr = isNatural ? 'Natural' : 'Enhanced';
-                                                                    openInfoModal({
-                                                                        title: statusStr,
-                                                                        description: isNatural
-                                                                            ? `${member.name} is verified as 100% Natural.`
-                                                                            : `${member.name} is verified as Enhanced.`,
-                                                                        iconName: isNatural ? 'leaf' : 'lightning-bolt',
-                                                                        iconColor: isNatural ? Colors.natural : Colors.theme.harvestGold,
-                                                                    });
-                                                                }}
-                                                            >
-                                                                <MaterialCommunityIcons
-                                                                    name={member.status === 'enhanced' ? 'lightning-bolt' : 'leaf'}
-                                                                    size={14}
-                                                                    color={member.status === 'enhanced' ? Colors.theme.harvestGold : Colors.natural}
-                                                                />
-                                                            </TouchableOpacity>
-                                                        )}
-                                                        {member.activity && (
-                                                            (() => {
-                                                                    const actLower = member.activity.toLowerCase();
-                                                                    const isBulk = actLower.includes('bulk') || actLower.includes('increase');
-                                                                    const isCut = actLower.includes('cut') || actLower.includes('decrease');
-                                                                    const modifier = isBulk ? '+' : (isCut ? '-' : '');
-                                                                    const activeIconName = resolveActivityIcon(member.activity, member.activityIcon);
-
-                                                                    return (
-                                                                        <TouchableOpacity
-                                                                            activeOpacity={0.7}
-                                                                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                                                            style={[styles.metaIndicatorPill, styles.activityPill]}
-                                                                            onPress={() => {
-                                                                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                                                                openInfoModal({
-                                                                                    title: member.activity || 'Activity',
-                                                                                    description: '',
-                                                                                    iconName: activeIconName,
-                                                                                    modifier: modifier || undefined,
-                                                                                });
-                                                                            }}
-                                                                        >
-                                                                            <MaterialCommunityIcons
-                                                                                name={activeIconName as any}
-                                                                                size={14}
-                                                                                color={Colors.theme.dust}
-                                                                            />
-                                                                            {modifier ? (
-                                                                                <Text style={styles.mathModifierText}>{modifier}</Text>
-                                                                            ) : null}
-                                                                        </TouchableOpacity>
-                                                                    );
-                                                            })()
-                                                        )}
-                                                    </View>
-                                                </View>
-                                            </View>
-
-                                            {/* Column 2: Daily Logging Status */}
-                                            <View style={[styles.memberCell, isHeadToHead ? styles.colLoggedCompetitive : styles.colLogged, styles.centerCell]}>
-                                                {member.logged ? (
-                                                    <Ionicons 
-                                                        name="checkmark-circle" 
-                                                        size={24} 
-                                                        color={Colors.theme.harvestGold} 
-                                                    />
-                                                ) : (
-                                                    <View style={styles.unloggedCircle} />
-                                                )}
-                                            </View>
-
-                                            {/* Column 3: Streak / Trend */}
-                                            {isHeadToHead ? (
-                                                <View style={[styles.memberCell, styles.colTrendCompetitive, styles.centerCell]}>
-                                                    {member.rankChange > 0 ? (
-                                                        <View style={styles.trendRow}>
-                                                            <Text style={styles.trendUpArrow}>▲</Text>
-                                                            <Text style={styles.trendUpText}>{member.rankChange}</Text>
-                                                        </View>
-                                                    ) : member.rankChange < 0 ? (
-                                                        <View style={styles.trendRow}>
-                                                            <Text style={styles.trendDownArrow}>▼</Text>
-                                                            <Text style={styles.trendDownText}>{Math.abs(member.rankChange)}</Text>
-                                                        </View>
-                                                    ) : (
-                                                        <Text style={styles.trendStagnant}>—</Text>
-                                                    )}
-                                                </View>
-                                            ) : (
-                                                <View style={[styles.memberCell, styles.colStreak]}>
-                                                    <Text style={styles.streakText}>
-                                                        {member.streak}
-                                                        <Text style={styles.daysLabel}> days</Text>
-                                                    </Text>
-                                                </View>
-                                            )}
-
-                                            {/* Column 4: Progress / Points */}
-                                            {isHeadToHead ? (
-                                                isFaceoff ? (
-                                                    <View style={[styles.memberCell, styles.colPointsCompetitive, styles.centerCell]}>
-                                                        <Text style={styles.recordText}>
-                                                            {`${member.wins ?? 0}-${member.losses ?? 0}`}
-                                                        </Text>
-                                                    </View>
-                                                ) : (
-                                                    <PointsColumnCell points={member.points} />
-                                                )
-                                            ) : (
-                                                <View style={[styles.memberCell, styles.colProgress]}>
-                                                    {renderProgressBar(member.progress)}
-                                                </View>
-                                            )}
-                                        </TouchableOpacity>
-                                    </Reanimated.View>
-                                );
-                            })}
-                        </ScrollView>
-
-                        {/* QA Engineering Synthetic Testing Rig */}
-                        {isHeadToHead && (
-                            <View style={styles.qaRigContainer}>
-                                <Text style={styles.qaRigLabel}>QA ANIMATION TESTING RIG</Text>
-                                <View style={styles.qaActionRow}>
-                                    <TouchableOpacity
-                                        style={styles.qaPlusButton}
-                                        activeOpacity={0.7}
-                                        onPress={() => {
-                                            if (data.length === 0) return;
-                                            // Randomly select a member
-                                            const randomMember = data[Math.floor(Math.random() * data.length)];
-                                            // Mutate points by a random offset
-                                            const pointOptions = [-50, -25, 25, 50, 100];
-                                            const randomDelta = pointOptions[Math.floor(Math.random() * pointOptions.length)];
-                                            mutatePoints(randomMember.id, randomDelta);
-                                        }}
-                                    >
-                                        <Ionicons name="add" size={18} color="#DAA520" />
-                                        <Text style={styles.qaPlusText}>Mutate Score</Text>
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity
-                                        style={styles.qaResetButton}
-                                        activeOpacity={0.7}
-                                        onPress={async () => {
-                                            await simulateDailyReset();
-                                            alert("Daily cache reset successfully! Close and re-open this modal to witness the daily ranking crossover transitions play out live.");
-                                        }}
-                                    >
-                                        <Ionicons name="refresh-outline" size={16} color="#EDE8D5" />
-                                        <Text style={styles.qaResetText}>Reset Day Cache</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                        )}
-                    </>
-                )}
-            </>
-        );
+    const renderDashboardContent = () => {
+        switch (compStatus) {
+            case 'accountability':
+                return <AccountabilityDashboard tribeId={tribeId} tribe={tribe} />;
+            case 'premier':
+                return <PremierTribeBattleDashboard tribeId={tribeId} />;
+            case 'faceoff':
+                return <TradTribeBattleDashboard tribeId={tribeId} />;
+            default:
+                // Strict fallback with no fallthroughs, defaulting to Accountability
+                return <AccountabilityDashboard tribeId={tribeId} tribe={tribe} />;
+        }
     };
 
     const backdropOpacity = slideAnim.interpolate({
@@ -483,18 +177,32 @@ export default function TribeScoreboardModal({ visible, onClose, tribeId, tribeN
                             {isHeadToHead ? (
                                 <>
                                     <Text style={[styles.headerLabel, styles.h2hHeaderLabel]}>
-                                        {header?.line1 || (isFaceoff ? 'Head-to-Head · Faceoff · Habits' : 'Head-to-Head · Premier · Habits')}
+                                        {header?.line1 || (isFaceoff ? 'Head-to-Head • Faceoff' : 'Head-to-Head • Premier')}
                                     </Text>
-                                    <Text style={[styles.sheetTitle, styles.h2hSheetTitle]} numberOfLines={1}>
-                                        {tribeName.toUpperCase()}
-                                    </Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                        <Text style={[styles.sheetTitle, styles.h2hSheetTitle]} numberOfLines={1}>
+                                            {tribeName.toUpperCase()}
+                                        </Text>
+                                        {isChief && (
+                                            <TouchableOpacity onPress={() => { onClose(); router.push({ pathname: '/chiefs-chamber', params: { tribeId: tribeId } }); }}>
+                                                <MaterialCommunityIcons name="crown" size={24} color="#DAA520" />
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
                                 </>
                             ) : (
                                 <>
                                     <Text style={styles.headerLabel}>Accountability</Text>
-                                    <Text style={styles.sheetTitle} numberOfLines={1}>
-                                        {tribeName}
-                                    </Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                        <Text style={styles.sheetTitle} numberOfLines={1}>
+                                            {tribeName}
+                                        </Text>
+                                        {isChief && (
+                                            <TouchableOpacity onPress={() => { onClose(); router.push({ pathname: '/chiefs-chamber', params: { tribeId: tribeId } }); }}>
+                                                <MaterialCommunityIcons name="crown" size={24} color="#DAA520" />
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
                                 </>
                             )}
                         </View>
@@ -502,29 +210,13 @@ export default function TribeScoreboardModal({ visible, onClose, tribeId, tribeN
                         <View style={styles.headerSpacer} />
                     </View>
 
-                    {isFaceoff ? (
-                        <DashboardCarousel 
-                            itemWidth={Dimensions.get('window').width - 32}
-                            containerStyle={{ flex: 1 }}
-                            scrollViewStyle={{ flex: 1 }}
-                        >
-                            {/* Slide 1: Primary Scoreboard */}
-                            <View style={{ width: Dimensions.get('window').width - 32, flex: 1 }}>
-                                {renderScoreboardBody()}
-                            </View>
-
-                            {/* Slide 2: 1-on-1 Matchup View */}
-                            <View style={{ width: Dimensions.get('window').width - 32, flex: 1 }}>
-                                <H2HUserMatchupDashboard 
-                                    isEmbedded={true} 
-                                    containerWidth={Dimensions.get('window').width - 32} 
-                                    onSimulateTripleTie={simulateTripleTie}
-                                />
-                            </View>
-                        </DashboardCarousel>
-                    ) : (
-                        renderScoreboardBody()
-                    )}
+                    <ScrollView 
+                        style={styles.scrollView}
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={styles.scrollContent}
+                    >
+                        {renderDashboardContent()}
+                    </ScrollView>
                 </Animated.View>
             </Animated.View>
         </Modal>
@@ -673,19 +365,19 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     colIdentity: {
-        flex: 2.3,
+        flex: 2,
     },
     colIdentityCompetitive: {
         flex: 2.5,
     },
     colLogged: {
-        flex: 1.2,
+        flex: 1,
     },
     colLoggedCompetitive: {
         flex: 0.8,
     },
     colStreak: {
-        flex: 1.3,
+        flex: 1,
     },
     colTrendCompetitive: {
         flex: 1.0,

@@ -349,7 +349,7 @@ export const H2HUserMatchupDashboard: React.FC<H2HUserMatchupDashboardProps> = (
                 {/* Standardized Header System */}
             {!isEmbedded && (
                 <View style={styles.headerContext}>
-                    <Text style={styles.headerLine1}>Head-to-Head · Faceoff · Habits</Text>
+                    <Text style={styles.headerLine1}>Head-to-Head • Faceoff</Text>
                     <Text style={styles.headerLine2}>THE CUT SQUAD</Text>
                     <Text style={styles.headerLine3}>Week 10 / 10</Text>
                 </View>
@@ -486,47 +486,7 @@ export const H2HUserMatchupDashboard: React.FC<H2HUserMatchupDashboardProps> = (
                 </View>
             </View>
 
-            {/* QA Simulation Panel */}
-            <View style={styles.simulationContainer}>
-                <Text style={styles.simulationTitle}>QA Simulation Rig (v1.5)</Text>
-                <View style={styles.simulationButtonsRow}>
-                    <TouchableOpacity
-                        style={styles.simulationBtn}
-                        onPress={() => {
-                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                            setSelectedIdx(3);
-                            setModalInfo({
-                                visible: true,
-                                title: "Bye Week Mock Active",
-                                description: "The active Head-to-Head matchup has been set to the odd-number Bye Week pairing.\n\nObserve the Harvest Gold Shield indicator and locked macro progress controllers.",
-                                iconName: "shield"
-                            });
-                        }}
-                    >
-                        <MaterialCommunityIcons name="shield-outline" size={16} color={Colors.theme.harvestGold} />
-                        <Text style={styles.simulationBtnText}>Simulate Bye Week</Text>
-                    </TouchableOpacity>
 
-                    {onSimulateTripleTie && (
-                        <TouchableOpacity
-                            style={[styles.simulationBtn, { borderColor: Colors.theme.burntSienna }]}
-                            onPress={() => {
-                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                                onSimulateTripleTie();
-                                setModalInfo({
-                                    visible: true,
-                                    title: "Standings Updated",
-                                    description: "A triple-tie has been simulated: Peyton (B), Sam (C), and Riley (A) now have identical records (8-1, 500pts).\n\nSwipe left back to the main Scoreboard tab to inspect the championship sorting resolved via Logging Streak!",
-                                    iconName: "trophy"
-                                });
-                            }}
-                        >
-                            <MaterialCommunityIcons name="trophy-outline" size={16} color={Colors.theme.burntSienna} />
-                            <Text style={[styles.simulationBtnText, { color: Colors.theme.burntSienna }]}>Simulate Triple-Tie</Text>
-                        </TouchableOpacity>
-                    )}
-                </View>
-            </View>
 
             </ScrollView>
 

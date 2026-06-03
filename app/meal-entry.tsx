@@ -83,23 +83,36 @@ function MacroSlider({
         );
     }
 
+    const renderIcon = () => {
+        if (icon === 'fire') {
+            return <MaterialCommunityIcons name="fire" size={28} color={Colors.theme.harvestGold} />;
+        }
+        return (
+            <View style={[styles.macroBubble, { backgroundColor: Colors.theme.harvestGold }]}>
+                <Text style={styles.bubbleText}>
+                    {icon === 'food-drumstick' ? 'P' : icon === 'barley' ? 'C' : 'F'}
+                </Text>
+            </View>
+        );
+    };
+
     return (
         <View style={mss.row}>
             <View style={mss.iconBox}>
-                <MaterialCommunityIcons name={icon as any} size={28} color={Colors.primary} />
+                {renderIcon()}
             </View>
             <View style={mss.trackWrap}>
                 <View style={mss.track}>
                     {renderSeg(logged, Colors.primary, 'white')}
-                    {renderSeg(cart, 'white', Colors.primary)}
+                    {renderSeg(cart, Colors.theme.dust, Colors.theme.matteBlack)}
                     {renderSeg(proposed, '#A0A5A0', '#4F6352')}
-                    {renderSeg(remaining, '#787D78', 'white')}
+                    {renderSeg(remaining, '#4A4A4A', 'white')}
                 </View>
                 <View style={{ flexDirection: 'row', height: 24, position: 'relative' }}>
                     {renderSub(logged, Colors.primary, 'center')}
-                    {renderSub(cart, Colors.primary, 'left')}
+                    {renderSub(cart, Colors.theme.dust, 'left')}
                     {renderSub(proposed, '#A0A5A0', 'right')}
-                    {renderSub(remaining, '#787D78', 'center')}
+                    {renderSub(remaining, '#4A4A4A', 'center')}
                     {overflow > 0 && (
                         <View style={{ position: 'absolute', right: -5, top: 2, alignItems: 'flex-end', overflow: 'visible' }}>
                             <Ionicons name="chevron-up" size={14} color="#F06565" style={{ marginBottom: -4, marginRight: 2 }} />
@@ -116,9 +129,9 @@ function MacroSlider({
 
 const mss = StyleSheet.create({
     row: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
-    iconBox: { width: 30, alignItems: 'center', marginTop: 8 },
+    iconBox: { width: 30, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
     trackWrap: { flex: 1, marginLeft: 15 },
-    track: { height: 45, backgroundColor: 'transparent', borderRadius: 25, flexDirection: 'row', overflow: 'hidden' },
+    track: { height: 45, backgroundColor: '#D9D9D9', borderRadius: 25, flexDirection: 'row', overflow: 'hidden' },
     seg: { height: '100%', justifyContent: 'center', alignItems: 'center' },
     segText: { fontSize: 13, fontWeight: '700' },
 });
@@ -205,7 +218,9 @@ export default function MealEntryScreen() {
     if (amountValue > 0) {
         if (isUSDAFood) {
             // Use the selected unit's gram conversion
-            const totalGrams = currentUnit.gramsPerUnit * amountValue;
+            const unitMultiplier = currentUnit.amount || 1;
+            const totalUnits = amountValue * unitMultiplier;
+            const totalGrams = currentUnit.gramsPerUnit * totalUnits;
             const scale = totalGrams / 100;
             proposedCals = Math.round(caloriesPer100g * scale);
             proposedMacros = {
@@ -242,7 +257,10 @@ export default function MealEntryScreen() {
 
     const handleAdd = () => {
         const totalAmountNum = amountValue * currentUnit.gramsPerUnit; // Use gramsPerUnit for accuracy
-        const formattedAmount = `${amountValue} ${currentUnit.label}`;
+        const unitMultiplier = currentUnit.amount || 1;
+        const totalUnits = amountValue * unitMultiplier;
+        const cleanUnitName = currentUnit.unit || currentUnit.label.replace(/^[\d.]+\s*/, '');
+        const formattedAmount = `${totalUnits} ${cleanUnitName}`;
         
         const itemData = {
             name: (params.title as string) || 'Meal Item',
@@ -303,19 +321,25 @@ export default function MealEntryScreen() {
                 {/* ── Macro summary row ── */}
                 <View style={styles.summaryRow}>
                     <View style={styles.summaryItem}>
-                        <MaterialCommunityIcons name="fire" size={26} color={Colors.primary} />
+                        <MaterialCommunityIcons name="fire" size={26} color={Colors.theme.harvestGold} />
                         <Text style={styles.summaryValue}>{proposedCals} cals</Text>
                     </View>
                     <View style={styles.summaryItem}>
-                        <MaterialCommunityIcons name="food-drumstick" size={18} color={Colors.primary + '88'} />
+                        <View style={[styles.macroBubble, { backgroundColor: Colors.theme.harvestGold }]}>
+                            <Text style={styles.bubbleText}>P</Text>
+                        </View>
                         <Text style={styles.summaryValueSmall}>{proposedMacros.p}g</Text>
                     </View>
                     <View style={styles.summaryItem}>
-                        <MaterialCommunityIcons name="barley" size={18} color={Colors.primary + '88'} />
+                        <View style={[styles.macroBubble, { backgroundColor: Colors.theme.harvestGold }]}>
+                            <Text style={styles.bubbleText}>C</Text>
+                        </View>
                         <Text style={styles.summaryValueSmall}>{proposedMacros.c}g</Text>
                     </View>
                     <View style={styles.summaryItem}>
-                        <Ionicons name="water" size={18} color={Colors.primary + '88'} />
+                        <View style={[styles.macroBubble, { backgroundColor: Colors.theme.harvestGold }]}>
+                            <Text style={styles.bubbleText}>F</Text>
+                        </View>
                         <Text style={styles.summaryValueSmall}>{proposedMacros.f}g</Text>
                     </View>
                 </View>
@@ -382,7 +406,7 @@ export default function MealEntryScreen() {
                         <Text style={styles.legendText}>Logged</Text>
                     </View>
                     <View style={styles.legendItem}>
-                        <View style={[styles.legendDot, { backgroundColor: 'white' }]} />
+                        <View style={[styles.legendDot, { backgroundColor: Colors.theme.dust }]} />
                         <Text style={styles.legendText}>In cart</Text>
                     </View>
                     <View style={styles.legendItem}>
@@ -390,17 +414,18 @@ export default function MealEntryScreen() {
                         <Text style={styles.legendText}>Proposed entry</Text>
                     </View>
                     <View style={styles.legendItem}>
-                        <View style={{ gap: 2 }}>
-                            <View style={[styles.legendDot, { backgroundColor: '#787D78' }]} />
-                            <View style={[styles.legendDot, { backgroundColor: '#F06565' }]} />
-                        </View>
+                        <View style={[styles.legendDot, { backgroundColor: '#4A4A4A' }]} />
                         <Text style={styles.legendText}>Remaining</Text>
+                    </View>
+                    <View style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: '#F06565' }]} />
+                        <Text style={styles.legendText}>Overage</Text>
                     </View>
                 </View>
 
                 {/* ── Add button ── */}
                 <TouchableOpacity style={styles.addCircle} onPress={handleAdd}>
-                    <Ionicons name="add" size={32} color="white" />
+                    <Ionicons name="add" size={32} color={Colors.theme.matteBlack} />
                 </TouchableOpacity>
             </Pressable>
 
@@ -450,30 +475,30 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background, paddingHorizontal: 20 },
     header: { flexDirection: 'row', alignItems: 'center', marginTop: 10, marginBottom: 30 },
     titleContainer: { marginLeft: 20, flex: 1 },
-    title: { color: Colors.primary, fontSize: 24, fontWeight: 'bold' },
-    subtitle: { color: Colors.primary + '99', fontSize: 16, fontStyle: 'italic' },
+    title: { color: Colors.theme.softWhite, fontSize: 24, fontWeight: 'bold' },
+    subtitle: { color: Colors.theme.dust, fontSize: 16 },
     summaryRow: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
         paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: Colors.primary + '33', marginBottom: 25,
     },
     summaryItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    summaryValue: { color: Colors.textDark, fontSize: 18, fontWeight: '700' },
-    summaryValueSmall: { color: Colors.textDark, fontSize: 16, fontWeight: '600' },
+    summaryValue: { color: Colors.theme.softWhite, fontSize: 18, fontWeight: '700' },
+    summaryValueSmall: { color: Colors.theme.softWhite, fontSize: 16, fontWeight: '600' },
     inputsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 30 },
     inputGroup: { width: '45%' },
-    inputLabel: { color: Colors.textDark + 'AA', fontSize: 13, marginBottom: 8, fontStyle: 'italic' },
+    inputLabel: { color: Colors.theme.dust, fontSize: 13, marginBottom: 8, fontStyle: 'italic' },
     pillBox: {
         height: 50, borderRadius: 25, borderWidth: 1, borderColor: Colors.primary,
         justifyContent: 'center', alignItems: 'center',
         paddingHorizontal: 15,
     },
-    pillText: { color: Colors.textDark, fontSize: 16, fontWeight: '500' },
+    pillText: { color: Colors.theme.softWhite, fontSize: 16, fontWeight: '500' },
     amountPillBox: {
         height: 50, borderRadius: 25, borderWidth: 1, borderColor: Colors.primary,
         justifyContent: 'center', alignItems: 'center',
         paddingHorizontal: 15,
     },
-    amountInput: { color: Colors.primary, fontSize: 16, fontWeight: '500', width: '100%', height: '100%' },
+    amountInput: { color: Colors.theme.softWhite, fontSize: 16, fontWeight: '500', width: '100%', height: '100%' },
     chartsContainer: { gap: 18, marginBottom: 20 },
     legendContainer: { 
         flexDirection: 'row', 
@@ -484,13 +509,25 @@ const styles = StyleSheet.create({
     },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     legendDot: { width: 14, height: 14, borderRadius: 7 },
-    legendText: { color: Colors.textDark, fontSize: 12 },
+    legendText: { color: Colors.theme.dust, fontSize: 12 },
     addCircle: {
-        width: 60, height: 60, borderRadius: 30, backgroundColor: Colors.primary,
+        width: 60, height: 60, borderRadius: 30, backgroundColor: Colors.theme.harvestGold,
         justifyContent: 'center', alignItems: 'center', alignSelf: 'center',
         marginTop: 'auto', marginBottom: -25,
         // Optional floating shadow
         shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 5, elevation: 4
+    },
+    macroBubble: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    bubbleText: {
+        color: Colors.theme.matteBlack,
+        fontSize: 12,
+        fontWeight: 'bold',
     },
     modalOverlay: {
         flex: 1,
@@ -498,7 +535,7 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     modalContent: {
-        backgroundColor: Colors.background,
+        backgroundColor: Colors.theme.charcoal,
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
         padding: 20,
@@ -508,7 +545,7 @@ const styles = StyleSheet.create({
     modalTitle: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: Colors.textDark,
+        color: Colors.theme.softWhite,
         textAlign: 'center',
         marginBottom: 15,
     },
@@ -527,6 +564,6 @@ const styles = StyleSheet.create({
     },
     modalOptionText: {
         fontSize: 16,
-        color: Colors.textDark,
+        color: Colors.theme.softWhite,
     },
 });

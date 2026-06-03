@@ -23,15 +23,9 @@ import { useUserStore } from '@/store/UserStore';
 import { useUserTribeStore } from '@/src/store/UserTribeStore';
 import { ACTIVITIES } from '@/src/shared/constants/Activities';
 import { Tribe, TribeType } from '@/src/shared/models/types';
-import EditCompetitionModal, { CompetitionConfig } from '@/src/features/tribes/components/EditCompetitionModal';
 import { SupabaseTribeService } from '@/src/shared/services/SupabaseTribeService';
 import { useAuthStore } from '@/store/AuthStore';
 
-const FOCUS_OPTIONS: { label: string; value: TribeType; icon: string }[] = [
-    { label: 'Accountability', value: 'accountability', icon: 'calendar' },
-    { label: 'Head-to-Head', value: 'head-to-head', icon: 'trophy-outline' },
-    { label: 'Tribe Battle', value: 'tribe-vs-tribe', icon: 'trophy-variant-outline' }
-];
 
 export default function CreateTribeScreen() {
     const router = useRouter();
@@ -48,17 +42,8 @@ export default function CreateTribeScreen() {
     const [isPrivate, setIsPrivate] = useState(false); // Default public
     const [naturalStatus, setNaturalStatus] = useState<boolean | null>(true); // true = Natural, false = Enhanced, null = No Restriction
     const [activity, setActivity] = useState(ACTIVITIES[0]); // Default first
-    const [focus, setFocus] = useState(FOCUS_OPTIONS[0]); // Default Accountability
-
     // Modals
     const [activityModalVisible, setActivityModalVisible] = useState(false);
-    const [focusModalVisible, setFocusModalVisible] = useState(false);
-
-    // Competition State
-    const [selectedCompId, setSelectedCompId] = useState<string | null>(null);
-    const [compConfigs, setCompConfigs] = useState<Record<string, CompetitionConfig>>({});
-    const [editModalVisible, setEditModalVisible] = useState(false);
-    const [editingComp, setEditingComp] = useState<{ id: string, title: string, subtitle: string } | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -79,33 +64,6 @@ export default function CreateTribeScreen() {
                             const act = ACTIVITIES.find(a => a.name === data.activityType);
                             if (act) setActivity(act);
                         }
-                        
-                        const typeVal = data.type ?? data.focusType;
-                        if (typeVal) {
-                            const foc = FOCUS_OPTIONS.find(f => f.value === typeVal);
-                            if (foc) setFocus(foc);
-                        }
-
-                        // Load active competition if it exists
-                        const activeComp = await SupabaseTribeService.getActiveCompetition(tribeId as string);
-                        if (activeComp) {
-                            const styleKey = activeComp.style === 'faceoff' ? 'trad' : 'prem';
-                            const metricKey = activeComp.metric === 'weight_change' ? 'weight' : 'habits';
-                            const compId = `${styleKey}_${metricKey}`;
-                            setSelectedCompId(compId);
-                            setCompConfigs(prev => ({
-                                ...prev,
-                                [compId]: {
-                                    length: activeComp.total_weeks,
-                                    points2_5g: activeComp.pts_tier_1,
-                                    points10g: activeComp.pts_tier_2,
-                                    points15g: activeComp.pts_tier_3,
-                                    exerciseBonus: activeComp.pts_exercise_bonus,
-                                    penalty20g: activeComp.pts_penalty_miss,
-                                    scoringStyle: null,
-                                }
-                            }));
-                        }
                     }
                 } catch (err) {
                     console.error('[CreateTribe.loadTribe]', err);
@@ -116,17 +74,6 @@ export default function CreateTribeScreen() {
             loadTribe();
         }
     }, [isEditMode, tribeId]);
-
-    const openCompEdit = (id: string, type: string, subtype: string) => {
-        if (id.endsWith('_weight') || subtype === 'Weight change') {
-            Alert.alert('Under Development', "'Weight change' competition style in development. Check back soon!");
-            return;
-        }
-        setSelectedCompId(id);
-        const config = compConfigs[id];
-        setEditingComp({ id, title: `${type} · Head-to-Head`, subtitle: subtype });
-        setEditModalVisible(true);
-    };
 
     const handleLeaveTribe = async () => {
         const userId = session?.user?.id;
@@ -160,13 +107,6 @@ export default function CreateTribeScreen() {
                 }
             ]
         );
-    };
-
-    const saveCompConfig = (cfg: CompetitionConfig) => {
-        if (editingComp) {
-            setCompConfigs(prev => ({ ...prev, [editingComp.id]: cfg }));
-        }
-        setEditModalVisible(false);
     };
 
     // Helpers
@@ -240,23 +180,6 @@ export default function CreateTribeScreen() {
                     }
                 }
 
-                let competition: any = undefined;
-                if ((focus.value === 'head-to-head' || focus.value === 'tribe-vs-tribe') && selectedCompId) {
-                    const cfg = compConfigs[selectedCompId];
-                    const isFaceoff = selectedCompId.startsWith('trad_');
-                    competition = {
-                        style: isFaceoff ? 'faceoff' : 'premier',
-                        metric: selectedCompId.endsWith('habits') ? 'habits' : 'weight_change',
-                        totalWeeks: cfg?.length ?? 10,
-                        ptsTier1: cfg?.points2_5g ?? 20,
-                        ptsTier2: cfg?.points10g ?? 10,
-                        ptsTier3: cfg?.points15g ?? 5,
-                        ptsExerciseBonus: cfg?.exerciseBonus ?? 10,
-                        ptsPenaltyMiss: cfg?.penalty20g ?? -15,
-                        ptsPenaltyNoLog: -60,
-                    };
-                }
-
                 const updated = await SupabaseTribeService.updateTribe({
                     tribeId: tribeId as string,
                     name: name.trim(),
@@ -265,8 +188,6 @@ export default function CreateTribeScreen() {
                     activityType: activity.name,
                     activityIcon: activity.icon as string,
                     naturalStatus: naturalStatus ?? undefined,
-                    tribeType: focus.value,
-                    competition,
                 });
 
                 if (!updated) {
@@ -286,34 +207,16 @@ export default function CreateTribeScreen() {
                     return;
                 }
 
-                let competition: Parameters<typeof SupabaseTribeService.createAndPersistTribe>[0]['competition'];
-                if ((focus.value === 'head-to-head' || focus.value === 'tribe-vs-tribe') && selectedCompId) {
-                    const cfg = compConfigs[selectedCompId];
-                    const isFaceoff = selectedCompId.startsWith('trad_');
-                    competition = {
-                        style: isFaceoff ? 'faceoff' : 'premier',
-                        metric: selectedCompId.endsWith('habits') ? 'habits' : 'weight_change',
-                        totalWeeks: cfg?.length ?? 10,
-                        ptsTier1: cfg?.points2_5g ?? 20,
-                        ptsTier2: cfg?.points10g ?? 10,
-                        ptsTier3: cfg?.points15g ?? 5,
-                        ptsExerciseBonus: cfg?.exerciseBonus ?? 10,
-                        ptsPenaltyMiss: cfg?.penalty20g ?? -15,
-                        ptsPenaltyNoLog: -60,
-                    };
-                }
-
                 const created = await SupabaseTribeService.createAndPersistTribe({
                     userId,
                     name: name.trim(),
                     avatarUrl: avatar,
-                    tribeType: focus.value,
+                    tribeType: 'accountability',
                     privacy: isPrivate ? 'private' : 'public',
-                    description: `A ${focus.label} tribe for ${activity.name}.`,
+                    description: `A tribe for ${activity.name}.`,
                     activityType: activity.name,
                     activityIcon: activity.icon as string,
                     naturalStatus: naturalStatus ?? undefined,
-                    competition,
                 });
 
                 if (!created) {
@@ -450,57 +353,7 @@ export default function CreateTribeScreen() {
                                 <MaterialCommunityIcons name={activity.icon as any} size={16} color={Colors.theme.harvestGold} />
                             </TouchableOpacity>
                         </View>
-                        {/* Tribe Type */}
-                        <View style={styles.fieldRow}>
-                            <Text style={styles.label}>Tribe type</Text>
-                            <TouchableOpacity 
-                                style={styles.pillSelector} 
-                                onPress={() => setFocusModalVisible(true)}
-                            >
-                                <Text style={styles.pillText}>{focus.label}</Text>
-                                <MaterialCommunityIcons name={focus.icon as any} size={16} color={Colors.theme.harvestGold} />
-                            </TouchableOpacity>
-                        </View>
- 
-                        {/* Competition Style (Conditional) */}
-                        {(focus.value === 'head-to-head' || focus.value === 'tribe-vs-tribe') && (
-                            <View style={styles.compSection}>
-                                <Text style={styles.sectionHeader}>Competition style</Text>
- 
-                                <Text style={styles.sectionSubHeader}>Face-off</Text>
-                                <CompetitionCard
-                                    type="Face-off"
-                                    subtype="Habits"
-                                    description="Compete against fellow tribe members in weekly 1-on-1 matchups. Points are awarded or deducted based on daily proximity to macro targets and/or completed exercise sessions. The user with the higher weekly point total wins their matchup. An elimination-style tournament determines the Tribe Champion. Meal photos and post-workout photos must be submitted for verification."
-                                    isSelected={selectedCompId === 'trad_habits'}
-                                    onPress={() => openCompEdit('trad_habits', 'Face-off', 'Habits')}
-                                />
-                                <CompetitionCard
-                                    type="Face-off"
-                                    subtype="Weight change"
-                                    description="Compete against fellow tribe members in weekly matchups. Users log daily weight with scale photos for verification. Each week, the user with the greater percentage change in bodyweight—either loss or gain, depending on the tribe's setting—wins their matchup. An elimination-style tournament determines the Tribe Champion."
-                                    isSelected={selectedCompId === 'trad_weight'}
-                                    onPress={() => openCompEdit('trad_weight', 'Face-off', 'Weight change')}
-                                />
- 
-                                <Text style={styles.sectionSubHeader}>Premier</Text>
-                                <CompetitionCard
-                                    type="Premier"
-                                    subtype="Habits"
-                                    description="Compete against fellow tribe members over a fixed competition period. Points are awarded or deducted based on daily proximity to macro targets and/or completed exercise sessions. The user with the highest total points at the end of the competition period is crowned Tribe Champion. Meal photos and post-workout photos must be submitted for verification."
-                                    isSelected={selectedCompId === 'prem_habits'}
-                                    onPress={() => openCompEdit('prem_habits', 'Premier', 'Habits')}
-                                />
-                                <CompetitionCard
-                                    type="Premier"
-                                    subtype="Weight change"
-                                    description="Compete against fellow tribe members over a fixed competition period. Users log daily weight with scale photos for verification. Weekly weight is calculated as the average of daily weigh-ins from Sunday through Saturday. The user with the greatest percent bodyweight change—either loss or gain, depending on the tribe's setting, at the end of the competition period is crowned Tribe Champion."
-                                    isSelected={selectedCompId === 'prem_weight'}
-                                    onPress={() => openCompEdit('prem_weight', 'Premier', 'Weight change')}
-                                />
-                            </View>
-                        )}
-                        {isEditMode && (
+{isEditMode && (
                             <TouchableOpacity
                                 style={styles.leaveTribeButton}
                                 onPress={handleLeaveTribe}
@@ -560,86 +413,10 @@ export default function CreateTribeScreen() {
                     </TouchableOpacity>
                 </Modal>
 
-                {/* Focus Selector Modal */}
-                <Modal visible={focusModalVisible} transparent animationType="slide">
-                    <TouchableOpacity style={styles.modalOverlay} onPress={() => setFocusModalVisible(false)}>
-                        <View style={styles.modalContent}>
-                            <Text style={styles.modalTitle}>Select Tribe Type</Text>
-                            {FOCUS_OPTIONS.map(opt => (
-                                <TouchableOpacity 
-                                    key={opt.value} 
-                                    style={styles.optionRow} 
-                                    onPress={() => {
-                                        if (opt.value === 'tribe-vs-tribe') {
-                                            Alert.alert('Under Development', "'Tribe Battle' type in development. Check back soon!");
-                                            return;
-                                        }
-                                        setFocus(opt);
-                                        setFocusModalVisible(false);
-                                    }}
-                                >
-                                    <Text style={styles.optionText}>{opt.label}</Text>
-                                    <MaterialCommunityIcons name={opt.icon as any} size={20} color={Colors.theme.harvestGold} />
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    </TouchableOpacity>
-                </Modal>
-
-                {/* Edit Competition Modal */}
-                <EditCompetitionModal
-                    visible={editModalVisible}
-                    onClose={() => setEditModalVisible(false)}
-                    title={editingComp?.title || ''}
-                    subtitle={editingComp?.subtitle || ''}
-                    initialConfig={editingComp ? compConfigs[editingComp.id] : undefined}
-                    onSave={saveCompConfig}
-                />
             </SafeAreaView>
         </TouchableWithoutFeedback>
     );
 }
-
-const CompetitionCard = ({
-    type,
-    subtype,
-    description,
-    isSelected,
-    onPress
-}: {
-    type: string,
-    subtype: string,
-    description: string,
-    isSelected: boolean,
-    onPress: () => void
-}) => {
-    const [expanded, setExpanded] = useState(false);
-
-    return (
-        <TouchableOpacity
-            style={[styles.compCard, isSelected && styles.compCardSelected]}
-            onPress={onPress}
-            activeOpacity={0.9}
-        >
-            <View style={styles.compCardHeaderRow}>
-                <View style={{ flex: 1 }}>
-                    <Text style={styles.compCardHeader}>{type} · Head-to-Head</Text>
-                    <Text style={styles.compCardTitle}>{subtype}</Text>
-                </View>
-                <TouchableOpacity onPress={() => setExpanded(!expanded)} hitSlop={10} style={{ padding: 5 }}>
-                    <MaterialCommunityIcons 
-                        name={expanded ? "chevron-up" : "dots-horizontal"} 
-                        size={24} 
-                        color={Colors.theme.dust} 
-                    />
-                </TouchableOpacity>
-            </View>
-            {expanded && (
-                <Text style={styles.compCardDesc}>{description}</Text>
-            )}
-        </TouchableOpacity>
-    );
-};
 
 const styles = StyleSheet.create({
     container: {

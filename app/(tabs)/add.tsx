@@ -4,6 +4,7 @@ import { useProfileNavigation } from '@/src/shared/hooks/useProfileNavigation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     Dimensions,
     FlatList,
     Image,
@@ -12,6 +13,7 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
+    TouchableWithoutFeedback,
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -81,25 +83,31 @@ function USDAResultCard({
                 <Text style={styles.usdaServing}>{servingLabel}</Text>
                 <View style={styles.usdaMacros}>
                     <View style={styles.usdaMacroItem}>
-                        <MaterialCommunityIcons name="fire" size={13} color={Colors.primary} />
-                        <Text style={styles.usdaMacroText}>{cals}</Text>
+                        <MaterialCommunityIcons name="fire" size={13} color={Colors.primary} style={{ marginRight: 2 }} />
+                        <Text style={styles.usdaMacroText}>{cals} cals</Text>
                     </View>
                     <View style={styles.usdaMacroItem}>
-                        <MaterialCommunityIcons name="food-drumstick" size={12} color="white" />
+                        <View style={styles.macroBubble}>
+                            <Text style={styles.bubbleText}>P</Text>
+                        </View>
                         <Text style={styles.usdaMacroText}>{macros.p}g</Text>
                     </View>
                     <View style={styles.usdaMacroItem}>
-                        <MaterialCommunityIcons name="barley" size={12} color="white" />
+                        <View style={styles.macroBubble}>
+                            <Text style={styles.bubbleText}>C</Text>
+                        </View>
                         <Text style={styles.usdaMacroText}>{Math.round(item.netCarbsPer100g * (item.servingSizeG/100))}g</Text>
                     </View>
                     <View style={styles.usdaMacroItem}>
-                        <Ionicons name="water" size={12} color="white" />
+                        <View style={styles.macroBubble}>
+                            <Text style={styles.bubbleText}>F</Text>
+                        </View>
                         <Text style={styles.usdaMacroText}>{macros.f}g</Text>
                     </View>
                 </View>
             </View>
             <TouchableOpacity style={styles.usdaAddBtn} onPress={onQuickAdd} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="add" size={22} color={Colors.primary} />
+                <Ionicons name="add" size={22} color={Colors.theme.matteBlack} />
             </TouchableOpacity>
         </TouchableOpacity>
     );
@@ -114,6 +122,7 @@ export default function AddMealScreen() {
     const [activeTab, setActiveTab] = useState<Tab>((params.tab as Tab) || 'All');
     const [isLocked, setIsLocked] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
+    const [searchFocused, setSearchFocused] = useState(false);
     const [suggestions, setSuggestions] = useState<USDAFoodItem[]>([]);
     const [fullResults, setFullResults] = useState<USDAFoodItem[]>([]);
     const [showFullResults, setShowFullResults] = useState(false);
@@ -450,7 +459,7 @@ export default function AddMealScreen() {
             if (dataToRender.length === 0) {
                 return (
                     <View style={styles.centered}>
-                        <Ionicons name="search" size={48} color={Colors.primary + '55'} />
+                        <Ionicons name="search" size={60} color={Colors.theme.dust + '44'} />
                         <Text style={styles.emptyText}>No results found</Text>
                     </View>
                 );
@@ -470,7 +479,7 @@ export default function AddMealScreen() {
         // No search yet
         return (
             <View style={styles.centered}>
-                <Ionicons name="nutrition" size={56} color={Colors.primary + '44'} />
+                <Ionicons name="nutrition" size={60} color={Colors.theme.dust + '44'} />
                 <Text style={styles.emptyText}>Search millions of foods</Text>
                 <Text style={styles.emptySubText}>Type above to search the USDA database</Text>
             </View>
@@ -481,7 +490,7 @@ export default function AddMealScreen() {
         if (filteredRecents.length === 0) {
             return (
                 <View style={styles.centered}>
-                    <Ionicons name="time-outline" size={56} color={Colors.primary + '44'} />
+                    <Ionicons name="time-outline" size={60} color={Colors.theme.dust + '44'} />
                     <Text style={styles.emptyText}>No recent foods</Text>
                     <Text style={styles.emptySubText}>Foods you log will appear here</Text>
                 </View>
@@ -494,17 +503,16 @@ export default function AddMealScreen() {
                 renderItem={renderRecentCard}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
             />
         );
     };
-
-
 
     const renderMealLogTab = () => {
         if (filteredMealLog.length === 0) {
             return (
                 <View style={styles.centered}>
-                    <Ionicons name="book-outline" size={56} color={Colors.primary + '44'} />
+                    <Ionicons name="book-outline" size={60} color={Colors.theme.dust + '44'} />
                     <Text style={styles.emptyText}>Your Meal book is empty</Text>
                     <Text style={styles.emptySubText}>
                         Save items from posts to see them here
@@ -519,6 +527,7 @@ export default function AddMealScreen() {
                 renderItem={renderMealLogCard}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
             />
         );
     };
@@ -535,89 +544,90 @@ export default function AddMealScreen() {
 
     return (
         <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-            {/* ── Header bar ── */}
-            <View style={styles.header}>
-                <TouchableOpacity
-                    style={styles.scanButton}
-                    onPress={() => router.push('/scan')}
-                >
-                    <MaterialCommunityIcons name="barcode-scan" size={24} color={Colors.primary} />
-                </TouchableOpacity>
-
-                <View style={styles.searchWrapper}>
-                    <Ionicons name="search" size={20} color={Colors.primary} style={styles.searchIcon} />
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="Log it…"
-                        placeholderTextColor="#666"
-                        value={searchQuery}
-                        onChangeText={(t) => {
-                            setSearchQuery(t);
-                            if (!t.trim()) {
-                                setShowFullResults(false);
-                                setFullResults([]);
-                            }
-                        }}
-                        onSubmitEditing={() => {
-                            handleSubmitSearch();
-                            Keyboard.dismiss();
-                        }}
-                        returnKeyType="search"
-                    />
-                    <TouchableOpacity onPress={handleSubmitSearch}>
-                        <Ionicons name="arrow-forward" size={20} color={Colors.primary} />
-                    </TouchableOpacity>
-                </View>
-
-                <TouchableOpacity
-                    onPress={() => setIsLocked(!isLocked)}
-                    style={[
-                        styles.modeButton,
-                        isLocked ? styles.modeButtonLocked : styles.modeButtonGlobal,
-                    ]}
-                >
-                    <Ionicons
-                        name={isLocked ? 'lock-closed' : 'earth'}
-                        size={20}
-                        color={isLocked ? '#888' : 'white'}
-                    />
-                </TouchableOpacity>
-            </View>
-
-            {/* ── Tabs ── */}
-            <View style={styles.tabsRow}>
-                {TABS.map((tab) => (
-                    <TouchableOpacity
-                        key={tab}
-                        onPress={() => {
-                            setActiveTab(tab);
-                            setShowFullResults(false);
-                            setSuggestions([]);
-                        }}
-                        style={[styles.tabPill, activeTab === tab && styles.tabPillActive]}
-                    >
-                        <Text
-                            style={[styles.tabText, activeTab === tab && styles.tabTextActive]}
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+                <View style={{ flex: 1 }}>
+                    {/* ── Header bar ── */}
+                    <View style={styles.header}>
+                        <TouchableOpacity
+                            style={styles.scanButton}
+                            onPress={() => router.push('/scan')}
                         >
-                            {tab}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
+                            <MaterialCommunityIcons name="barcode-scan" size={24} color={Colors.primary} />
+                        </TouchableOpacity>
 
-            {/* ── Content ── */}
-            <View style={{ flex: 1 }}>{renderTabContent()}</View>
+                        <View style={styles.searchWrapper}>
+                            <Ionicons name="search" size={20} color={Colors.theme.dust} style={styles.searchIcon} />
+                            <TextInput
+                                style={styles.searchInput}
+                                placeholder="Log it…"
+                                placeholderTextColor={Colors.theme.dust}
+                                selectionColor={Colors.theme.harvestGold}
+                                value={searchQuery}
+                                onChangeText={(t) => {
+                                    setSearchQuery(t);
+                                    if (!t.trim()) {
+                                        setShowFullResults(false);
+                                        setFullResults([]);
+                                    }
+                                }}
+                                onSubmitEditing={() => {
+                                    handleSubmitSearch();
+                                    Keyboard.dismiss();
+                                }}
+                                onFocus={() => setSearchFocused(true)}
+                                onBlur={() => setSearchFocused(false)}
+                                returnKeyType="search"
+                            />
+                            <TouchableOpacity onPress={handleSubmitSearch}>
+                                <Ionicons name="arrow-forward" size={20} color={Colors.primary} />
+                            </TouchableOpacity>
+                        </View>
 
-            <MealLoggerSheet
-                visible={isSheetVisible}
-                items={cartItems}
-                onClose={() => setIsSheetVisible(false)}
-                onPublish={handlePublish}
-                onRemoveItem={removeItem}
-                onPressItem={handleEditItem}
-                capturedImage={capturedImage}
-                mediaType={mediaType}
-            />
+                        <TouchableOpacity
+                            onPress={() => Alert.alert('Check back soon!', 'Create a food item feature on the way')}
+                            style={styles.modeButton}
+                        >
+                            <MaterialCommunityIcons name="pencil-plus-outline" size={24} color={Colors.theme.dust} />
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* ── Tabs ── */}
+                    <View style={styles.tabsRow}>
+                        {TABS.map((tab) => (
+                            <TouchableOpacity
+                                key={tab}
+                                onPress={() => {
+                                    setActiveTab(tab);
+                                    setShowFullResults(false);
+                                    setSuggestions([]);
+                                }}
+                                style={[styles.tabPill, activeTab === tab && styles.tabPillActive]}
+                            >
+                                <Text
+                                    style={[styles.tabText, activeTab === tab && styles.tabTextActive]}
+                                >
+                                    {tab}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+
+                    {/* ── Content ── */}
+                    <View style={{ flex: 1 }}>{renderTabContent()}</View>
+
+                    <MealLoggerSheet
+                        visible={isSheetVisible}
+                        items={cartItems}
+                        onClose={() => setIsSheetVisible(false)}
+                        onPublish={handlePublish}
+                        onRemoveItem={removeItem}
+                        onPressItem={handleEditItem}
+                        capturedImage={capturedImage}
+                        mediaType={mediaType}
+                        forceTucked={searchFocused}
+                    />
+                </View>
+            </TouchableWithoutFeedback>
         </SafeAreaView>
     );
 }
@@ -643,43 +653,79 @@ const styles = StyleSheet.create({
         flex: 1, flexDirection: 'row', alignItems: 'center',
         height: 44, borderRadius: 22, borderWidth: 1.5,
         borderColor: Colors.primary, paddingHorizontal: 12,
-        backgroundColor: Colors.background,
+        backgroundColor: Colors.theme.matteBlack,
     },
     searchIcon: { marginRight: 8 },
-    searchInput: { flex: 1, color: Colors.textDark, fontSize: 16 },
-    modeButton: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
-    modeButtonGlobal: { backgroundColor: Colors.primary },
-    modeButtonLocked: { backgroundColor: 'rgba(164,182,157,0.2)', borderWidth: 1, borderColor: Colors.primary },
+    searchInput: { flex: 1, color: Colors.theme.softWhite, fontSize: 16, backgroundColor: 'transparent' },
+    modeButton: { 
+        width: 44, 
+        height: 44, 
+        borderRadius: 22, 
+        backgroundColor: 'rgba(237, 232, 213, 0.05)', 
+        borderWidth: 1.5, 
+        borderColor: Colors.theme.harvestGold, 
+        justifyContent: 'center', 
+        alignItems: 'center' 
+    },
 
     // Tabs
-    tabsRow: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-    tabPill: {
-        flex: 1, height: 34, borderRadius: 17,
-        justifyContent: 'center', alignItems: 'center',
-        borderWidth: 1, borderColor: 'transparent',
+    tabsRow: { 
+        flexDirection: 'row', 
+        backgroundColor: Colors.theme.charcoal, 
+        borderRadius: 25, 
+        padding: 5, 
+        marginHorizontal: 16, 
+        marginVertical: 10,
+        justifyContent: 'space-between'
+    },
+    tabPill: { 
+        flex: 1, 
+        paddingVertical: 10, 
+        alignItems: 'center', 
+        borderRadius: 20 
     },
     tabPillActive: { backgroundColor: Colors.primary },
-    tabText: { color: Colors.textDark, fontSize: 12, fontWeight: '500' },
+    tabText: { 
+        fontSize: 14, 
+        color: Colors.theme.dust, 
+        fontWeight: 'bold' 
+    },
     tabTextActive: { color: 'white', fontWeight: 'bold' },
 
     listContent: { paddingHorizontal: 12, paddingBottom: 100 },
 
     // USDA result card
     usdaCard: {
-        backgroundColor: Colors.card,
+        backgroundColor: Colors.theme.charcoal,
         borderRadius: 20, padding: 14, marginBottom: 10,
         flexDirection: 'row', alignItems: 'center',
+        borderWidth: 1, borderColor: 'rgba(218, 165, 32, 0.3)',
     },
     usdaCardLeft: { flex: 1, paddingRight: 10 },
-    usdaName: { color: 'white', fontSize: 15, fontWeight: '700', marginBottom: 2 },
+    usdaName: { color: Colors.theme.dust, fontSize: 15, fontWeight: '700', marginBottom: 2 },
     usdaBrand: { color: 'rgba(255,255,255,0.65)', fontSize: 12, marginBottom: 2 },
-    usdaServing: { color: 'rgba(255,255,255,0.5)', fontSize: 11, marginBottom: 6 },
+    usdaServing: { color: Colors.theme.softWhite, fontSize: 11, marginBottom: 6 },
     usdaMacros: { flexDirection: 'row', gap: 10 },
     usdaMacroItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
     usdaMacroText: { color: 'white', fontSize: 12, fontWeight: '600' },
     usdaAddBtn: {
+        backgroundColor: Colors.theme.harvestGold,
         width: 36, height: 36, borderRadius: 18,
-        backgroundColor: 'white', justifyContent: 'center', alignItems: 'center',
+        justifyContent: 'center', alignItems: 'center',
+    },
+    macroBubble: {
+        width: 14,
+        height: 14,
+        borderRadius: 7,
+        backgroundColor: Colors.theme.harvestGold,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 4,
+    },
+    bubbleText: {
+        color: Colors.theme.matteBlack,
+        fontSize: 9,
+        fontWeight: 'bold',
     },
 
     // Following card
@@ -696,7 +742,19 @@ const styles = StyleSheet.create({
 
     // Empty / loading states
     centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
-    loadingText: { color: Colors.textDark, marginTop: 16, fontSize: 14 },
-    emptyText: { color: Colors.textDark, fontSize: 18, fontWeight: '700', marginTop: 16 },
-    emptySubText: { color: Colors.textDark + '99', fontSize: 13, marginTop: 6, textAlign: 'center' },
+    loadingText: { color: Colors.theme.dust, marginTop: 16, fontSize: 14 },
+    emptyText: { 
+        color: Colors.theme.dust, 
+        fontSize: 16, 
+        opacity: 0.6, 
+        marginTop: 20,
+        textAlign: 'center'
+    },
+    emptySubText: { 
+        color: Colors.theme.dust, 
+        fontSize: 13, 
+        opacity: 0.4,
+        marginTop: 6, 
+        textAlign: 'center' 
+    },
 });

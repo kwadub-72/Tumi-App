@@ -1,5 +1,5 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Tabs, usePathname, useRouter } from 'expo-router';
+import { Tabs, usePathname, useRouter, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Keyboard, Modal, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
@@ -11,6 +11,8 @@ import { LineChartIcon } from '../../src/features/tribes/components/TribeIcons';
 export default function TabLayout() {
     const pathname = usePathname();
     const router = useRouter();
+    const params = useLocalSearchParams();
+    const isOnboarding = params.isOnboarding === 'true';
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isWeightModalVisible, setIsWeightModalVisible] = useState(false);
     const [tempWeight, setTempWeight] = useState('253.1');
@@ -148,9 +150,12 @@ export default function TabLayout() {
         }
     }, [selectedDate, isWeightModalVisible]);
 
+    const SafeTabs = Tabs as any;
+
     return (
         <View style={{ flex: 1, backgroundColor: Colors.background }}>
-            <Tabs
+            <SafeTabs
+                sceneStyle={{ backgroundColor: Colors.theme.matteBlack }}
                 screenOptions={{
                     headerShown: false,
                     tabBarStyle: {
@@ -160,32 +165,43 @@ export default function TabLayout() {
                         height: Platform.OS === 'ios' ? 88 : 68, // Shaved height while keeping full visibility on all screens
                         paddingBottom: Platform.OS === 'ios' ? 24 : 10, // Move buttons up so they don't fall off the screen
                         paddingTop: 8,
-                        elevation: 0,
+                        elevation: 10,
+                        zIndex: 10,
                     },
                     tabBarShowLabel: false,
                     tabBarActiveTintColor: Colors.white,
                     tabBarInactiveTintColor: 'rgba(255,255,255,0.6)',
                 }}>
-                <Tabs.Screen
+                <SafeTabs.Screen
                     name="index"
                     options={{
-                        tabBarIcon: ({ color, focused }) => (
+                        tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
                             <MaterialCommunityIcons name="home" size={36} color={color} />
                         ),
                     }}
                 />
-                <Tabs.Screen
+                <SafeTabs.Screen
                     name="search"
                     options={{
-                        tabBarIcon: ({ color, focused }) => (
+                        tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
                             <Ionicons name="search" size={32} color={color} />
                         ),
+                        tabBarStyle: isOnboarding ? { display: 'none' } : {
+                            backgroundColor: Colors.tabBar,
+                            borderTopWidth: 1.5,
+                            borderTopColor: '#DAA520',
+                            height: Platform.OS === 'ios' ? 88 : 68,
+                            paddingBottom: Platform.OS === 'ios' ? 24 : 10,
+                            paddingTop: 8,
+                            elevation: 10,
+                            zIndex: 10,
+                        }
                     }}
                 />
-                <Tabs.Screen
+                <SafeTabs.Screen
                     name="add"
                     options={{
-                        tabBarIcon: ({ color, focused }) => (
+                        tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
                             <View style={{
                                 width: 60,
                                 height: 60,
@@ -209,29 +225,29 @@ export default function TabLayout() {
                         ),
                     }}
                     listeners={() => ({
-                        tabPress: (e) => {
+                        tabPress: (e: any) => {
                             e.preventDefault();
                             setIsMenuOpen(!isMenuOpen);
                         }
                     })}
                 />
-                <Tabs.Screen
+                <SafeTabs.Screen
                     name="activity"
                     options={{
-                        tabBarIcon: ({ color, focused }) => (
+                        tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
                             <LineChartIcon color={color} size={32} />
                         ),
                     }}
                 />
-                <Tabs.Screen
+                <SafeTabs.Screen
                     name="profile"
                     options={{
-                        tabBarIcon: ({ color, focused }) => (
+                        tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
                             <Ionicons name="person" size={32} color={color} />
                         ),
                     }}
                 />
-            </Tabs>
+            </SafeTabs>
 
             {isMenuOpen && (
                 <Pressable style={styles.menuOverlay} onPress={() => setIsMenuOpen(false)}>

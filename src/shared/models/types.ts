@@ -241,6 +241,8 @@ export interface Tribe {
     naturalStatus?: boolean | null;
     /** Canonical focus type from DB: accountability | head-to-head | tribe-vs-tribe */
     focusType?: TribeType;
+    tribe_type?: TribeType;
+    comp_status?: 'accountability' | 'premier' | 'faceoff';
     /** Total post counts per category */
     stats?: {
         meals: number;

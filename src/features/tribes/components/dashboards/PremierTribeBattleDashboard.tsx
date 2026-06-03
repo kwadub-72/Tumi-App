@@ -1,339 +1,506 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, LayoutAnimation } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, ActivityIndicator, Animated, Platform } from 'react-native';
 import { Colors } from '../../../../shared/theme/Colors';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import TribeInfoModal from '../TribeInfoModal';
+import { useAuthStore } from '@/store/AuthStore';
+import { useProfileNavigation } from '@/src/shared/hooks/useProfileNavigation';
+import { useTribeScoreboard } from '../../hooks/useTribeScoreboard';
+import { resolveActivityIcon } from '@/src/shared/constants/Activities';
+import * as Haptics from 'expo-haptics';
+import Reanimated, { LinearTransition } from 'react-native-reanimated';
 
-const getCompetitionWeek = () => {
-    const START_DATE = new Date('2026-03-22T00:00:00Z');
-    const now = new Date();
-    const diffMs = now.getTime() - START_DATE.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    const weeks = Math.floor(diffDays / 7) + 1;
-    return Math.max(1, weeks);
+// Helper to determine top 3 rank medal coloring
+const getRankColor = (rank: number) => {
+    if (rank === 1) return '#DAA520'; // Gold
+    if (rank === 2) return '#C0C0C0'; // Silver
+    if (rank === 3) return '#CD7F32'; // Bronze
+    return 'rgba(237, 232, 213, 0.6)'; // Soft Dust
 };
 
-// Same structure as Face-off TribeBattle extended view, but ranks and points instead of logging active matches
-const mockMatchupData = {
-    leftTribe: {
-        name: 'Team Flex',
-        avatar: 'https://i.pravatar.cc/100?img=33',
-        score: 100,
-    },
-    rightTribe: {
-        name: 'Harvard alums',
-        avatar: 'https://i.pravatar.cc/100?img=60',
-        score: 100,
-    },
-    comparativeLeaderboard: [
-        { id: 1, leftUser: { rank: 1, name: 'Kwaku', handle: '@kwadub', avatar: 'https://i.pravatar.cc/100?img=33', leaf: true, activity: 'hammer', points: 10 }, rightUser: { rank: 1, name: 'Matthew', handle: '@BigBoiMatt', avatar: 'https://i.pravatar.cc/100?img=11', leaf: true, activity: 'hammer', points: 10 } },
-        { id: 2, leftUser: { rank: 2, name: 'Kwaku', handle: '@kwadub', avatar: 'https://i.pravatar.cc/100?img=33', leaf: true, activity: 'hammer', points: 10 }, rightUser: { rank: 2, name: 'Michael', handle: '@MikeyMike123', avatar: 'https://i.pravatar.cc/100?img=60', leaf: true, activity: 'hammer', points: 10 } },
-        { id: 3, leftUser: { rank: 3, name: 'Kwaku', handle: '@kwadub', avatar: 'https://i.pravatar.cc/100?img=33', leaf: true, activity: 'hammer', points: 10 }, rightUser: { rank: 3, name: 'Michael', handle: '@MikeyMike123', avatar: 'https://i.pravatar.cc/100?img=60', leaf: true, activity: 'hammer', points: 10 } },
-        { id: 4, leftUser: { rank: 4, name: 'Kwaku', handle: '@kwadub', avatar: 'https://i.pravatar.cc/100?img=33', leaf: true, activity: 'hammer', points: 10 }, rightUser: { rank: 4, name: 'Michael', handle: '@MikeyMike123', avatar: 'https://i.pravatar.cc/100?img=60', leaf: true, activity: 'hammer', points: 10 } },
-        { id: 5, leftUser: { rank: 5, name: 'Kwaku', handle: '@kwadub', avatar: 'https://i.pravatar.cc/100?img=33', leaf: true, activity: 'hammer', points: 10 }, rightUser: { rank: 5, name: 'Michael', handle: '@MikeyMike123', avatar: 'https://i.pravatar.cc/100?img=60', leaf: true, activity: 'hammer', points: 10 } },
-        { id: 6, leftUser: { rank: 6, name: 'Kwaku', handle: '@kwadub', avatar: 'https://i.pravatar.cc/100?img=33', leaf: true, activity: 'hammer', points: 10 }, rightUser: { rank: 6, name: 'Michael', handle: '@MikeyMike123', avatar: 'https://i.pravatar.cc/100?img=60', leaf: true, activity: 'hammer', points: 10 } },
-    ]
-};
+// Self-contained component for points scaling pop and inline delta indicators
+const PointsColumnCell = React.memo(({ points }: { points: number }) => {
+    const [currentPoints, setCurrentPoints] = useState(points);
+    const [delta, setDelta] = useState<number | null>(null);
 
-export const PremierTribeBattleDashboard = () => {
-    const [expanded, setExpanded] = useState(false);
-    const [modalInfo, setModalInfo] = useState<{ visible: boolean, title: string, description: string, iconName: any } | null>(null);
-    const week = getCompetitionWeek();
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+    const translateYAnim = useRef(new Animated.Value(0)).current;
+    const opacityAnim = useRef(new Animated.Value(0)).current;
 
-    const toggleExpand = () => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setExpanded(!expanded);
+    useEffect(() => {
+        if (points !== currentPoints) {
+            const diff = points - currentPoints;
+            setDelta(diff);
+            setCurrentPoints(points);
+
+            Animated.sequence([
+                Animated.timing(scaleAnim, { toValue: 1.3, duration: 120, useNativeDriver: true }),
+                Animated.timing(scaleAnim, { toValue: 1.0, duration: 150, useNativeDriver: true })
+            ]).start();
+
+            translateYAnim.setValue(0);
+            opacityAnim.setValue(1);
+
+            Animated.parallel([
+                Animated.timing(translateYAnim, { toValue: -28, duration: 900, useNativeDriver: true }),
+                Animated.timing(opacityAnim, { toValue: 0, duration: 900, useNativeDriver: true })
+            ]).start(() => setDelta(null));
+        }
+    }, [points]);
+
+    const isPositive = delta && delta > 0;
+    const deltaText = isPositive ? `+${delta}` : `${delta}`;
+    const deltaColor = isPositive ? '#AEDD63' : '#8B2613';
+
+    return (
+        <View style={[styles.memberCell, styles.colPointsCompetitive, styles.pointsCellContainer]}>
+            <Animated.Text style={[styles.pointsText, { transform: [{ scale: scaleAnim }] }]}>
+                {currentPoints}
+            </Animated.Text>
+            {delta !== null && (
+                <Animated.Text style={[styles.floatingDeltaText, { color: deltaColor, transform: [{ translateY: translateYAnim }], opacity: opacityAnim }]}>
+                    {deltaText}
+                </Animated.Text>
+            )}
+        </View>
+    );
+});
+PointsColumnCell.displayName = 'PointsColumnCell';
+
+export const PremierTribeBattleDashboard = ({ tribeId }: { tribeId?: string }) => {
+    const { session } = useAuthStore();
+    const { navigateToProfile } = useProfileNavigation();
+    
+    const { loading, data, mutatePoints, simulateDailyReset } = useTribeScoreboard(tribeId || '');
+    const [infoModalVisible, setInfoModalVisible] = useState(false);
+    const [infoModalConfig, setInfoModalConfig] = useState<any>({});
+
+    const openInfoModal = (config: any) => {
+        setInfoModalConfig(config);
+        setInfoModalVisible(true);
     };
 
-    const renderIcons = (user: any) => (
-        <>
-            {user.leaf && (
-                <TouchableOpacity onPress={() => setModalInfo({
-                    visible: true, title: 'Natural Athlete', description: 'This user is verified as a natural athlete by the tribe.', iconName: 'leaf'
-                })}>
-                    <MaterialCommunityIcons name="leaf" size={14} color="#4ADE80" style={styles.icon} />
-                </TouchableOpacity>
-            )}
-            {user.activity && (
-                <TouchableOpacity onPress={() => setModalInfo({
-                    visible: true, 
-                    title: user.activity === 'hammer' ? 'Bodybuilding' : (user.activity === 'weight-lifter' ? 'Powerlifting' : 'Activity'), 
-                    description: '', 
-                    iconName: user.activity as any
-                })}>
-                    <MaterialCommunityIcons name={user.activity as any} size={14} color={Colors.primary} style={styles.icon} />
-                </TouchableOpacity>
-            )}
-        </>
-    );
+    const handleRowPress = (member: any) => {
+        if (!member.id) return;
+        navigateToProfile({ id: member.id, handle: member.handle || '' });
+    };
+
+    if (loading) {
+        return (
+            <View style={styles.loaderContainer}>
+                <ActivityIndicator size="large" color={Colors.theme.harvestGold} />
+                <Text style={styles.loadingText}>Syncing Scoreboard...</Text>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
-            <Text style={styles.dashboardType}>Premier • Tribe Battle • Habits</Text>
-
-            <View style={styles.header}>
-                <Text style={styles.leagueName}>Team flex</Text>
-                <Image source={{ uri: 'https://i.pravatar.cc/100?img=26' }} style={styles.leagueImage} />
-            </View>
-            <Text style={styles.weekText}>Week {week}</Text>
-
-            <View style={styles.matchupContainer}>
-                {/* Left Tribe */}
-                <View style={styles.tribeCol}>
-                    <Image source={{ uri: mockMatchupData.leftTribe.avatar }} style={styles.bigAvatar} />
-                    <Text style={styles.tribeName}>{mockMatchupData.leftTribe.name}</Text>
-                </View>
-
-                {/* Score */}
-                <View style={styles.scoreCol}>
-                    <Text style={styles.bigScore}>{mockMatchupData.leftTribe.score}-{mockMatchupData.rightTribe.score}</Text>
-                </View>
-
-                {/* Right Tribe */}
-                <View style={styles.tribeCol}>
-                    <Image source={{ uri: mockMatchupData.rightTribe.avatar }} style={styles.bigAvatarRight} />
-                    <Text style={styles.tribeName}>{mockMatchupData.rightTribe.name}</Text>
-                </View>
+            <View style={styles.tableHeaderRow}>
+                <Text style={[styles.columnHeader, styles.colIdentityCompetitive]}>MEMBER</Text>
+                <Text style={[styles.columnHeader, styles.colLoggedCompetitive, { textAlign: 'center' }]} numberOfLines={1} adjustsFontSizeToFit>LOGGED</Text>
+                <Text style={[styles.columnHeader, styles.colTrendCompetitive, { textAlign: 'center' }]}>TREND</Text>
+                <Text style={[styles.columnHeader, styles.colPointsCompetitive, { textAlign: 'right', paddingRight: 8 }]}>POINTS</Text>
             </View>
 
-            <TouchableOpacity style={styles.expandButton} onPress={toggleExpand}>
-                <MaterialCommunityIcons name="dots-horizontal" size={24} color="white" />
-            </TouchableOpacity>
+            {data.map((member) => {
+                const isCurrentUser = session?.user?.id === member.id;
+                
+                return (
+                    <Reanimated.View 
+                        key={member.id} 
+                        layout={LinearTransition.duration(400)}
+                        style={isCurrentUser && styles.currentUserRowWrapper}
+                    >
+                        <TouchableOpacity
+                            style={[
+                                styles.memberRow,
+                                isCurrentUser && styles.currentUserHighlightRow
+                            ]}
+                            activeOpacity={0.85}
+                            onPress={() => handleRowPress(member)}
+                        >
+                            <View style={[styles.memberCell, styles.colIdentityCompetitive, styles.identityContainer]}>
+                                <View style={styles.rankContainer}>
+                                    <Text style={[styles.rankNumberText, { color: getRankColor(member.rank) }]}>{member.rank}</Text>
+                                </View>
+                                <Image source={member.avatar ? { uri: member.avatar } : require('@/assets/images/react-logo.png')} style={styles.avatar} />
+                                <View style={styles.nameContainer}>
+                                    <Text style={styles.displayName} numberOfLines={1}>{member.name}</Text>
+                                    <Text style={styles.userHandle} numberOfLines={1}>{member.handle}</Text>
+                                    <View style={styles.metaIndicatorRow}>
+                                        {member.status && member.status !== 'none' && (
+                                            <TouchableOpacity
+                                                activeOpacity={0.7}
+                                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                                style={styles.metaIndicatorPill}
+                                                onPress={() => {
+                                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                                    const isNatural = member.status !== 'enhanced';
+                                                    openInfoModal({
+                                                        title: isNatural ? 'Natural' : 'Enhanced',
+                                                        description: isNatural
+                                                            ? `${member.name} is verified as 100% Natural.`
+                                                            : `${member.name} is verified as Enhanced.`,
+                                                        iconName: isNatural ? 'leaf' : 'lightning-bolt',
+                                                        iconColor: isNatural ? Colors.natural : Colors.theme.harvestGold,
+                                                    });
+                                                }}
+                                            >
+                                                <MaterialCommunityIcons
+                                                    name={member.status === 'enhanced' ? 'lightning-bolt' : 'leaf'}
+                                                    size={14}
+                                                    color={member.status === 'enhanced' ? Colors.theme.harvestGold : Colors.natural}
+                                                />
+                                            </TouchableOpacity>
+                                        )}
+                                        {member.activity && (
+                                            (() => {
+                                                    const actLower = member.activity.toLowerCase();
+                                                    const isBulk = actLower.includes('bulk') || actLower.includes('increase');
+                                                    const isCut = actLower.includes('cut') || actLower.includes('decrease');
+                                                    const modifier = isBulk ? '+' : (isCut ? '-' : '');
+                                                    const activeIconName = resolveActivityIcon(member.activity, member.activityIcon);
 
-            {expanded && (
-                <View style={styles.expandedContent}>
-                    {mockMatchupData.comparativeLeaderboard.map((row) => (
-                        <View key={row.id} style={styles.matchupRow}>
-                            <View style={styles.matchupUserLeft}>
-                                <Text style={styles.rankNumSmall}>#{row.leftUser.rank}</Text>
-                                <Image source={{ uri: row.leftUser.avatar }} style={styles.smallAvatar} />
-                                <View style={styles.historyNameCol}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Text style={styles.historyName}>{row.leftUser.name}</Text>
-                                        {renderIcons(row.leftUser)}
+                                                    return (
+                                                        <TouchableOpacity
+                                                            activeOpacity={0.7}
+                                                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                                            style={[styles.metaIndicatorPill, styles.activityPill]}
+                                                            onPress={() => {
+                                                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                                                openInfoModal({
+                                                                    title: member.activity || 'Activity',
+                                                                    description: '',
+                                                                    iconName: activeIconName,
+                                                                    modifier: modifier || undefined,
+                                                                });
+                                                            }}
+                                                        >
+                                                            <MaterialCommunityIcons name={activeIconName as any} size={14} color={Colors.theme.dust} />
+                                                            {modifier ? <Text style={styles.mathModifierText}>{modifier}</Text> : null}
+                                                        </TouchableOpacity>
+                                                    );
+                                            })()
+                                        )}
                                     </View>
-                                    <Text style={styles.historyHandle}>{row.leftUser.handle}</Text>
                                 </View>
                             </View>
 
-                            <View style={styles.historyScoreBox}>
-                                <View style={styles.historyScoreRow}>
-                                    <Text style={[styles.historyScore, { color: 'white', opacity: 0.8 }]}>{row.leftUser.points}</Text>
-                                    <View style={styles.historyDividerHoriz} />
-                                    <Text style={[styles.historyScore, { color: 'white', opacity: 0.8 }]}>{row.rightUser.points}</Text>
-                                </View>
+                            <View style={[styles.memberCell, styles.colLoggedCompetitive, styles.centerCell]}>
+                                {member.logged ? (
+                                    <Ionicons name="checkmark-circle" size={24} color={Colors.theme.harvestGold} />
+                                ) : (
+                                    <View style={styles.unloggedCircle} />
+                                )}
                             </View>
 
-                            <View style={styles.matchupUserRight}>
-                                <View style={[styles.historyNameCol, { alignItems: 'flex-end' }]}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Text style={styles.historyName}>{row.rightUser.name}</Text>
-                                        {renderIcons(row.rightUser)}
+                            <View style={[styles.memberCell, styles.colTrendCompetitive, styles.centerCell]}>
+                                {member.rankChange > 0 ? (
+                                    <View style={styles.trendRow}>
+                                        <Text style={styles.trendUpArrow}>▲</Text>
+                                        <Text style={styles.trendUpText}>{member.rankChange}</Text>
                                     </View>
-                                    <Text style={styles.historyHandle}>{row.rightUser.handle}</Text>
-                                </View>
-                                <Image source={{ uri: row.rightUser.avatar }} style={styles.smallAvatar} />
-                                <Text style={styles.rankNumSmallRight}>#{row.rightUser.rank}</Text>
+                                ) : member.rankChange < 0 ? (
+                                    <View style={styles.trendRow}>
+                                        <Text style={styles.trendDownArrow}>▼</Text>
+                                        <Text style={styles.trendDownText}>{Math.abs(member.rankChange)}</Text>
+                                    </View>
+                                ) : (
+                                    <Text style={styles.trendStagnant}>—</Text>
+                                )}
                             </View>
-                        </View>
-                    ))}
+
+                            <View style={[styles.memberCell, styles.colPointsCompetitive, styles.centerCell]}>
+                                <PointsColumnCell points={member.points} />
+                            </View>
+                        </TouchableOpacity>
+                    </Reanimated.View>
+                );
+            })}
+
+            {/* QA Engineering Synthetic Testing Rig */}
+            <View style={styles.qaRigContainer}>
+                <Text style={styles.qaRigLabel}>QA ANIMATION TESTING RIG</Text>
+                <View style={styles.qaActionRow}>
+                    <TouchableOpacity
+                        style={styles.qaPlusButton}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                            if (data.length === 0) return;
+                            const randomMember = data[Math.floor(Math.random() * data.length)];
+                            const pointOptions = [-50, -25, 25, 50, 100];
+                            const randomDelta = pointOptions[Math.floor(Math.random() * pointOptions.length)];
+                            mutatePoints(randomMember.id, randomDelta);
+                        }}
+                    >
+                        <Ionicons name="add" size={18} color="#DAA520" />
+                        <Text style={styles.qaPlusText}>Mutate Score</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.qaResetButton}
+                        activeOpacity={0.7}
+                        onPress={async () => {
+                            await simulateDailyReset();
+                        }}
+                    >
+                        <Ionicons name="refresh-outline" size={16} color="#EDE8D5" />
+                        <Text style={styles.qaResetText}>Reset Day Cache</Text>
+                    </TouchableOpacity>
                 </View>
-            )}
+            </View>
 
-            <Text style={styles.timestamp}>Just now</Text>
-
-            {modalInfo && (
-                <TribeInfoModal
-                    visible={modalInfo.visible}
-                    onClose={() => setModalInfo(null)}
-                    title={modalInfo.title}
-                    description={modalInfo.description}
-                    type="icon-title"
-                    iconName={modalInfo.iconName}
-                />
-            )}
+            <TribeInfoModal
+                visible={infoModalVisible}
+                onClose={() => setInfoModalVisible(false)}
+                type="icon-title"
+                {...infoModalConfig}
+            />
         </View>
     );
 };
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: Colors.card,
-        borderRadius: 35,
-        padding: 20,
-        paddingTop: 15,
-        borderWidth: 1,
-        borderColor: 'rgba(79, 99, 82, 0.4)',
-        position: 'relative',
+        flex: 1,
     },
-    dashboardType: {
-        textAlign: 'center',
-        color: Colors.primary,
-        fontWeight: 'bold',
+    loaderContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 40,
+    },
+    loadingText: {
+        color: Colors.theme.dust,
         fontSize: 14,
-        marginBottom: 5,
+        fontWeight: '600',
+        marginTop: 12,
     },
-    header: {
+    tableHeaderRow: {
+        flexDirection: 'row',
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(237, 232, 213, 0.12)',
+        marginBottom: 8,
+        paddingHorizontal: 8,
+    },
+    columnHeader: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: '#8B4513',
+        letterSpacing: 1,
+    },
+    currentUserRowWrapper: {
+        borderRadius: 16,
+    },
+    memberRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(237, 232, 213, 0.08)',
+        minHeight: 52,
+        borderRadius: 16,
+        paddingHorizontal: 8,
+        marginVertical: 1,
+    },
+    currentUserHighlightRow: {
+        backgroundColor: 'rgba(218, 165, 32, 0.12)',
+        borderWidth: 1,
+        borderColor: 'rgba(218, 165, 32, 0.35)',
+    },
+    memberCell: {
         justifyContent: 'center',
-        gap: 10,
     },
-    leagueName: {
-        fontSize: 26,
-        fontWeight: 'bold',
-        color: 'white',
+    centerCell: {
+        alignItems: 'center',
     },
-    leagueImage: {
+    colIdentityCompetitive: {
+        flex: 2.5,
+    },
+    colLoggedCompetitive: {
+        flex: 0.8,
+    },
+    colTrendCompetitive: {
+        flex: 1.0,
+    },
+    colPointsCompetitive: {
+        flex: 1.2,
+        alignItems: 'flex-end',
+    },
+    identityContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        minHeight: 44,
+    },
+    rankContainer: {
+        width: 22,
+        marginRight: 6,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    rankNumberText: {
+        fontSize: 14,
+        fontWeight: '900',
+    },
+    avatar: {
         width: 32,
         height: 32,
         borderRadius: 16,
+        borderWidth: 1.5,
+        borderColor: '#DAA520', 
+        marginRight: 10,
     },
-    weekText: {
-        textAlign: 'center',
-        color: 'white',
-        fontStyle: 'italic',
-        fontSize: 12,
-        marginBottom: 15,
-        opacity: 0.8,
-    },
-    matchupContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-    },
-    tribeCol: {
+    nameContainer: {
         flex: 1,
-        alignItems: 'center',
-    },
-    scoreCol: {
-        width: 120,
-        height: 80,
-        alignItems: 'center',
         justifyContent: 'center',
     },
-    bigScore: {
-        fontSize: 60,
-        fontWeight: 'bold',
-        color: 'rgba(255,255,255,0.7)',
+    displayName: {
+        color: '#FFFFFF',
+        fontSize: 14,
+        fontWeight: '700',
+        marginBottom: 1,
     },
-    bigAvatar: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        borderWidth: 3,
-        borderColor: Colors.primary,
-        marginBottom: 10,
+    userHandle: {
+        color: '#EDE8D5',
+        fontSize: 11,
+        opacity: 0.65,
     },
-    bigAvatarRight: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        borderWidth: 3,
-        borderColor: '#FCA5A5',
-        marginBottom: 10,
+    unloggedCircle: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        borderWidth: 2,
+        borderColor: '#EDE8D5', 
+        backgroundColor: 'transparent',
     },
-    tribeName: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 22,
-        textAlign: 'center',
-        marginBottom: 15,
-    },
-    expandButton: {
+    trendRow: {
+        flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 15,
-        padding: 5,
-        zIndex: 2,
+        gap: 2,
     },
-    expandedContent: {
-        marginTop: 10,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(255,255,255,0.2)',
-        paddingTop: 15,
+    trendUpArrow: {
+        fontSize: 11,
+        color: '#AEDD63', 
+    },
+    trendUpText: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#AEDD63',
+    },
+    trendDownArrow: {
+        fontSize: 11,
+        color: '#8B2613', 
+    },
+    trendDownText: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#8B2613',
+    },
+    trendStagnant: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#EDE8D5',
+        opacity: 0.5,
+    },
+    pointsCellContainer: {
+        position: 'relative',
+        minWidth: 50,
+        justifyContent: 'center',
+    },
+    pointsText: {
+        color: '#FFFFFF', 
+        fontSize: 15,
+        fontWeight: '900',
+        marginRight: 8,
+    },
+    floatingDeltaText: {
+        position: 'absolute',
+        top: -6,
+        right: 8,
+        fontSize: 13,
+        fontWeight: '900',
+        zIndex: 10,
+    },
+    metaIndicatorRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 4,
         gap: 12,
     },
-    matchupRow: {
+    metaIndicatorPill: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: 5,
-    },
-    matchupUserLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-        gap: 6,
-        position: 'relative',
-    },
-    matchupUserRight: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-        justifyContent: 'flex-end',
-        gap: 6,
-        position: 'relative',
-    },
-    smallAvatar: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-    },
-    rankNumSmall: {
-        fontSize: 10,
-        fontWeight: 'bold',
-        color: 'white',
-        position: 'absolute',
-        top: -5,
-        left: -10,
-    },
-    rankNumSmallRight: {
-        fontSize: 10,
-        fontWeight: 'bold',
-        color: 'white',
-        position: 'absolute',
-        top: -5,
-        right: -10,
-    },
-    historyNameCol: {
         justifyContent: 'center',
     },
-    historyName: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 14,
-    },
-    historyHandle: {
-        color: 'rgba(255,255,255,0.6)',
-        fontSize: 10,
-    },
-    icon: {
-        marginLeft: 2,
-    },
-    historyScoreBox: {
-        alignItems: 'center',
-        width: 60,
-    },
-    historyScoreRow: {
+    activityPill: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
     },
-    historyScore: {
-        fontSize: 22,
+    mathModifierText: {
+        color: '#EDE8D5',
+        fontSize: 11,
+        fontWeight: '900',
+        marginLeft: 1.5,
+        marginTop: -3,
+    },
+    qaRigContainer: {
+        marginTop: 10,
+        paddingTop: 10,
+        borderTopWidth: 1.5,
+        borderTopColor: 'rgba(237, 232, 213, 0.1)',
+        paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+    },
+    qaRigLabel: {
+        color: '#DAA520',
+        fontSize: 9,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+        letterSpacing: 1.2,
+        marginBottom: 8,
+        textAlign: 'center',
+        opacity: 0.7,
+    },
+    qaActionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 16,
+    },
+    qaPlusButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1.5,
+        borderColor: '#DAA520',
+        borderRadius: 100,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        gap: 6,
+        backgroundColor: 'rgba(218, 165, 32, 0.05)',
+    },
+    qaPlusText: {
+        color: '#DAA520',
+        fontSize: 12,
         fontWeight: 'bold',
     },
-    historyDividerHoriz: {
-        width: 4,
-        height: 30, // vertical divider to match image 5
-        backgroundColor: 'rgba(255,255,255,0.4)',
+    qaResetButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(237, 232, 213, 0.25)',
+        borderRadius: 100,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        gap: 6,
+        backgroundColor: 'rgba(237, 232, 213, 0.03)',
     },
-    timestamp: {
-        position: 'absolute',
-        bottom: 15,
-        right: 20,
-        fontSize: 10,
-        color: Colors.primary,
-        opacity: 0.7,
-    }
+    qaResetText: {
+        color: '#EDE8D5',
+        fontSize: 12,
+        fontWeight: '600',
+        opacity: 0.8,
+    },
 });
