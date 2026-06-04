@@ -40,6 +40,8 @@ function rowToFeedPost(row: any, currentUserId: string): FeedPost {
         workout: payload.workout ?? undefined,
         macroUpdate: payload.macroUpdate ?? undefined,
         snapshot: payload.snapshot ?? undefined,
+        macroMap: payload.macroMap ?? undefined,
+        postType: row.post_type ?? undefined,
         mediaUrl: row.media_url ?? undefined,
         mediaType: row.media_type ?? undefined,
         stats: {
@@ -87,9 +89,15 @@ export const SupabasePostService = {
         const dayEnd = new Date(date);
         dayEnd.setHours(23, 59, 59, 999);
 
+        const allowedTypes = ['meal', 'workout', 'macro_update', 'snapshot', 'map_publish', 'map_subscribe'];
+        if (feedType === 'profile') {
+            allowedTypes.push('map_silent');
+        }
+
         let query = supabase
             .from('posts_with_counts')
             .select('*')
+            .in('post_type', allowedTypes)
             .order('created_at', { ascending: false })
             .limit(limit);
 
@@ -285,6 +293,45 @@ export const SupabasePostService = {
 
         if (error) {
             console.error('[SupabasePostService.addPost]', error.message);
+            return null;
+        }
+        return data;
+    },
+
+    async addMapPost(
+        authorId: string,
+        mapId: string,
+        postType: 'map_publish' | 'map_subscribe' | 'map_silent',
+        caption: string,
+        mapData: any
+    ): Promise<FeedPost | null> {
+        // Duplicate Prevention: upgrade silent placeholder to real feed post
+        if (postType === 'map_publish' || postType === 'map_subscribe') {
+            const { error: delError } = await supabase
+                .from('posts')
+                .delete()
+                .eq('map_id', mapId)
+                .eq('post_type', 'map_silent');
+
+            if (delError) {
+                console.error('[SupabasePostService.addMapPost] Error deleting silent post:', delError.message);
+            }
+        }
+
+        const { data, error } = await supabase
+            .from('posts')
+            .insert({
+                author_id: authorId,
+                post_type: postType,
+                map_id: mapId,
+                caption: caption || null,
+                payload: mapData,
+            })
+            .select()
+            .single();
+
+        if (error) {
+            console.error('[SupabasePostService.addMapPost]', error.message);
             return null;
         }
         return data;
@@ -551,9 +598,13 @@ export const SupabasePostService = {
                     author_id,
                     payload,
                     profiles!author_id (
+                        id,
                         handle,
                         name,
-                        avatar_url
+                        avatar_url,
+                        status,
+                        activity_icon,
+                        activity
                     )
                 )
             `)
@@ -611,9 +662,13 @@ export const SupabasePostService = {
                 posts!original_post_id (
                     author_id,
                     profiles!author_id (
+                        id,
                         handle,
                         name,
-                        avatar_url
+                        avatar_url,
+                        status,
+                        activity_icon,
+                        activity
                     )
                 )
             `)

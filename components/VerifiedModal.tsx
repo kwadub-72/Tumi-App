@@ -13,7 +13,7 @@ export default function VerifiedModal({ visible, onClose, status }: VerifiedModa
     const text = isEnhanced ? 'Self-declared Enhanced' : 'Tribe-verified natural';
     const IconComponent = isEnhanced ? MaterialCommunityIcons : Ionicons;
     const iconName = isEnhanced ? 'lightning-bolt' : 'leaf';
-    const iconColor = isEnhanced ? '#FFD700' : Colors.success;
+    const iconColor = isEnhanced ? Colors.theme.burntSienna : Colors.success;
 
     return (
         <Modal

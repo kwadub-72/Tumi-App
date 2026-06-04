@@ -15,14 +15,17 @@ import {
     NativeSyntheticEvent,
     NativeScrollEvent
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import ViewShot from 'react-native-view-shot';
 import { Colors } from '@/src/shared/theme/Colors';
 import { FeedPost } from '@/src/shared/models/types';
 import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
+import { MacroMapPreviewCard } from '@/src/features/macromaps/components/MacroMapPreviewCard';
 import { useAuthStore } from '@/store/AuthStore';
 import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
+import { resolveActivityIcon } from '@/src/shared/constants/Activities';
+import { ActivityIcon } from '@/src/shared/components/ActivityIcon';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PAGE_WIDTH = SCREEN_WIDTH - 40; // Full padding inside modal
@@ -35,7 +38,6 @@ interface TribeShareModalProps {
 }
 
 type DensityMode = 'detailed' | 'headline';
-type VisualStyle = 'floating' | 'canvas';
 
 export default function TribeShareModal({ visible, onClose, post, onShareRecorded }: TribeShareModalProps) {
     const { session } = useAuthStore();
@@ -50,6 +52,7 @@ export default function TribeShareModal({ visible, onClose, post, onShareRecorde
     if (!post) return null;
 
     const isMacroOrSnapshot = !!(post.macroUpdate || post.snapshot);
+    const isMapPost = post.postType === 'map_publish' || post.postType === 'map_subscribe' || post.postType === 'map_silent';
 
     // Toggle Density Mode with premium haptic feedback
     const toggleDensity = () => {
@@ -198,8 +201,191 @@ export default function TribeShareModal({ visible, onClose, post, onShareRecorde
     };
 
     // Render the structured nutritional content block reused across formats
-    const renderOverlayContent = (isCanvas: boolean) => (
-        <View style={[styles.overlayContainer, isCanvas && styles.canvasOverlayContent]}>
+    const renderOverlayContent = (isCanvas: boolean) => {
+        if (isMapPost) {
+            if (densityMode === 'headline') {
+                // Headline Share (Floating style) - small layout for Canvas
+                const mapName = post.macroMap?.name || 'Map Journey';
+                const durationWeeks = post.macroMap?.durationWeeks || 12;
+                const rawGoal = (post.macroMap?.mapType || 'MAINTENANCE').toUpperCase();
+                const goalText = rawGoal.includes('CUT') ? 'CUT' : (rawGoal.includes('BULK') ? 'BULK' : 'MAINT');
+
+                const creatorHandle = (post.macroMap as any)?.creator_handle || post.user.handle;
+                const creatorName = (post.macroMap as any)?.creator_name || post.user.name;
+                const creatorAvatar = (post.macroMap as any)?.creator_avatar_url || post.user.avatar;
+                const creatorStatus = (post.macroMap as any)?.creator_status_snapshot || post.user.status;
+                const creatorActivity = (post.macroMap as any)?.creator_activity_snapshot || post.user.activity;
+                const creatorActivityIcon = (post.macroMap as any)?.creator_activity_icon || post.user.activityIcon;
+
+                return (
+                    <View style={[styles.overlayContainer, { backgroundColor: 'rgba(26, 26, 26, 0.95)', padding: 20, gap: 12 }]}>
+                        {/* Top Branding Row */}
+                        <View style={{
+                            flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            width: '100%',
+                            marginBottom: 8
+                        }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <TabonoLogo size={20} color={Colors.theme.harvestGold} hasDropShadow={true} />
+                                <Text style={{
+                                    color: Colors.theme.harvestGold,
+                                    fontSize: 14,
+                                    fontWeight: '900',
+                                    letterSpacing: 1,
+                                    marginLeft: 6,
+                                    ...textShadowStyle
+                                }}>TRIBE</Text>
+                            </View>
+                            <View style={{
+                                backgroundColor: Colors.theme.burntSienna,
+                                borderRadius: 12,
+                                paddingHorizontal: 8,
+                                paddingVertical: 4
+                            }}>
+                                <Text style={{
+                                    color: Colors.theme.softWhite,
+                                    fontSize: 12,
+                                    fontWeight: 'bold',
+                                    ...textShadowStyle
+                                }}>
+                                    @{post.user.handle.replace('@', '')}
+                                </Text>
+                            </View>
+                        </View>
+
+                        {/* Avatar and Creator Info */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                            {creatorAvatar ? (
+                                <Image 
+                                    source={typeof creatorAvatar === 'string' ? { uri: creatorAvatar } : creatorAvatar} 
+                                    style={{
+                                        width: 48,
+                                        height: 48,
+                                        borderRadius: 24,
+                                        borderWidth: 2,
+                                        borderColor: Colors.theme.dust,
+                                        marginRight: 12
+                                    }} 
+                                />
+                            ) : (
+                                <View style={{
+                                    width: 48,
+                                    height: 48,
+                                    borderRadius: 24,
+                                    borderWidth: 2,
+                                    borderColor: Colors.theme.dust,
+                                    backgroundColor: Colors.theme.charcoal,
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    marginRight: 12
+                                }}>
+                                    <Ionicons name="person" size={20} color={Colors.theme.dust} />
+                                </View>
+                            )}
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ color: Colors.theme.softWhite, fontSize: 16, fontWeight: 'bold', ...textShadowStyle }}>
+                                    {creatorName}
+                                </Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                                    <Text style={{ color: Colors.theme.dust, fontSize: 12, ...textShadowStyle, marginRight: 6 }}>
+                                        @{creatorHandle.replace('@', '')}
+                                    </Text>
+                                    
+                                    {/* Natural Status Icon */}
+                                    <MaterialCommunityIcons 
+                                        name={creatorStatus === 'enhanced' ? "lightning-bolt" : "leaf"} 
+                                        size={14} 
+                                        color={creatorStatus === 'enhanced' ? Colors.theme.burntSienna : Colors.theme.naturalGreen} 
+                                        style={{ marginRight: 4 }} 
+                                    />
+
+                                    {/* Activity Icon */}
+                                    {creatorActivity && (
+                                        <ActivityIcon 
+                                            activity={creatorActivity}
+                                            icon={resolveActivityIcon(creatorActivity, creatorActivityIcon)}
+                                            size={14} 
+                                            color={Colors.theme.harvestGold} 
+                                        />
+                                    )}
+                                </View>
+                            </View>
+                        </View>
+
+                        {/* Map Info Block */}
+                        <View style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', marginTop: 4 }}>
+                            <Text style={{ color: Colors.theme.softWhite, fontSize: 18, fontWeight: '900', marginBottom: 8, textAlign: 'center', ...textShadowStyle }}>
+                                {mapName}
+                            </Text>
+                            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' }}>
+                                <View style={{ backgroundColor: 'rgba(218, 165, 32, 0.15)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12 }}>
+                                    <Text style={{ color: Colors.theme.harvestGold, fontSize: 14, fontWeight: 'bold' }}>{goalText}</Text>
+                                </View>
+                                <View style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}>
+                                    <Text style={{ color: Colors.theme.dust, fontSize: 14, fontWeight: '600' }}>{durationWeeks} Weeks</Text>
+                                </View>
+                            </View>
+                        </View>
+                    </View>
+                );
+            } else {
+                // Detailed Share (Canvas style) - large layout for overlay preview
+                return (
+                    <View style={{
+                        width: '100%',
+                        backgroundColor: Colors.theme.charcoal,
+                        borderWidth: 1.5,
+                        borderColor: Colors.theme.harvestGold + '80',
+                        borderRadius: 16,
+                        padding: 16
+                    }}>
+                        {/* Top Branding Row */}
+                        <View style={{
+                            flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            width: '100%',
+                            marginBottom: 16
+                        }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <TabonoLogo size={20} color={Colors.theme.harvestGold} hasDropShadow={true} />
+                                <Text style={{
+                                    color: Colors.theme.harvestGold,
+                                    fontSize: 14,
+                                    fontWeight: '900',
+                                    letterSpacing: 1,
+                                    marginLeft: 6,
+                                    ...textShadowStyle
+                                }}>TRIBE</Text>
+                            </View>
+                            <View style={{
+                                backgroundColor: Colors.theme.burntSienna,
+                                borderRadius: 12,
+                                paddingHorizontal: 8,
+                                paddingVertical: 4
+                            }}>
+                                <Text style={{
+                                    color: Colors.theme.softWhite,
+                                    fontSize: 12,
+                                    fontWeight: 'bold',
+                                    ...textShadowStyle
+                                }}>
+                                    @{post.user.handle.replace('@', '')}
+                                </Text>
+                            </View>
+                        </View>
+                        {post.macroMap && (
+                            <MacroMapPreviewCard map={post.macroMap} />
+                        )}
+                    </View>
+                );
+            }
+        }
+
+        return (
+            <View style={[styles.overlayContainer, isCanvas && styles.canvasOverlayContent]}>
             {/* Header branding row */}
             <View style={styles.overlayHeaderRow}>
                 <View style={[styles.logoWrap, dropShadowStyle]}>
@@ -334,6 +520,7 @@ export default function TribeShareModal({ visible, onClose, post, onShareRecorde
             )}
         </View>
     );
+    };
 
     return (
         <Modal
@@ -356,15 +543,15 @@ export default function TribeShareModal({ visible, onClose, post, onShareRecorde
 
                         {/* Centered Rolodex Header Dropdown */}
                         <TouchableOpacity 
-                            style={[styles.rolodexSelector, isMacroOrSnapshot && { justifyContent: 'center' }]} 
-                            onPress={isMacroOrSnapshot ? undefined : toggleDensity} 
-                            activeOpacity={isMacroOrSnapshot ? 1 : 0.7}
-                            disabled={isMacroOrSnapshot}
+                            style={[styles.rolodexSelector, (isMacroOrSnapshot && !isMapPost) && { justifyContent: 'center' }]} 
+                            onPress={(isMacroOrSnapshot && !isMapPost) ? undefined : toggleDensity} 
+                            activeOpacity={(isMacroOrSnapshot && !isMapPost) ? 1 : 0.7}
+                            disabled={isMacroOrSnapshot && !isMapPost}
                         >
                             <Text style={styles.rolodexTitle}>
-                                {isMacroOrSnapshot ? 'Headline share' : (densityMode === 'detailed' ? 'Detailed share' : 'Headline share')}
+                                {(isMacroOrSnapshot && !isMapPost) ? 'Headline share' : (densityMode === 'detailed' ? 'Detailed share' : 'Headline share')}
                             </Text>
-                            {!isMacroOrSnapshot && (
+                            {(!isMacroOrSnapshot || isMapPost) && (
                                 <Ionicons name="swap-vertical" size={16} color={Colors.theme.burntSienna} style={styles.rolodexCarrot} />
                             )}
                         </TouchableOpacity>
@@ -374,7 +561,7 @@ export default function TribeShareModal({ visible, onClose, post, onShareRecorde
                     </View>
 
                     {/* Subtitle guidance row */}
-                    {!isMacroOrSnapshot && (
+                    {(!isMacroOrSnapshot || isMapPost) && (
                         <Text style={styles.sheetSubtitle}>
                             Tap the header to toggle share type
                         </Text>
@@ -440,6 +627,8 @@ export default function TribeShareModal({ visible, onClose, post, onShareRecorde
                         <View style={[styles.dot, activePageIndex === 0 ? styles.activeDot : styles.inactiveDot]} />
                         <View style={[styles.dot, activePageIndex === 1 ? styles.activeDot : styles.inactiveDot]} />
                     </View>
+
+
 
                     {/* Direct Social Intent Sharing Footers */}
                     <View style={styles.shareActionsContainer}>

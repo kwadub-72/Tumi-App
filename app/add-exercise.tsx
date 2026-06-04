@@ -70,17 +70,23 @@ function ExerciseSearchCard({
     onQuickAdd: () => void;
 }) {
     const isCardio = item.category === 'Cardio';
+    const creatorName = 'Tribe';
+    const creatorHandle = '@Tribe';
+    const isTribe = creatorHandle === '@Tribe' || creatorHandle === 'Tribe' || creatorName === 'Tribe';
 
     return (
         <TouchableOpacity style={styles.exerciseCard} onPress={onAdd} activeOpacity={0.85}>
             {/* ── Far left: Tribe avatar + name + handle ── */}
             <View style={styles.creatorSection}>
-                <View style={styles.tribeAvatarCircle}>
+                <View style={[
+                    styles.tribeAvatarCircle,
+                    isTribe && { borderColor: Colors.theme.harvestGold }
+                ]}>
                     <MaterialCommunityIcons name="fire" size={22} color={Colors.primary} />
                 </View>
                 <View style={styles.creatorInfo}>
-                    <Text style={styles.creatorName}>Tribe</Text>
-                    <Text style={styles.creatorHandle}>@Tribe</Text>
+                    <Text style={styles.creatorName}>{creatorName}</Text>
+                    <Text style={styles.creatorHandle}>{creatorHandle}</Text>
                 </View>
             </View>
 
@@ -107,7 +113,7 @@ function ExerciseSearchCard({
                     onPress={onQuickAdd}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                    <Ionicons name="add" size={24} color={Colors.primary} />
+                    <Ionicons name="add" size={24} color={Colors.theme.matteBlack} />
                 </TouchableOpacity>
                 <Text style={styles.logCount}>{countInCart}</Text>
             </View>
@@ -501,11 +507,12 @@ export default function AddExerciseScreen() {
                     </TouchableOpacity>
 
                     <View style={styles.searchWrapper}>
-                        <Ionicons name="search" size={20} color={Colors.primary} style={styles.searchIcon} />
+                        <Ionicons name="search" size={20} color={Colors.theme.dust} style={styles.searchIcon} />
                         <TextInput
                             style={styles.searchInput}
                             placeholder="Log it..."
-                            placeholderTextColor="#666"
+                            placeholderTextColor={Colors.theme.dust}
+                            selectionColor={Colors.theme.harvestGold}
                             value={query}
                             onChangeText={setQuery}
                             returnKeyType="search"
@@ -522,8 +529,11 @@ export default function AddExerciseScreen() {
                         )}
                     </View>
 
-                    <TouchableOpacity style={styles.createButton}>
-                        <MaterialCommunityIcons name="pencil" size={22} color={Colors.primary} />
+                    <TouchableOpacity 
+                        style={styles.createButton}
+                        onPress={() => Alert.alert('Check back soon!', '“Create an exercise” feature on the way!')}
+                    >
+                        <MaterialCommunityIcons name="pencil-plus-outline" size={24} color={Colors.theme.dust} />
                     </TouchableOpacity>
                 </View>
 
@@ -629,16 +639,16 @@ const styles = StyleSheet.create({
     },
     searchInput: {
         flex: 1,
-        color: Colors.textDark,
+        color: Colors.theme.softWhite,
         fontSize: 16,
     },
     createButton: {
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: Colors.background,
+        backgroundColor: 'rgba(237, 232, 213, 0.05)',
         borderWidth: 1.5,
-        borderColor: Colors.primary,
+        borderColor: Colors.theme.harvestGold,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -668,7 +678,7 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
     tabTextActive: {
-        color: 'white',
+        color: Colors.theme.matteBlack,
         fontWeight: 'bold',
     },
 
@@ -679,7 +689,7 @@ const styles = StyleSheet.create({
 
     // Exercise search card
     exerciseCard: {
-        backgroundColor: Colors.card,
+        backgroundColor: Colors.theme.charcoal,
         borderRadius: 40,
         paddingVertical: 12,
         paddingHorizontal: 14,
@@ -687,6 +697,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         minHeight: 80,
+        borderWidth: 1,
+        borderColor: 'rgba(218, 165, 32, 0.3)',
     },
     creatorSection: {
         flexDirection: 'row',
@@ -753,7 +765,7 @@ const styles = StyleSheet.create({
         width: 42,
         height: 42,
         borderRadius: 21,
-        backgroundColor: 'white',
+        backgroundColor: Colors.theme.harvestGold,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -765,7 +777,7 @@ const styles = StyleSheet.create({
 
     // Skeleton loader
     skeletonCard: {
-        backgroundColor: Colors.card,
+        backgroundColor: Colors.theme.charcoal,
         borderRadius: 40,
         paddingVertical: 12,
         paddingHorizontal: 14,
@@ -774,6 +786,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         height: 80,
         opacity: 0.5,
+        borderWidth: 1,
+        borderColor: 'rgba(218, 165, 32, 0.3)',
     },
     skeletonAvatar: {
         width: 44,

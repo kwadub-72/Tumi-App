@@ -10,6 +10,9 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useAuthStore, DbProfile } from '../store/AuthStore';
 import { useNetworkStore } from '@/src/store/NetworkStore';
 import { supabase } from '@/src/shared/services/supabase';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const queryClient = new QueryClient();
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -89,22 +92,24 @@ export default function RootLayout() {
     */
 
     return (
-        <GestureHandlerRootView style={{ flex: 1 }}>
-            <ThemeProvider value={DefaultTheme}>
-                <AuthGate>
-                    <Stack screenOptions={{ headerShown: false }}>
-                        <Stack.Screen name="index" />
-                        <Stack.Screen name="login" />
-                        <Stack.Screen name="(tabs)" />
-                        <Stack.Screen name="email-confirmed" />
-                        <Stack.Screen name="scan" options={{ presentation: 'fullScreenModal' }} />
-                        <Stack.Screen name="scan-result" options={{ presentation: 'transparentModal', animation: 'fade' }} />
-                        <Stack.Screen name="camera-capture" options={{ presentation: 'fullScreenModal' }} />
-                        <Stack.Screen name="chiefs-chamber" options={{ presentation: 'fullScreenModal' }} />
-                    </Stack>
-                </AuthGate>
-                <StatusBar style="dark" />
-            </ThemeProvider>
-        </GestureHandlerRootView>
+        <QueryClientProvider client={queryClient}>
+            <GestureHandlerRootView style={{ flex: 1 }}>
+                <ThemeProvider value={DefaultTheme}>
+                    <AuthGate>
+                        <Stack screenOptions={{ headerShown: false }}>
+                            <Stack.Screen name="index" />
+                            <Stack.Screen name="login" />
+                            <Stack.Screen name="(tabs)" />
+                            <Stack.Screen name="email-confirmed" />
+                            <Stack.Screen name="scan" options={{ presentation: 'fullScreenModal' }} />
+                            <Stack.Screen name="scan-result" options={{ presentation: 'transparentModal', animation: 'fade' }} />
+                            <Stack.Screen name="camera-capture" options={{ presentation: 'fullScreenModal' }} />
+                            <Stack.Screen name="chiefs-chamber" options={{ presentation: 'fullScreenModal' }} />
+                        </Stack>
+                    </AuthGate>
+                    <StatusBar style="dark" />
+                </ThemeProvider>
+            </GestureHandlerRootView>
+        </QueryClientProvider>
     );
 }

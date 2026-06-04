@@ -2,6 +2,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View, TouchableWithoutFeedback } from 'react-native';
 import { Colors } from '@/src/shared/theme/Colors';
+import { ActivityIcon } from '../../../shared/components/ActivityIcon';
 import { formatTimeAgo } from '@/src/shared/services/SupabasePostService';
 import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
 
@@ -69,22 +70,17 @@ export function CondensedMealCard({
                     <Text style={styles.authorName} numberOfLines={1}>{authorName}</Text>
                     {authorStatus === 'natural' && <MaterialCommunityIcons name="leaf" size={14} color="#1BB607" />}
                     {authorStatus === 'enhanced' && <MaterialCommunityIcons name="hammer" size={14} color="rgba(255,255,255,0.8)" />}
-                    {authorActivityIcon && (
-                        <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-                            <MaterialCommunityIcons
-                                name={authorActivityIcon as any}
-                                size={14}
-                                color='white'
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Text style={styles.authorHandle} numberOfLines={1}>{formattedHandle}</Text>
+                        {(!!authorActivity || !!authorActivityIcon) && (
+                            <ActivityIcon 
+                                activity={authorActivity || ''} 
+                                icon={authorActivityIcon} 
+                                size={14} 
+                                color={Colors.theme.harvestGold}
                             />
-                            {authorActivity?.toLowerCase().includes('bulk') && (
-                                <Text style={{ color: 'white', fontSize: 8, fontWeight: 'bold', marginLeft: 1, marginTop: -2 }}>+</Text>
-                            )}
-                            {authorActivity?.toLowerCase().includes('cut') && (
-                                <Text style={{ color: 'white', fontSize: 8, fontWeight: 'bold', marginLeft: 1, marginTop: -2 }}>-</Text>
-                            )}
-                        </View>
-                    )}
-                    <Text style={styles.authorHandle} numberOfLines={1}>{formattedHandle}</Text>
+                        )}
+                    </View>
                 </TouchableOpacity>
                 
                 <View style={styles.titleMacroContainer}>
@@ -92,19 +88,70 @@ export function CondensedMealCard({
                     
                     <View style={styles.macroRow}>
                         <View style={styles.macroItem}>
-                            <MaterialCommunityIcons name="fire" size={12} color="white" />
+                            <MaterialCommunityIcons name="fire" size={12} color={Colors.theme.harvestGold} />
                             <Text style={styles.macroText}>{calculatedCalories} cals</Text>
                         </View>
                         <View style={styles.macroItem}>
-                            <MaterialCommunityIcons name="food-drumstick" size={12} color="white" />
+                            <View style={{
+                                backgroundColor: Colors.theme.harvestGold,
+                                borderRadius: 8,
+                                width: 16,
+                                height: 16,
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                marginRight: 2
+                            }}>
+                                <Text style={{
+                                    color: Colors.theme.matteBlack,
+                                    fontWeight: 'bold',
+                                    fontSize: 9,
+                                    lineHeight: 11,
+                                }}>
+                                    P
+                                </Text>
+                            </View>
                             <Text style={styles.macroText}>{protein}g</Text>
                         </View>
                         <View style={styles.macroItem}>
-                            <MaterialCommunityIcons name="barley" size={12} color="white" />
+                            <View style={{
+                                backgroundColor: Colors.theme.harvestGold,
+                                borderRadius: 8,
+                                width: 16,
+                                height: 16,
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                marginRight: 2
+                            }}>
+                                <Text style={{
+                                    color: Colors.theme.matteBlack,
+                                    fontWeight: 'bold',
+                                    fontSize: 9,
+                                    lineHeight: 11,
+                                }}>
+                                    C
+                                </Text>
+                            </View>
                             <Text style={styles.macroText}>{carbs}g</Text>
                         </View>
                         <View style={styles.macroItem}>
-                            <Ionicons name="water" size={12} color="white" />
+                            <View style={{
+                                backgroundColor: Colors.theme.harvestGold,
+                                borderRadius: 8,
+                                width: 16,
+                                height: 16,
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                marginRight: 2
+                            }}>
+                                <Text style={{
+                                    color: Colors.theme.matteBlack,
+                                    fontWeight: 'bold',
+                                    fontSize: 9,
+                                    lineHeight: 11,
+                                }}>
+                                    F
+                                </Text>
+                            </View>
                             <Text style={styles.macroText}>{fats}g</Text>
                         </View>
                     </View>
@@ -117,10 +164,10 @@ export function CondensedMealCard({
                 {isMenuOpen && (
                     <View style={styles.floatingButtonsWrapper}>
                         <TouchableOpacity style={styles.floatingTribeBtn} onPress={() => { setIsMenuOpen(false); onPressTribeCopy(); }}>
-                            <TabonoLogo size={16} color="white" />
+                            <TabonoLogo size={16} color={Colors.theme.matteBlack} />
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.floatingCopyBtn} onPress={() => { setIsMenuOpen(false); onPressStandardCopy(); }}>
-                            <Ionicons name="copy-outline" size={14} color="white" />
+                            <Ionicons name="copy-outline" size={14} color={Colors.theme.matteBlack} />
                         </TouchableOpacity>
                     </View>
                 )}
@@ -139,7 +186,7 @@ export function CondensedMealCard({
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: Colors.card, // Tribe Green (#A6B89D) equivalent from theme
+        backgroundColor: Colors.theme.charcoal,
         borderRadius: 40, // Pill shape
         padding: 12,
         paddingRight: 16,
@@ -147,7 +194,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.05)',
+        borderColor: 'rgba(218, 165, 32, 0.3)',
     },
     avatar: {
         width: 50,
@@ -164,7 +211,7 @@ const styles = StyleSheet.create({
     },
     headerRow: {
         flexDirection: 'row',
-        alignItems: 'baseline',
+        alignItems: 'center',
         gap: 6,
         marginBottom: 2,
     },
@@ -216,7 +263,7 @@ const styles = StyleSheet.create({
         paddingVertical: 4,
     },
     tribeButton: {
-        backgroundColor: 'white',
+        backgroundColor: Colors.theme.harvestGold,
         width: 28.88,
         height: 28.88,
         borderRadius: 14.44,
@@ -252,7 +299,7 @@ const styles = StyleSheet.create({
         width: 30,
         height: 30,
         borderRadius: 15,
-        backgroundColor: '#A5B79D',
+        backgroundColor: Colors.theme.harvestGold,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -260,7 +307,7 @@ const styles = StyleSheet.create({
         width: 30,
         height: 30,
         borderRadius: 15,
-        backgroundColor: '#C5D7C2',
+        backgroundColor: Colors.theme.harvestGold,
         justifyContent: 'center',
         alignItems: 'center',
     },

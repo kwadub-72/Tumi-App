@@ -18,11 +18,29 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '@/src/shared/theme/Colors';
 import { useUserStore } from '@/store/UserStore';
+import { useAuthStore } from '@/store/AuthStore';
 
 export default function NaturalStatusScreen() {
     const router = useRouter();
-    const { status, setStatus } = useUserStore();
+    const { status: localStatus, setStatus } = useUserStore();
+    const { profile } = useAuthStore();
+    const currentStatus = profile?.status || localStatus || 'none';
     const [step, setStep] = useState(1); // 1: Select, 2: Natural Form, 3: Success
+
+    const updateStatus = async (newStatus: 'none' | 'natural-pending' | 'natural' | 'enhanced') => {
+        try {
+            const err = await useAuthStore.getState().updateProfile({ status: newStatus });
+            if (err) {
+                console.error('[NaturalStatusScreen] Failed to update status in Supabase:', err);
+                Alert.alert('Error', 'Failed to update status in database.');
+                return;
+            }
+            setStatus(newStatus);
+        } catch (error) {
+            console.error('[NaturalStatusScreen] Exception during status update:', error);
+            Alert.alert('Error', 'An unexpected error occurred.');
+        }
+    };
 
     // Form State
     const [yearsTraining, setYearsTraining] = useState('');
@@ -80,22 +98,22 @@ export default function NaturalStatusScreen() {
             Alert.alert('Required Fields', 'Please complete all required photo, dob and training fields.');
             return;
         }
-        setStatus('natural-pending');
+        updateStatus('natural-pending');
         setStep(3);
     };
 
     const handleApproveAdmin = () => {
-        setStatus('natural');
+        updateStatus('natural');
         Alert.alert('Admin: Approved', 'User status set to Natural.');
     };
 
     const handleStatusUpdate = (targetStatus: 'natural' | 'enhanced') => {
-        if (status === targetStatus) {
+        if (currentStatus === targetStatus) {
             // Toggling off the current status
-            const currentLabel = status.charAt(0).toUpperCase() + status.slice(1);
+            const currentLabel = currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1);
             let message = `Are you sure you want to remove your ${currentLabel} status?`;
 
-            if (status === 'natural') {
+            if (currentStatus === 'natural') {
                 message += "\n\nWarning: You will be subject to re-application if you wish to return to Natural status later.";
             }
 
@@ -104,15 +122,15 @@ export default function NaturalStatusScreen() {
                 message,
                 [
                     { text: 'Cancel', style: 'cancel' },
-                    { text: 'Yes, Remove', onPress: () => setStatus('none') }
+                    { text: 'Yes, Remove', onPress: () => updateStatus('none') }
                 ]
             );
-        } else if (status === 'natural' || status === 'enhanced') {
-            const currentLabel = status.charAt(0).toUpperCase() + status.slice(1);
+        } else if (currentStatus === 'natural' || currentStatus === 'enhanced') {
+            const currentLabel = currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1);
             const targetLabel = targetStatus.charAt(0).toUpperCase() + targetStatus.slice(1);
             let message = `Are you sure you want to change your status from ${currentLabel} to ${targetLabel}?`;
 
-            if (status === 'natural' && targetStatus === 'enhanced') {
+            if (currentStatus === 'natural' && targetStatus === 'enhanced') {
                 message += "\n\nWarning: You will be subject to re-application if you wish to return to Natural status later.";
             }
 
@@ -127,7 +145,7 @@ export default function NaturalStatusScreen() {
                             if (targetStatus === 'natural') {
                                 setStep(2);
                             } else {
-                                setStatus('enhanced');
+                                updateStatus('enhanced');
                             }
                         }
                     }
@@ -137,7 +155,7 @@ export default function NaturalStatusScreen() {
             if (targetStatus === 'natural') {
                 setStep(2);
             } else {
-                setStatus('enhanced');
+                updateStatus('enhanced');
             }
         }
     };
@@ -190,7 +208,7 @@ export default function NaturalStatusScreen() {
             <SafeAreaView style={styles.container}>
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => setStep(1)} style={styles.backBtn}>
-                        <Ionicons name="arrow-back" size={28} color={Colors.primary} />
+                        <Ionicons name="arrow-back" size={28} color={Colors.theme.harvestGold} />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>Natural Application</Text>
                     <View style={{ width: 28 }} />
@@ -213,7 +231,8 @@ export default function NaturalStatusScreen() {
                             value={dob}
                             onChangeText={handleDobChange}
                             maxLength={10}
-                            placeholderTextColor="#999"
+                            placeholderTextColor={Colors.theme.dust + '55'}
+                            selectionColor={Colors.theme.harvestGold}
                         />
                     </View>
 
@@ -226,7 +245,8 @@ export default function NaturalStatusScreen() {
                             keyboardType="numeric"
                             value={yearsTraining}
                             onChangeText={setYearsTraining}
-                            placeholderTextColor="#999"
+                            placeholderTextColor={Colors.theme.dust + '55'}
+                            selectionColor={Colors.theme.harvestGold}
                         />
                     </View>
 
@@ -240,14 +260,14 @@ export default function NaturalStatusScreen() {
                             {photoStart ? (
                                 <Image source={{ uri: photoStart }} style={styles.previewImage} />
                             ) : (
-                                <Ionicons name="camera-outline" size={32} color={Colors.primary} />
+                                <Ionicons name="camera-outline" size={32} color={Colors.theme.harvestGold} />
                             )}
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.input, { marginTop: 10, justifyContent: 'center' }]}
                             onPress={() => openCalendar('start')}
                         >
-                            <Text style={{ color: timestampStart ? Colors.primary : '#999', fontSize: 16 }}>
+                            <Text style={{ color: timestampStart ? Colors.theme.harvestGold : Colors.theme.dust + '55', fontSize: 16 }}>
                                 {timestampStart || "Select timestamp (MM/YYYY)"}
                             </Text>
                         </TouchableOpacity>
@@ -263,14 +283,14 @@ export default function NaturalStatusScreen() {
                             {photoToday ? (
                                 <Image source={{ uri: photoToday }} style={styles.previewImage} />
                             ) : (
-                                <Ionicons name="camera-outline" size={32} color={Colors.primary} />
+                                <Ionicons name="camera-outline" size={32} color={Colors.theme.harvestGold} />
                             )}
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.input, { marginTop: 10, justifyContent: 'center' }]}
                             onPress={() => openCalendar('today')}
                         >
-                            <Text style={{ color: timestampToday ? Colors.primary : '#999', fontSize: 16 }}>
+                            <Text style={{ color: timestampToday ? Colors.theme.harvestGold : Colors.theme.dust + '55', fontSize: 16 }}>
                                 {timestampToday || "Select current timestamp"}
                             </Text>
                         </TouchableOpacity>
@@ -284,7 +304,7 @@ export default function NaturalStatusScreen() {
                             {docPolygraph ? (
                                 <Image source={{ uri: docPolygraph }} style={styles.previewImage} />
                             ) : (
-                                <Ionicons name="document-attach-outline" size={32} color={Colors.primary} />
+                                <Ionicons name="document-attach-outline" size={32} color={Colors.theme.harvestGold} />
                             )}
                         </TouchableOpacity>
                     </View>
@@ -297,7 +317,7 @@ export default function NaturalStatusScreen() {
                             {docMedical ? (
                                 <Image source={{ uri: docMedical }} style={styles.previewImage} />
                             ) : (
-                                <Ionicons name="medkit-outline" size={32} color={Colors.primary} />
+                                <Ionicons name="medkit-outline" size={32} color={Colors.theme.harvestGold} />
                             )}
                         </TouchableOpacity>
                         <Text style={styles.tinyNote}>Supports PDF, JPG, IMG</Text>
@@ -308,8 +328,8 @@ export default function NaturalStatusScreen() {
                         <Switch
                             value={emailOptIn}
                             onValueChange={setEmailOptIn}
-                            trackColor={{ false: "#767577", true: Colors.primary }}
-                            thumbColor={emailOptIn ? Colors.success : "#f4f3f4"}
+                            trackColor={{ false: "#767577", true: Colors.theme.harvestGold }}
+                            thumbColor={emailOptIn ? Colors.theme.matteBlack : "#f4f3f4"}
                         />
                     </View>
 
@@ -333,7 +353,7 @@ export default function NaturalStatusScreen() {
                                     d.setMonth(d.getMonth() - 1);
                                     setViewDate(d);
                                 }}>
-                                    <Ionicons name="chevron-back" size={20} color="white" />
+                                    <Ionicons name="chevron-back" size={20} color={Colors.theme.harvestGold} />
                                 </TouchableOpacity>
                                 <Text style={styles.calendarMonthText}>
                                     {viewDate.toLocaleString('default', { month: 'long' })} {viewDate.getFullYear()}
@@ -343,7 +363,7 @@ export default function NaturalStatusScreen() {
                                     d.setMonth(d.getMonth() + 1);
                                     setViewDate(d);
                                 }}>
-                                    <Ionicons name="chevron-forward" size={20} color="white" />
+                                    <Ionicons name="chevron-forward" size={20} color={Colors.theme.harvestGold} />
                                 </TouchableOpacity>
                             </View>
                             <View style={styles.calendarGrid}>
@@ -374,10 +394,10 @@ export default function NaturalStatusScreen() {
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                    <Ionicons name="arrow-back" size={28} color={Colors.primary} />
+                    <Ionicons name="arrow-back" size={28} color={Colors.theme.harvestGold} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Status</Text>
-                {status === 'natural-pending' ? (
+                {currentStatus === 'natural-pending' ? (
                     <TouchableOpacity onPress={handleApproveAdmin} style={styles.approveBtn}>
                         <Text style={styles.approveBtnText}>Approve</Text>
                     </TouchableOpacity>
@@ -391,36 +411,46 @@ export default function NaturalStatusScreen() {
 
                 {/* Natural Button */}
                 <TouchableOpacity
-                    style={[styles.statusCard, status === 'natural' && styles.statusActive]}
+                    style={[styles.statusCard, currentStatus === 'natural' && styles.statusActive]}
                     onPress={() => handleStatusUpdate('natural')}
                 >
                     <View style={styles.statusInfo}>
-                        <Ionicons name="leaf" size={32} color={Colors.natural} />
+                        <Ionicons 
+                            name="leaf" 
+                            size={32} 
+                            color={currentStatus === 'natural' ? Colors.theme.matteBlack : Colors.theme.naturalGreen} 
+                        />
                         <View>
-                            <Text style={styles.statusTitle}>Natural</Text>
-                            {status === 'natural-pending' ? (
+                            <Text style={[styles.statusTitle, currentStatus === 'natural' && styles.statusTitleActive]}>Natural</Text>
+                            {currentStatus === 'natural-pending' ? (
                                 <Text style={styles.statusPending}>Application pending review</Text>
                             ) : (
-                                <Text style={styles.statusSubtitle}>{status === 'natural' ? 'Verified Status' : 'Apply for verified status'}</Text>
+                                <Text style={[styles.statusSubtitle, currentStatus === 'natural' && styles.statusSubtitleActive]}>
+                                    {currentStatus === 'natural' ? 'Verified Status' : 'Apply for verified status'}
+                                </Text>
                             )}
                         </View>
                     </View>
-                    {status === 'natural' && <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />}
+                    {currentStatus === 'natural' && <Ionicons name="checkmark-circle" size={24} color={Colors.theme.matteBlack} />}
                 </TouchableOpacity>
 
                 {/* Enhanced Button */}
                 <TouchableOpacity
-                    style={[styles.statusCard, status === 'enhanced' && styles.statusActiveEnhanced]}
+                    style={[styles.statusCard, currentStatus === 'enhanced' && styles.statusActiveEnhanced]}
                     onPress={() => handleStatusUpdate('enhanced')}
                 >
                     <View style={styles.statusInfo}>
-                        <MaterialCommunityIcons name="lightning-bolt" size={32} color="#FFD700" />
+                        <MaterialCommunityIcons 
+                            name="lightning-bolt" 
+                            size={32} 
+                            color={currentStatus === 'enhanced' ? Colors.theme.matteBlack : Colors.theme.burntSienna} 
+                        />
                         <View>
-                            <Text style={styles.statusTitle}>Enhanced</Text>
-                            <Text style={styles.statusSubtitle}>Self-select enhanced status</Text>
+                            <Text style={[styles.statusTitle, currentStatus === 'enhanced' && styles.statusTitleActive]}>Enhanced</Text>
+                            <Text style={[styles.statusSubtitle, currentStatus === 'enhanced' && styles.statusSubtitleActive]}>Self-select enhanced status</Text>
                         </View>
                     </View>
-                    {status === 'enhanced' && <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />}
+                    {currentStatus === 'enhanced' && <Ionicons name="checkmark-circle" size={24} color={Colors.theme.matteBlack} />}
                 </TouchableOpacity>
 
                 {/* What is Tribe Natural? */}
@@ -429,7 +459,7 @@ export default function NaturalStatusScreen() {
                     onPress={() => router.push('/settings/natural-definition')}
                 >
                     <Text style={styles.definitionLabel}>What is Tribe natural?</Text>
-                    <Ionicons name="leaf" size={30} color={Colors.natural} style={{ marginTop: 10 }} />
+                    <Ionicons name="leaf" size={30} color={Colors.theme.naturalGreen} style={{ marginTop: 10 }} />
                 </TouchableOpacity>
             </View>
         </SafeAreaView>
@@ -455,16 +485,16 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: Colors.primary,
+        color: Colors.theme.harvestGold,
     },
     approveBtn: {
-        backgroundColor: Colors.primary,
+        backgroundColor: Colors.theme.harvestGold,
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 15,
     },
     approveBtnText: {
-        color: 'white',
+        color: Colors.theme.matteBlack,
         fontSize: 12,
         fontWeight: 'bold',
     },
@@ -476,26 +506,26 @@ const styles = StyleSheet.create({
     sectionHeading: {
         fontSize: 18,
         fontWeight: '600',
-        color: Colors.primary,
+        color: Colors.theme.harvestGold,
         marginBottom: 10,
     },
     statusCard: {
-        backgroundColor: Colors.card,
+        backgroundColor: Colors.theme.charcoal,
         borderRadius: 25,
         padding: 20,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         borderWidth: 2,
-        borderColor: 'transparent',
+        borderColor: 'rgba(218, 165, 32, 0.1)',
     },
     statusActive: {
-        borderColor: Colors.success,
-        backgroundColor: '#D1DEC7',
+        borderColor: Colors.theme.harvestGold,
+        backgroundColor: Colors.theme.harvestGold,
     },
     statusActiveEnhanced: {
-        borderColor: '#FFD700',
-        backgroundColor: '#FFF9E6',
+        borderColor: Colors.theme.harvestGold,
+        backgroundColor: Colors.theme.harvestGold,
     },
     statusInfo: {
         flexDirection: 'row',
@@ -505,16 +535,23 @@ const styles = StyleSheet.create({
     statusTitle: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: Colors.primary,
+        color: Colors.theme.dust,
+    },
+    statusTitleActive: {
+        color: Colors.theme.matteBlack,
     },
     statusSubtitle: {
         fontSize: 14,
-        color: Colors.primary,
-        opacity: 0.6,
+        color: Colors.theme.dust,
+        opacity: 0.5,
+    },
+    statusSubtitleActive: {
+        color: Colors.theme.matteBlack,
+        opacity: 0.8,
     },
     statusPending: {
         fontSize: 14,
-        color: '#B8860B',
+        color: Colors.theme.harvestGold,
         fontWeight: 'bold',
     },
     definitionLink: {
@@ -525,7 +562,7 @@ const styles = StyleSheet.create({
     definitionLabel: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: Colors.primary,
+        color: Colors.theme.harvestGold,
         textDecorationLine: 'underline',
     },
     scrollContent: {
@@ -534,7 +571,7 @@ const styles = StyleSheet.create({
     },
     instructionText: {
         fontSize: 15,
-        color: Colors.primary,
+        color: Colors.theme.dust,
         opacity: 0.8,
         marginBottom: 20,
         lineHeight: 22,
@@ -551,39 +588,39 @@ const styles = StyleSheet.create({
     label: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: Colors.primary,
+        color: Colors.theme.softWhite,
         flex: 1,
     },
     ageIndicator: {
         fontSize: 14,
         fontWeight: 'bold',
-        color: Colors.success,
+        color: Colors.theme.harvestGold,
         marginLeft: 10,
     },
     subLabel: {
         fontSize: 12,
-        color: Colors.primary,
-        opacity: 0.7,
+        color: Colors.theme.dust,
+        opacity: 0.6,
         marginBottom: 10,
         lineHeight: 16,
     },
     input: {
-        backgroundColor: Colors.card,
+        backgroundColor: Colors.theme.charcoal,
         borderRadius: 15,
         height: 50,
         paddingHorizontal: 15,
-        color: Colors.primary,
+        color: Colors.theme.softWhite,
         fontSize: 16,
         borderWidth: 1,
-        borderColor: 'rgba(45, 58, 38, 0.1)',
+        borderColor: 'rgba(218, 165, 32, 0.3)',
     },
     uploadBox: {
-        backgroundColor: Colors.card,
+        backgroundColor: Colors.theme.charcoal,
         height: 150,
         borderRadius: 15,
         borderWidth: 2,
         borderStyle: 'dashed',
-        borderColor: 'rgba(45, 58, 38, 0.2)',
+        borderColor: 'rgba(218, 165, 32, 0.4)',
         justifyContent: 'center',
         alignItems: 'center',
         overflow: 'hidden',
@@ -594,7 +631,8 @@ const styles = StyleSheet.create({
     },
     tinyNote: {
         fontSize: 10,
-        color: '#999',
+        color: Colors.theme.dust,
+        opacity: 0.5,
         marginTop: 5,
         textAlign: 'right',
     },
@@ -608,10 +646,10 @@ const styles = StyleSheet.create({
     optInLabel: {
         fontSize: 16,
         fontWeight: '600',
-        color: Colors.primary,
+        color: Colors.theme.softWhite,
     },
     submitBtn: {
-        backgroundColor: Colors.primary,
+        backgroundColor: Colors.theme.harvestGold,
         borderRadius: 20,
         height: 60,
         justifyContent: 'center',
@@ -619,7 +657,7 @@ const styles = StyleSheet.create({
         marginTop: 10,
     },
     submitBtnText: {
-        color: 'white',
+        color: Colors.theme.matteBlack,
         fontSize: 18,
         fontWeight: 'bold',
     },
@@ -632,13 +670,13 @@ const styles = StyleSheet.create({
     successTitle: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: Colors.primary,
+        color: Colors.theme.harvestGold,
         marginTop: 20,
         marginBottom: 15,
     },
     successText: {
         fontSize: 16,
-        color: Colors.primary,
+        color: Colors.theme.dust,
         textAlign: 'center',
         lineHeight: 24,
         opacity: 0.8,
@@ -647,11 +685,11 @@ const styles = StyleSheet.create({
         marginTop: 40,
         paddingVertical: 15,
         paddingHorizontal: 30,
-        backgroundColor: Colors.primary,
+        backgroundColor: Colors.theme.harvestGold,
         borderRadius: 25,
     },
     backButtonText: {
-        color: 'white',
+        color: Colors.theme.matteBlack,
         fontWeight: 'bold',
     },
     modalOverlay: {
@@ -661,10 +699,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     calendarCard: {
-        backgroundColor: Colors.primary,
+        backgroundColor: Colors.theme.charcoal,
         width: '85%',
         borderRadius: 25,
         padding: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(218, 165, 32, 0.3)',
     },
     calendarHeader: {
         flexDirection: 'row',
@@ -673,7 +713,7 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     calendarMonthText: {
-        color: 'white',
+        color: Colors.theme.softWhite,
         fontSize: 18,
         fontWeight: 'bold',
     },
@@ -684,7 +724,8 @@ const styles = StyleSheet.create({
     dayHeader: {
         width: '14.28%',
         textAlign: 'center',
-        color: 'rgba(255,255,255,0.6)',
+        color: Colors.theme.dust,
+        opacity: 0.4,
         fontSize: 12,
         fontWeight: 'bold',
         marginBottom: 10,
@@ -696,7 +737,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     calendarDayText: {
-        color: 'white',
+        color: Colors.theme.softWhite,
         fontSize: 14,
     },
 });

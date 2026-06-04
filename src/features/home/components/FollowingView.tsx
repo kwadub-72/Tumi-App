@@ -324,9 +324,9 @@ export default function FollowingView({ selectedDate }: FollowingViewProps) {
                         <Ionicons 
                             name={toastType === 'success' ? "checkmark-circle" : "close-circle"} 
                             size={20} 
-                            color="#F5F5DC" 
+                            color={toastType === 'error' ? "white" : Colors.black} 
                         />
-                        <Text style={styles.toastText}>{toastMessage}</Text>
+                        <Text style={[styles.toastText, toastType === 'error' && { color: 'white' }]}>{toastMessage}</Text>
                     </View>
                 </View>
             )}
@@ -397,7 +397,7 @@ const styles = StyleSheet.create({
     toast: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#4F6352',
+        backgroundColor: Colors.primary,
         paddingHorizontal: 20,
         paddingVertical: 12,
         borderRadius: 100,
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
         elevation: 5,
     },
     toastText: {
-        color: '#F5F5DC',
+        color: Colors.black,
         fontSize: 16,
         fontWeight: '600',
     },

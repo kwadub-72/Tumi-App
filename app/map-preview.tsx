@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, ActivityIndicator, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, ActivityIndicator, Pressable, Alert, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/src/shared/theme/Colors';
 import { supabase } from '@/src/shared/services/supabase';
 
 import { useOnboardingStore } from '@/store/useOnboardingStore';
+import { MapComposerSheet } from '@/src/features/macromaps/components/MapComposerSheet';
+import { useSubscribeToLiveMap } from '@/src/features/macromaps/hooks/useSubscribeToLiveMap';
+import { useAuthStore } from '@/store/AuthStore';
+import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
 
 interface CheckpointNode {
     id: string;
@@ -28,14 +32,23 @@ export default function MapPreviewScreen(props: { isOnboarding?: boolean }) {
     const { selectedMapIds, setSelectedMapIds } = useOnboardingStore();
     
     const [checkpoints, setCheckpoints] = useState<CheckpointNode[]>([]);
-    const [mapData, setMapData] = useState<{ engine_type: string; is_live: boolean } | null>(null);
+    const [mapData, setMapData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+
+    const [isComposerVisible, setIsComposerVisible] = useState(false);
+    const [caption, setCaption] = useState('');
+    const [isSubscribed, setIsSubscribed] = useState(false);
+    const [isShareModalVisible, setIsShareModalVisible] = useState(false);
+    const [isUnsubscribedModalVisible, setIsUnsubscribedModalVisible] = useState(false);
+
+    const { mutateAsync: subscribeToLiveMap } = useSubscribeToLiveMap();
+    const { profile, session } = useAuthStore();
 
     useEffect(() => {
         if (map_id) {
             fetchData();
         }
-    }, [map_id]);
+    }, [map_id, session?.user?.id]);
 
     const fetchData = async () => {
         setLoading(true);
@@ -48,7 +61,18 @@ export default function MapPreviewScreen(props: { isOnboarding?: boolean }) {
                     .order('sequence_index', { ascending: true }),
                 supabase
                     .from('macro_maps')
-                    .select('engine_type, is_live')
+                    .select(`
+                        id, creator_id, name, engine_type, is_live, goal_type, total_duration_weeks, generation_type,
+                        creator_status_snapshot, creator_activity_snapshot, creator_activity_icon_snapshot,
+                        profiles (
+                            name,
+                            handle,
+                            status,
+                            activity_icon,
+                            activity,
+                            avatar_url
+                        )
+                    `)
                     .eq('id', map_id)
                     .single()
             ]);
@@ -59,6 +83,22 @@ export default function MapPreviewScreen(props: { isOnboarding?: boolean }) {
             if (!mapRes.error && mapRes.data) {
                 setMapData(mapRes.data as any);
             }
+
+            if (session?.user?.id && map_id) {
+                const { data: subData } = await supabase
+                    .from('macro_map_subscriptions')
+                    .select('id, status')
+                    .eq('user_id', session.user.id)
+                    .eq('map_id', map_id)
+                    .eq('status', 'ACTIVE')
+                    .maybeSingle();
+
+                if (subData) {
+                    setIsSubscribed(true);
+                } else {
+                    setIsSubscribed(false);
+                }
+            }
         } catch (err) {
             console.error(err);
         } finally {
@@ -66,7 +106,7 @@ export default function MapPreviewScreen(props: { isOnboarding?: boolean }) {
         }
     };
 
-    const handleSubscribe = () => {
+    const handleSubscribe = async () => {
         if (isOnboarding) {
             if (map_id && typeof map_id === 'string') {
                 const currentIds = selectedMapIds || [];
@@ -76,7 +116,79 @@ export default function MapPreviewScreen(props: { isOnboarding?: boolean }) {
             }
             router.back();
         } else {
-            Alert.alert("Subscription", "You have successfully subscribed to this map!");
+            if (!session?.user?.id || !profile) {
+                Alert.alert("Authentication Required", "Please log in to subscribe to maps.");
+                return;
+            }
+
+            try {
+                const subscriberTargetCals = profile.macro_targets?.calories || 2000;
+                await subscribeToLiveMap({
+                    subscriberId: session.user.id,
+                    creatorId: mapData?.creator_id,
+                    mapId: map_id as string,
+                    subscriberTargetCals: subscriberTargetCals
+                });
+
+                setIsSubscribed(true);
+                setIsShareModalVisible(true);
+            } catch (err: any) {
+                Alert.alert("Subscription Failed", err.message || "An error occurred during subscription.");
+            }
+        }
+    };
+
+    const handleUnsubscribe = async () => {
+        if (!session?.user?.id || !map_id) return;
+        try {
+            const { error } = await supabase
+                .from('macro_map_subscriptions')
+                .update({ status: 'PAUSED' })
+                .eq('user_id', session.user.id)
+                .eq('map_id', map_id);
+
+            if (error) throw error;
+
+            setIsSubscribed(false);
+            setIsUnsubscribedModalVisible(true);
+        } catch (err: any) {
+            Alert.alert("Error", err.message || "Failed to unsubscribe.");
+        }
+    };
+
+    const handlePostMap = async () => {
+        if (!session?.user?.id || !map_id) return;
+        try {
+            const mapPayload = {
+                macroMap: {
+                    id: map_id,
+                    name: mapData?.name || 'Map Journey',
+                    mapType: mapData?.goal_type || 'MAINTENANCE',
+                    durationWeeks: mapData?.total_duration_weeks || 0,
+                    avgMacroShiftPct: mapData?.global_calorie_shift_pct !== undefined 
+                        ? mapData.global_calorie_shift_pct 
+                        : (mapData?.avgMacroShiftPct || 0),
+                    isLive: mapData?.is_live || false,
+                    creator_status_snapshot: mapData?.creator_status_snapshot,
+                    creator_activity_snapshot: mapData?.creator_activity_snapshot,
+                    creator_activity_icon_snapshot: mapData?.creator_activity_icon_snapshot,
+                    checkpoints: checkpoints,
+                    profiles: mapData?.profiles ? (Array.isArray(mapData.profiles) ? mapData.profiles : [mapData.profiles]) : []
+                }
+            };
+            
+            await SupabasePostService.addMapPost(
+                session.user.id,
+                map_id as string,
+                'map_subscribe',
+                caption,
+                mapPayload
+            );
+            setCaption('');
+            router.push('/');
+        } catch (err: any) {
+            Alert.alert("Post Failed", err.message || "Could not publish your post.");
+            throw err;
         }
     };
 
@@ -221,14 +333,119 @@ export default function MapPreviewScreen(props: { isOnboarding?: boolean }) {
 
             {!loading && checkpoints.length > 0 && (
                 <View style={styles.footer}>
-                    <TouchableOpacity 
-                        style={styles.subscribeButton}
-                        onPress={handleSubscribe}
-                    >
-                        <Text style={styles.subscribeText}>Subscribe to Map</Text>
-                    </TouchableOpacity>
+                    {isSubscribed ? (
+                        <TouchableOpacity 
+                            style={[styles.subscribeButton, { backgroundColor: Colors.theme.burntSienna }]}
+                            onPress={handleUnsubscribe}
+                        >
+                            <Text style={[styles.subscribeText, { color: Colors.theme.softWhite }]}>Unsubscribe from Map</Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity 
+                            style={styles.subscribeButton}
+                            onPress={handleSubscribe}
+                        >
+                            <Text style={styles.subscribeText}>Subscribe to Map</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
             )}
+
+            <Modal
+                transparent
+                visible={isShareModalVisible}
+                animationType="fade"
+                onRequestClose={() => setIsShareModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Subscription Active</Text>
+                        <Text style={styles.modalBody}>Share this map to your feeds?</Text>
+                        <View style={styles.modalButtonsRow}>
+                            <TouchableOpacity 
+                                style={styles.modalCancelBtn}
+                                onPress={async () => {
+                                    setIsShareModalVisible(false);
+                                    if (session?.user?.id && map_id) {
+                                        try {
+                                            const mapPayload = {
+                                                macroMap: {
+                                                    id: map_id,
+                                                    name: mapData?.name || 'Map Journey',
+                                                    mapType: mapData?.goal_type || 'MAINTENANCE',
+                                                    durationWeeks: mapData?.total_duration_weeks || 0,
+                                                    avgMacroShiftPct: mapData?.global_calorie_shift_pct !== undefined 
+                                                        ? mapData.global_calorie_shift_pct 
+                                                        : (mapData?.avgMacroShiftPct || 0),
+                                                    isLive: mapData?.is_live || false,
+                                                    creator_status_snapshot: mapData?.creator_status_snapshot,
+                                                    creator_activity_snapshot: mapData?.creator_activity_snapshot,
+                                                    creator_activity_icon_snapshot: mapData?.creator_activity_icon_snapshot,
+                                                    engine_type: mapData?.engine_type,
+                                                    generation_type: mapData?.generation_type,
+                                                    checkpoints: checkpoints,
+                                                    profiles: mapData?.profiles ? (Array.isArray(mapData.profiles) ? mapData.profiles : [mapData.profiles]) : []
+                                                }
+                                            };
+                                            await SupabasePostService.addMapPost(
+                                                session.user.id,
+                                                map_id as string,
+                                                'map_silent',
+                                                '',
+                                                mapPayload
+                                            );
+                                        } catch (e) {
+                                            console.error('[MapPreviewScreen] Silent post failed:', e);
+                                        }
+                                    }
+                                    router.push('/(tabs)/profile');
+                                }}
+                            >
+                                <Text style={styles.modalCancelBtnText}>No, keep it private</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={styles.modalConfirmBtn}
+                                onPress={() => {
+                                    setIsShareModalVisible(false);
+                                    setIsComposerVisible(true);
+                                }}
+                            >
+                                <Text style={styles.modalConfirmBtnText}>Yes, share</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            <Modal
+                transparent
+                visible={isUnsubscribedModalVisible}
+                animationType="fade"
+                onRequestClose={() => setIsUnsubscribedModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Unsubscribed</Text>
+                        <Text style={styles.modalBody}>You have successfully unsubscribed from this map.</Text>
+                        <TouchableOpacity 
+                            style={styles.unsubscribeDismissBtn}
+                            onPress={() => setIsUnsubscribedModalVisible(false)}
+                        >
+                            <Text style={styles.unsubscribeDismissBtnText}>Okay</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            <MapComposerSheet
+                visible={isComposerVisible}
+                onClose={() => setIsComposerVisible(false)}
+                mapData={mapData}
+                postType="map_subscribe"
+                caption={caption}
+                setCaption={setCaption}
+                onSubmit={handlePostMap}
+            />
         </SafeAreaView>
     );
 }
@@ -451,5 +668,88 @@ const styles = StyleSheet.create({
         fontWeight: '900',
         letterSpacing: 0.5,
         textTransform: 'uppercase',
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContent: {
+        width: '85%',
+        backgroundColor: Colors.theme.charcoal,
+        borderRadius: 20,
+        padding: 24,
+        borderWidth: 1,
+        borderColor: Colors.theme.harvestGold,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: Colors.theme.softWhite,
+        marginBottom: 12,
+        textAlign: 'center',
+    },
+    modalBody: {
+        fontSize: 16,
+        color: Colors.theme.dust,
+        marginBottom: 24,
+        textAlign: 'center',
+        lineHeight: 22,
+    },
+    modalButtonsRow: {
+        flexDirection: 'row',
+        gap: 12,
+        width: '100%',
+        justifyContent: 'space-between',
+    },
+    modalCancelBtn: {
+        flex: 1,
+        paddingVertical: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 12,
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    modalCancelBtnText: {
+        color: Colors.theme.dust,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    modalConfirmBtn: {
+        flex: 1,
+        paddingVertical: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 12,
+        backgroundColor: Colors.theme.harvestGold,
+    },
+    modalConfirmBtnText: {
+        color: Colors.theme.matteBlack,
+        fontSize: 14,
+        fontWeight: 'bold',
+    },
+    unsubscribeDismissBtn: {
+        backgroundColor: Colors.theme.harvestGold,
+        borderRadius: 24,
+        paddingVertical: 12,
+        width: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 10,
+    },
+    unsubscribeDismissBtnText: {
+        color: Colors.theme.matteBlack,
+        fontWeight: 'bold',
+        textAlign: 'center',
+        fontSize: 15,
     }
 });

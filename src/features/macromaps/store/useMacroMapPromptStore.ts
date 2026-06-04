@@ -324,6 +324,13 @@ export const useMacroMapPromptStore = create<MacroMapPromptState>((set, get) => 
                     activeLiveMapId: null // Explicitly clear cached mapId
                 });
             } else {
+                // Fetch profile first for snapshotting
+                const { data: profileData } = await supabase
+                    .from('profiles')
+                    .select('status, activity, activity_icon')
+                    .eq('id', userId)
+                    .single();
+
                 // Global sweep to guarantee no ghost streams
                 await supabase
                     .from('macro_maps')
@@ -343,6 +350,9 @@ export const useMacroMapPromptStore = create<MacroMapPromptState>((set, get) => 
                         total_duration_weeks: 12,
                         is_live: true,
                         is_published: true,
+                        creator_status_snapshot: profileData?.status || null,
+                        creator_activity_snapshot: profileData?.activity || null,
+                        creator_activity_icon_snapshot: profileData?.activity_icon || null,
                         created_at: new Date().toISOString()
                     })
                     .select('id')

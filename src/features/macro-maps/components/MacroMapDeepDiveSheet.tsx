@@ -25,12 +25,12 @@ export function MacroMapDeepDiveSheet({ visible, onClose, mapData, isCreator, on
         if (onToggleOutlierFlare) onToggleOutlierFlare(id, isNowFlared);
     };
 
-    const renderCheckpoint = (cp: MacroMapCheckpoint, index: number) => {
-        const isPositive = cp.delta && cp.delta.weight > 0;
+    const renderCheckpoint = (cp: any, index: number) => {
+        const isPositive = cp.delta?.weight !== undefined && cp.delta.weight > 0;
         const deltaColor = isPositive ? Colors.theme.oliveDrab : Colors.theme.burntSienna;
 
         return (
-            <View key={cp.id} style={styles.checkpointContainer}>
+            <View key={cp.id || `cp-${index}`} style={styles.checkpointContainer}>
                 <View style={styles.timelineColumn}>
                     <View style={styles.timelineDot} />
                     {index < mapData.checkpoints.length - 1 && <View style={styles.timelineLine} />}
@@ -54,7 +54,7 @@ export function MacroMapDeepDiveSheet({ visible, onClose, mapData, isCreator, on
                         <View style={styles.metricItem}>
                             <Text style={styles.metricLabel}>Weight</Text>
                             <Text style={styles.metricValue}>{cp.weight} lbs</Text>
-                            {cp.delta && (
+                            {cp.delta?.weight !== undefined && (
                                 <Text style={[styles.deltaText, { color: deltaColor }]}>
                                     {isPositive ? '+' : ''}{cp.delta.weight}
                                 </Text>
@@ -62,12 +62,27 @@ export function MacroMapDeepDiveSheet({ visible, onClose, mapData, isCreator, on
                         </View>
                         <View style={styles.metricItem}>
                             <Text style={styles.metricLabel}>Calories</Text>
-                            <Text style={styles.metricValue}>{cp.targets.calories}</Text>
-                            {cp.delta && (
+                            <Text style={styles.metricValue}>{cp.targets?.calories ?? 'N/A'}</Text>
+                            {cp.delta?.calories !== undefined && (
                                 <Text style={[styles.deltaText, { color: cp.delta.calories > 0 ? Colors.theme.oliveDrab : Colors.theme.burntSienna }]}>
                                     {cp.delta.calories > 0 ? '+' : ''}{cp.delta.calories}
                                 </Text>
                             )}
+                        </View>
+                    </View>
+
+                    <View style={[styles.metricsRow, { marginTop: 8 }]}>
+                        <View style={styles.metricItem}>
+                            <Text style={styles.metricLabel}>Protein</Text>
+                            <Text style={styles.metricValue}>{cp.targets?.p ? `${cp.targets.p}g` : (cp.protein_ratio ? `${cp.protein_ratio}%` : '--')}</Text>
+                        </View>
+                        <View style={styles.metricItem}>
+                            <Text style={styles.metricLabel}>Carbs</Text>
+                            <Text style={styles.metricValue}>{cp.targets?.c ? `${cp.targets.c}g` : (cp.carbs_ratio ? `${cp.carbs_ratio}%` : '--')}</Text>
+                        </View>
+                        <View style={styles.metricItem}>
+                            <Text style={styles.metricLabel}>Fats</Text>
+                            <Text style={styles.metricValue}>{cp.targets?.f ? `${cp.targets.f}g` : (cp.fats_ratio ? `${cp.fats_ratio}%` : '--')}</Text>
                         </View>
                     </View>
 

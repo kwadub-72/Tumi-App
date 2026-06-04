@@ -143,14 +143,14 @@ export const PremierTribeBattleDashboard = ({ tribeId }: { tribeId?: string }) =
                                                             ? `${member.name} is verified as 100% Natural.`
                                                             : `${member.name} is verified as Enhanced.`,
                                                         iconName: isNatural ? 'leaf' : 'lightning-bolt',
-                                                        iconColor: isNatural ? Colors.natural : Colors.theme.harvestGold,
+                                                        iconColor: isNatural ? Colors.natural : Colors.theme.burntSienna,
                                                     });
                                                 }}
                                             >
                                                 <MaterialCommunityIcons
                                                     name={member.status === 'enhanced' ? 'lightning-bolt' : 'leaf'}
                                                     size={14}
-                                                    color={member.status === 'enhanced' ? Colors.theme.harvestGold : Colors.natural}
+                                                    color={member.status === 'enhanced' ? Colors.theme.burntSienna : Colors.natural}
                                                 />
                                             </TouchableOpacity>
                                         )}

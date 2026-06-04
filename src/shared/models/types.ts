@@ -96,6 +96,7 @@ export interface FeedPost {
     macroUpdate?: MacroUpdate;
     snapshot?: Snapshot;
     macroMap?: MacroMapFeedData;
+    postType?: 'meal' | 'workout' | 'macro_update' | 'snapshot' | 'map_publish' | 'map_subscribe' | 'map_silent';
     comments?: Comment[];
 }
 
@@ -126,6 +127,8 @@ export interface MacroMapFeedData {
     avgMacroShiftPct: number;
     isLive: boolean;
     checkpoints: MacroMapCheckpoint[];
+    name?: string;
+    profiles?: any;
 }
 
 export interface Snapshot {

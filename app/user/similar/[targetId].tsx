@@ -122,7 +122,7 @@ function ProfileSlide({
                                 size={20}
                                 color={
                                     user.status === 'enhanced'
-                                        ? '#FFD700'
+                                        ? Colors.theme.burntSienna
                                         : '#4ADE80'
                                 }
                                 style={{ marginLeft: 6 }}

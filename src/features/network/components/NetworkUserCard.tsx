@@ -53,7 +53,7 @@ export const NetworkUserCard: React.FC<NetworkUserCardProps> = ({
                 <View style={styles.nameRow}>
                     <Text style={styles.name} numberOfLines={1}>{user.name}</Text>
                     {user.status === 'natural' && <Ionicons name="leaf" size={16} color={Colors.natural} style={styles.icon} />}
-                    {user.status === 'enhanced' && <MaterialCommunityIcons name="lightning-bolt" size={16} color={Colors.theme.harvestGold} style={styles.icon} />}
+                    {user.status === 'enhanced' && <MaterialCommunityIcons name="lightning-bolt" size={16} color={Colors.theme.burntSienna} style={styles.icon} />}
                     <ActivityIcon 
                         activity={user.activity || ''} 
                         icon={(user.activityIcon as any) || 'hammer'} 

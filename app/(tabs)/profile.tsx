@@ -85,6 +85,7 @@ export default function ProfileScreen() {
         if (tab === 'meals') return p.meal && p.user.handle === userInfo.handle;
         if (tab === 'workouts') return p.workout && p.user.handle === userInfo.handle;
         if (tab === 'macros') return (p.macroUpdate || p.snapshot) && p.user.handle === userInfo.handle;
+        if (tab === 'maps') return (p.postType === 'map_subscribe' || p.postType === 'map_publish' || p.postType === 'map_silent') && p.user.handle === userInfo.handle;
         return false;
     });
     const loadData = async (silent = false) => {
@@ -162,6 +163,7 @@ export default function ProfileScreen() {
     const workoutsCount = posts.filter(p => (p.workout && (p.user.handle === userInfo.handle))).length;
     const likesCount = posts.filter(p => p.isLiked).length;
     const macroUpdatesCount = posts.filter(p => ((p.macroUpdate || p.snapshot) && (p.user.handle === userInfo.handle))).length;
+    const mapsCount = posts.filter(p => ((p.postType === 'map_subscribe' || p.postType === 'map_publish' || p.postType === 'map_silent') && (p.user.handle === userInfo.handle))).length;
 
     // No longer using getFilteredPosts directly as it's handled per-tab in the horizontal pager.
 
@@ -418,7 +420,7 @@ export default function ProfileScreen() {
                             styles.tabLabel,
                             { color: activeTab === tab ? Colors.theme.harvestGold : Colors.theme.softWhite }
                         ]}>{
-                            tab === 'meals' ? mealsCount : (tab === 'workouts' ? workoutsCount : (tab === 'likes' ? likesCount : (tab === 'maps' ? activeProfileMaps.length : macroUpdatesCount)))
+                            tab === 'meals' ? mealsCount : (tab === 'workouts' ? workoutsCount : (tab === 'likes' ? likesCount : (tab === 'maps' ? mapsCount : macroUpdatesCount)))
                         }{'\n'}{tab === 'macros' ? 'macros' : tab}</Text>
                     </Pressable>
                 ))}
@@ -503,35 +505,6 @@ export default function ProfileScreen() {
                 }}
             >
                 {tabs.map((tab) => {
-                    if (tab === 'maps') {
-                        const isEmpty = activeProfileMaps.length === 0;
-                        return (
-                            <Tabs.Tab name={tab} key={tab}>
-                                <Tabs.FlatList
-                                    data={activeProfileMaps}
-                                    keyExtractor={(item: any) => item.id}
-                                    renderItem={({ item }: { item: any }) => (
-                                        <View style={{ marginBottom: 16, paddingHorizontal: 16 }}>
-                                            <DiscoveryMapCard map={item} />
-                                        </View>
-                                    )}
-                                    ListEmptyComponent={getEmptyStateForTab(tab)}
-                                    scrollEnabled={!isEmpty}
-                                    bounces={!isEmpty}
-                                    showsVerticalScrollIndicator={false}
-                                    refreshControl={
-                                        !isEmpty ? (
-                                            <RefreshControl
-                                                refreshing={refreshing}
-                                                onRefresh={loadData}
-                                                tintColor={TEST_COLORS.text}
-                                            />
-                                        ) : undefined
-                                    }
-                                />
-                            </Tabs.Tab>
-                        );
-                    }
 
                     const tabPosts = getTabPosts(tab);
                     const isEmpty = tabPosts.length === 0;

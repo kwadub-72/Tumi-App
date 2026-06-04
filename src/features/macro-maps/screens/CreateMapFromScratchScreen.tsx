@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform, InteractionManager } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform, InteractionManager, Modal } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Colors } from '@/src/shared/theme/Colors';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/src/shared/services/supabase';
+import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
+import { MapComposerSheet } from '../../macromaps/components/MapComposerSheet';
 import { useAuthStore } from '@/store/AuthStore';
 import { BMRWarningModal } from '../components/BMRWarningModal';
 import { useCreatedMapFormStore } from '../store/useCreatedMapFormStore';
@@ -17,6 +20,30 @@ export function CreateMapFromScratchScreen({
 }) {
     const session = useAuthStore((state) => state.session);
     const userId = session?.user?.id;
+    const router = useRouter();
+
+    const [isSuccessModalVisible, setIsSuccessModalVisible] = useState(false);
+    const [isComposerVisible, setIsComposerVisible] = useState(false);
+    const [caption, setCaption] = useState('');
+    const [shareMapData, setShareMapData] = useState<any>(null);
+
+    const handlePostMap = async () => {
+        if (!userId || !shareMapData) return;
+        try {
+            await SupabasePostService.addMapPost(
+                userId,
+                shareMapData.macroMap.id,
+                'map_publish',
+                caption,
+                shareMapData
+            );
+            setCaption('');
+            router.push('/');
+        } catch (err: any) {
+            Alert.alert("Post Failed", err.message || "Could not publish your post.");
+            throw err;
+        }
+    };
 
     // Connect custom map form store
     const {
@@ -188,25 +215,59 @@ export function CreateMapFromScratchScreen({
                 return;
             }
 
-            Alert.alert('Success', 'Your custom macro map has been compiled and published!', [
-                { 
-                    text: 'Awesome', 
-                    onPress: () => {
-                        // 1. First, explicitly call Agent 3's feed tab setter
-                        if (setActiveFeedTab) {
-                            setActiveFeedTab('Maps');
-                        }
-                        
-                        // 2. Second, close the modal/screen cleanly
-                        onClose();
-                        
-                        // 3. Third, wrap heavy form state reset inside InteractionManager.runAfterInteractions
-                        InteractionManager.runAfterInteractions(() => {
-                            resetForm();
-                        });
+            // Compute relative timeline dates for the deep dive preview and format for sharing
+            let checkpointsWithDates: any[] = [];
+            try {
+                // Fetch creator profile snapshot first
+                const { data: profileData } = await supabase
+                    .from('profiles')
+                    .select('id, name, handle, avatar_url, status, activity, activity_icon')
+                    .eq('id', userId)
+                    .single();
+
+                const now = new Date();
+                let accumulatedDays = 0;
+                checkpointsWithDates = checkpoints.map((cp, idx) => {
+                    const tElapsed = parseFloat(cp.time_elapsed_val) || 0;
+                    const timeDays = timeUnit === 'weeks' ? tElapsed * 7 : tElapsed;
+                    accumulatedDays += timeDays;
+                    const cpDate = new Date(now.getTime() + accumulatedDays * 24 * 60 * 60 * 1000);
+
+                    return {
+                        ...checkpointsToInsert[idx],
+                        date: cpDate.toISOString(),
+                        intent: goalType === 'CUT' ? 'weight-down' : goalType === 'BULK' ? 'weight-up' : 'maintain'
+                    };
+                });
+
+                const mapPayload = {
+                    macroMap: {
+                        id: mapData.id,
+                        name: mapData.name,
+                        map_name: mapData.name,
+                        goal_type: mapData.goal_type,
+                        global_track: mapData.goal_type,
+                        mapType: mapData.goal_type,
+                        engine_type: 'ALGORITHMIC_CREATED',
+                        generation_type: 'update',
+                        is_live: false,
+                        isLive: false,
+                        total_duration_weeks: mapData.total_duration_weeks,
+                        durationWeeks: mapData.total_duration_weeks,
+                        creator_status_snapshot: mapData.creator_status_snapshot,
+                        creator_activity_snapshot: mapData.creator_activity_snapshot,
+                        creator_activity_icon_snapshot: mapData.creator_activity_icon_snapshot,
+                        checkpoints: checkpointsWithDates,
+                        profiles: profileData ? [profileData] : []
                     }
-                }
-            ]);
+                };
+
+                setShareMapData(mapPayload);
+            } catch (postErr) {
+                console.error('[CreateMapFromScratchScreen.commitMapToDatabase] Failed to build map payload:', postErr);
+            }
+
+            setIsSuccessModalVisible(true);
         } catch (err) {
             console.error('[CreateMapFromScratchScreen.commitMapToDatabase] Exception:', err);
         }
@@ -477,6 +538,81 @@ export function CreateMapFromScratchScreen({
                     commitMapToDatabase();
                 }}
                 onCancel={() => setShowWarningModal(false)}
+            />
+
+            {/* Share Prompt Modal */}
+            <Modal
+                transparent
+                visible={isSuccessModalVisible}
+                animationType="fade"
+                onRequestClose={() => setIsSuccessModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Map Published</Text>
+                        <Text style={styles.modalBody}>Share this map to your feeds?</Text>
+                        <View style={styles.modalButtonsRow}>
+                            <TouchableOpacity
+                                style={styles.modalCancelBtn}
+                                onPress={async () => {
+                                    setIsSuccessModalVisible(false);
+                                    if (userId && shareMapData?.macroMap?.id) {
+                                        try {
+                                            await SupabasePostService.addMapPost(
+                                                userId,
+                                                shareMapData.macroMap.id,
+                                                'map_silent',
+                                                '',
+                                                shareMapData
+                                            );
+                                        } catch (e) {
+                                            console.error('[CreateMapFromScratchScreen] Silent post failed:', e);
+                                        }
+                                    }
+                                    if (setActiveFeedTab) {
+                                        setActiveFeedTab('Maps');
+                                    }
+                                    onClose();
+                                    InteractionManager.runAfterInteractions(() => {
+                                        resetForm();
+                                        router.push('/(tabs)/profile');
+                                    });
+                                }}
+                            >
+                                <Text style={styles.modalCancelBtnText}>Not right now</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.modalConfirmBtn}
+                                onPress={() => {
+                                    setIsSuccessModalVisible(false);
+                                    setIsComposerVisible(true);
+                                }}
+                            >
+                                <Text style={styles.modalConfirmBtnText}>Yes, share</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Map Share Composer Sheet */}
+            <MapComposerSheet
+                visible={isComposerVisible}
+                onClose={() => {
+                    setIsComposerVisible(false);
+                    if (setActiveFeedTab) {
+                        setActiveFeedTab('Maps');
+                    }
+                    onClose();
+                    InteractionManager.runAfterInteractions(() => {
+                        resetForm();
+                    });
+                }}
+                mapData={shareMapData?.macroMap}
+                postType="map_publish"
+                caption={caption}
+                setCaption={setCaption}
+                onSubmit={handlePostMap}
             />
         </KeyboardAvoidingView>
     );
@@ -799,5 +935,73 @@ const styles = StyleSheet.create({
         fontSize: 13,
         fontWeight: '600',
         flex: 1,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContent: {
+        width: '85%',
+        backgroundColor: Colors.theme.charcoal,
+        borderRadius: 20,
+        padding: 24,
+        borderWidth: 1,
+        borderColor: Colors.theme.harvestGold,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: Colors.theme.softWhite,
+        marginBottom: 12,
+        textAlign: 'center',
+    },
+    modalBody: {
+        fontSize: 16,
+        color: Colors.theme.dust,
+        marginBottom: 24,
+        textAlign: 'center',
+        lineHeight: 22,
+    },
+    modalButtonsRow: {
+        flexDirection: 'row',
+        gap: 12,
+        width: '100%',
+        justifyContent: 'space-between',
+    },
+    modalCancelBtn: {
+        flex: 1,
+        paddingVertical: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 12,
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    modalCancelBtnText: {
+        color: Colors.theme.dust,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    modalConfirmBtn: {
+        flex: 1,
+        paddingVertical: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 12,
+        backgroundColor: Colors.theme.harvestGold,
+    },
+    modalConfirmBtnText: {
+        color: Colors.theme.matteBlack,
+        fontSize: 14,
+        fontWeight: 'bold',
     },
 });

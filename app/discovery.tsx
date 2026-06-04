@@ -10,6 +10,7 @@ import { ACTIVITIES, resolveActivityIcon } from '@/src/shared/constants/Activiti
 import { ActivityIcon } from '@/src/shared/components/ActivityIcon';
 import { DiscoveryMapCard } from '@/src/features/macromaps/components/DiscoveryMapCard';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
+import { MapFilterSheet } from '@/src/features/macromaps/components/MapFilterSheet';
 
 export default function DiscoveryFeedScreen() {
     const router = useRouter();
@@ -77,119 +78,19 @@ export default function DiscoveryFeedScreen() {
             </View>
 
             {/* Filter Modal */}
-            <Modal visible={isFilterModalVisible} animationType="slide" transparent>
-                <TouchableWithoutFeedback onPress={() => setFilterModalVisible(false)}>
-                    <View style={styles.modalOverlay} />
-                </TouchableWithoutFeedback>
-                <View style={styles.modalContent}>
-                    <View style={styles.modalHandle} />
-                    <View style={styles.modalHeaderRow}>
-                        <Text style={styles.modalTitle}>Filters</Text>
-                        {(activeGoalFilters.length > 0 || activeEngineFilters.length > 0 || activeStatusFilters.length > 0 || activeActivityFilters.length > 0) && (
-                            <TouchableOpacity onPress={clearFilters}>
-                                <Text style={styles.clearFiltersText}>Clear All</Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                    
-                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
-                        <Text style={styles.filterHeader}>Goal</Text>
-                        <View style={styles.filterGroupWrap}>
-                            {goalFilters.map(goal => (
-                                <TouchableOpacity 
-                                    key={`goal-${goal}`} 
-                                    style={[styles.chip, activeGoalFilters.includes(goal) && styles.chipActive]}
-                                    onPress={() => toggleGoalFilter(goal)}
-                                >
-                                    <Text style={[styles.chipText, activeGoalFilters.includes(goal) && styles.chipTextActive]}>
-                                        {goal}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                        
-                        <Text style={styles.filterHeader}>Generation Mode</Text>
-                        <View style={styles.filterGroupWrap}>
-                            {engineFilters.map(engine => (
-                                <TouchableOpacity 
-                                    key={`engine-${engine}`} 
-                                    style={[styles.chip, activeEngineFilters.includes(engine) && styles.chipActive]}
-                                    onPress={() => toggleEngineFilter(engine)}
-                                >
-                                    <Text style={[styles.chipText, activeEngineFilters.includes(engine) && styles.chipTextActive]}>
-                                        {engine}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-
-                        <Text style={styles.filterHeader}>Status</Text>
-                        <View style={styles.filterGroupWrap}>
-                            {statusFilters.map(status => (
-                                <TouchableOpacity 
-                                    key={`status-${status}`} 
-                                    style={[styles.chip, activeStatusFilters.includes(status) && styles.chipActive]}
-                                    onPress={() => toggleStatusFilter(status)}
-                                >
-                                    <Text style={[styles.chipText, activeStatusFilters.includes(status) && styles.chipTextActive]}>
-                                        {status}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-
-                        <TouchableOpacity 
-                            style={styles.accordionHeader} 
-                            onPress={() => setIsActivitySectionExpanded(!isActivitySectionExpanded)}
-                        >
-                            <Text style={[styles.filterHeader, { marginBottom: 0 }]}>Activity / Training Focus</Text>
-                            <Ionicons 
-                                name={isActivitySectionExpanded ? "chevron-up" : "chevron-down"} 
-                                size={20} 
-                                color={Colors.theme.dust} 
-                            />
-                        </TouchableOpacity>
-
-                        {isActivitySectionExpanded && (
-                            <View style={styles.activityListContainer}>
-                                <ScrollView nestedScrollEnabled={true} showsVerticalScrollIndicator={false}>
-                                    <View style={styles.activityList}>
-                                        {ACTIVITIES.map(activity => (
-                                            <TouchableOpacity 
-                                                key={`activity-${activity.name}`} 
-                                                style={styles.activityRow}
-                                                onPress={() => toggleActivityFilter(activity.name)}
-                                            >
-                                                <View style={styles.activityRowLeft}>
-                                                    <ActivityIcon 
-                                                        activity={activity.name}
-                                                        icon={resolveActivityIcon(activity.name, activity.icon)}
-                                                        size={16}
-                                                        color={activeActivityFilters.includes(activity.name) ? Colors.theme.harvestGold : Colors.theme.dust}
-                                                    />
-                                                    <Text style={[
-                                                        styles.activityRowText,
-                                                        activeActivityFilters.includes(activity.name) && styles.activityRowTextActive
-                                                    ]}>
-                                                        {activity.displayName || activity.name}
-                                                    </Text>
-                                                </View>
-                                                {activeActivityFilters.includes(activity.name) && (
-                                                    <Ionicons name="checkmark-circle" size={20} color={Colors.theme.harvestGold} />
-                                                )}
-                                            </TouchableOpacity>
-                                        ))}
-                                    </View>
-                                </ScrollView>
-                            </View>
-                        )}
-                    </ScrollView>
-
-                    <TouchableOpacity style={styles.applyFilterButton} onPress={() => setFilterModalVisible(false)}>
-                        <Text style={styles.applyFilterText}>Apply Filters</Text>
-                    </TouchableOpacity>
-                </View>
-            </Modal>
+            <MapFilterSheet
+                visible={isFilterModalVisible}
+                onClose={() => setFilterModalVisible(false)}
+                activeGoalFilters={activeGoalFilters}
+                onToggleGoalFilter={toggleGoalFilter}
+                activeEngineFilters={activeEngineFilters}
+                onToggleEngineFilter={toggleEngineFilter}
+                activeStatusFilters={activeStatusFilters}
+                onToggleStatusFilter={toggleStatusFilter}
+                activeActivityFilters={activeActivityFilters}
+                onToggleActivityFilter={toggleActivityFilter}
+                onClearFilters={clearFilters}
+            />
 
             {isLoading ? (
                 <View style={styles.loaderContainer}>

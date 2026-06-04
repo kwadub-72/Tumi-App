@@ -1,7 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { supabase } from '@/src/shared/services/supabase';
 import { MacroScalingService, ScaledMacros } from '@/src/shared/services/MacroScalingService';
-import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
 
 interface SubscribeArgs {
     subscriberId: string;
@@ -86,16 +85,17 @@ export function useSubscribeToLiveMap() {
                 // Skip real-time push routing, properly initialize parameters:
                 // current_weight_checkpoint_index = 0, current_time_checkpoint_index = 0
                 
-                // Fetch the sequence_index = 0 checkpoint for this map to initialize user's macro targets
+                // Fetch the starting checkpoint for this map to initialize user's macro targets
                 const { data: initialCheckpoint, error: cpError } = await supabase
                     .from('macro_map_checkpoints')
                     .select('protein_ratio, carbs_ratio, fats_ratio, calorie_delta_pct')
                     .eq('map_id', targetMapId)
-                    .eq('sequence_index', 0)
+                    .order('sequence_index', { ascending: true })
+                    .limit(1)
                     .single();
 
                 if (cpError || !initialCheckpoint) {
-                    throw new Error(`Could not fetch the starting checkpoint (sequence_index = 0) for map: ${targetMapId}`);
+                    throw new Error(`Could not fetch the starting checkpoint for map: ${targetMapId}`);
                 }
 
                 scaledMacros = MacroScalingService.scaleCheckpointMacros(subscriberTargetCals, initialCheckpoint);
@@ -116,12 +116,37 @@ export function useSubscribeToLiveMap() {
                 if (subError) throw subError;
             }
 
-            // 2. Set as subscriber's active targets with updates published to feed
-            await SupabasePostService.updateMacroTargetsWithPost(
-                subscriberId,
-                scaledMacros,
-                `Subscribed to ${engineType === 'LIVE' ? 'LIVE' : engineType.replace('_', ' ')} Macro Map!`,
-            );
+            // 2. Set as subscriber's active targets silently (no feed post)
+            const { data: currentProfile } = await supabase
+                .from('profiles')
+                .select('macro_targets, update_count')
+                .eq('id', subscriberId)
+                .single();
+
+            if (currentProfile?.macro_targets) {
+                await supabase
+                    .from('macro_history')
+                    .insert({
+                        user_id: subscriberId,
+                        macro_targets: currentProfile.macro_targets
+                    });
+            }
+
+            const currentUpdateCount = currentProfile?.update_count ?? 0;
+
+            const { error: profileError } = await supabase
+                .from('profiles')
+                .update({
+                    macro_targets: scaledMacros,
+                    last_macro_update: new Date().toISOString().split('T')[0],
+                    update_count: currentUpdateCount + 1
+                })
+                .eq('id', subscriberId);
+
+            if (profileError) {
+                console.error('[useSubscribeToLiveMap] profile update error:', profileError.message);
+                throw profileError;
+            }
 
             return scaledMacros;
         },

@@ -1,5 +1,5 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Tabs, usePathname, useRouter, useLocalSearchParams } from 'expo-router';
+import { Tabs, useRouter, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Keyboard, Modal, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
@@ -9,13 +9,12 @@ import { useUserStore } from '../../store/UserStore';
 import { LineChartIcon } from '../../src/features/tribes/components/TribeIcons';
 
 export default function TabLayout() {
-    const pathname = usePathname();
     const router = useRouter();
     const params = useLocalSearchParams();
     const isOnboarding = params.isOnboarding === 'true';
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isWeightModalVisible, setIsWeightModalVisible] = useState(false);
-    const [tempWeight, setTempWeight] = useState('253.1');
+    const [tempWeight, setTempWeight] = useState('');
 
     const getLocalDateString = (d: Date = new Date()) => {
         return [
@@ -29,6 +28,7 @@ export default function TabLayout() {
     const [viewDate, setViewDate] = useState(new Date());
 
     const { units } = useUserStore();
+    const unit = units === 'metric' ? 'kg' : 'lbs';
 
     const generateCalendarDays = () => {
         const year = viewDate.getFullYear();
@@ -141,6 +141,7 @@ export default function TabLayout() {
 
     useEffect(() => {
         if (isWeightModalVisible) {
+            setTempWeight(''); // Immediately clear to prevent ghost/stale weight flash
             const loadCurrent = async () => {
                 const weights = await WeightStore.loadWeights();
                 const current = weights.find(w => w.date === selectedDate);
@@ -252,15 +253,34 @@ export default function TabLayout() {
             {isMenuOpen && (
                 <Pressable style={styles.menuOverlay} onPress={() => setIsMenuOpen(false)}>
                     <View style={styles.fabContainer}>
-                        {/* Workout/Run Button */}
+                        {/* Scale Button */}
                         <TouchableOpacity
-                            style={[styles.subFab, styles.workoutFab]}
+                            style={[styles.subFab, styles.scaleFab]}
+                            onPress={() => setIsWeightModalVisible(true)}
+                        >
+                            <MaterialCommunityIcons name="scale-bathroom" size={40} color="white" />
+                        </TouchableOpacity>
+
+                        {/* Macros Button */}
+                        <TouchableOpacity
+                            style={[styles.subFab, styles.macroFab]}
                             onPress={() => {
                                 setIsMenuOpen(false);
-                                router.push('/add-exercise');
+                                router.push('/macro-update?mode=snapshot');
                             }}
                         >
-                            <MaterialCommunityIcons name="run" size={40} color="white" />
+                            <Ionicons name="stats-chart" size={30} color="white" />
+                        </TouchableOpacity>
+
+                        {/* Map Flow Button (Apex) */}
+                        <TouchableOpacity
+                            style={[styles.subFab, styles.mapFab]}
+                            onPress={() => {
+                                setIsMenuOpen(false);
+                                router.push('/map-action' as any);
+                            }}
+                        >
+                            <MaterialCommunityIcons name="map-legend" size={35} color="white" />
                         </TouchableOpacity>
 
                         {/* Fire/Food Button */}
@@ -274,23 +294,15 @@ export default function TabLayout() {
                             <MaterialCommunityIcons name="fire" size={45} color="white" />
                         </TouchableOpacity>
 
-                        {/* Macros Button (New) */}
+                        {/* Workout/Run Button */}
                         <TouchableOpacity
-                            style={[styles.subFab, styles.macroFab]}
+                            style={[styles.subFab, styles.workoutFab]}
                             onPress={() => {
                                 setIsMenuOpen(false);
-                                router.push('/macro-update?mode=snapshot');
+                                router.push('/add-exercise');
                             }}
                         >
-                            <Ionicons name="stats-chart" size={30} color="white" />
-                        </TouchableOpacity>
-
-                        {/* Scale Button */}
-                        <TouchableOpacity
-                            style={[styles.subFab, styles.scaleFab]}
-                            onPress={() => setIsWeightModalVisible(true)}
-                        >
-                            <MaterialCommunityIcons name="scale-bathroom" size={40} color="white" />
+                            <MaterialCommunityIcons name="run" size={40} color="white" />
                         </TouchableOpacity>
                     </View>
                 </Pressable>
@@ -310,7 +322,7 @@ export default function TabLayout() {
                         style={styles.adjustmentCard}
                         onPress={() => Keyboard.dismiss()}
                     >
-                        <Text style={styles.adjustmentTitle}>Update Weight ({units === 'imperial' ? 'lbs' : 'kg'})</Text>
+                        <Text style={styles.adjustmentTitle}>Log weight ({unit})</Text>
                         <TextInput
                             style={styles.adjustmentInput}
                             value={tempWeight}
@@ -318,7 +330,8 @@ export default function TabLayout() {
                             keyboardType="numeric"
                             autoFocus
                             selectTextOnFocus
-                            placeholderTextColor="#666"
+                            placeholderTextColor={Colors.theme.dust + '55'}
+                            selectionColor={Colors.theme.harvestGold}
                         />
                         <Text style={styles.sectionLabel}>Select Date</Text>
                         <View style={styles.calendarContainer}>
@@ -328,7 +341,7 @@ export default function TabLayout() {
                                     d.setMonth(d.getMonth() - 1);
                                     setViewDate(d);
                                 }}>
-                                    <Ionicons name="chevron-back" size={20} color="white" />
+                                    <Ionicons name="chevron-back" size={20} color={Colors.theme.harvestGold} />
                                 </TouchableOpacity>
                                 <Text style={styles.calendarMonthText}>{monthName} {viewDate.getFullYear()}</Text>
                                 <TouchableOpacity onPress={() => {
@@ -336,7 +349,7 @@ export default function TabLayout() {
                                     d.setMonth(d.getMonth() + 1);
                                     setViewDate(d);
                                 }}>
-                                    <Ionicons name="chevron-forward" size={20} color="white" />
+                                    <Ionicons name="chevron-forward" size={20} color={Colors.theme.harvestGold} />
                                 </TouchableOpacity>
                             </View>
                             <View style={styles.calendarGrid}>
@@ -364,13 +377,13 @@ export default function TabLayout() {
                                 style={styles.adjustCancelBtn}
                                 onPress={() => setIsWeightModalVisible(false)}
                             >
-                                <Text style={styles.adjustBtnText}>Cancel</Text>
+                                <Text style={styles.adjustCancelBtnText}>Cancel</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={styles.adjustSaveBtn}
                                 onPress={() => handleSaveWeight()}
                             >
-                                <Text style={styles.adjustBtnText}>Save</Text>
+                                <Text style={styles.adjustSaveBtnText}>Log weight ({unit})</Text>
                             </TouchableOpacity>
                         </View>
                     </Pressable>
@@ -412,21 +425,26 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         elevation: 8,
     },
+    mapFab: {
+        bottom: 80,
+        left: 5,
+        backgroundColor: Colors.theme.harvestGold,
+    },
     scaleFab: {
-        bottom: 20,
-        left: -115,
+        bottom: 15,
+        left: -125,
     },
     macroFab: {
-        bottom: 50,
-        left: -40,
+        bottom: 60,
+        left: -65,
     },
     tumiFab: {
-        bottom: 50,
-        left: 40,
+        bottom: 60,
+        left: 75,
     },
     workoutFab: {
-        bottom: 20,
-        left: 115,
+        bottom: 15,
+        left: 135,
     },
     modalOverlay: {
         flex: 1,
@@ -436,13 +454,15 @@ const styles = StyleSheet.create({
     },
     adjustmentCard: {
         width: '85%',
-        backgroundColor: '#2D3A26',
+        backgroundColor: Colors.theme.charcoal,
         borderRadius: 30,
         padding: 25,
         alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(218, 165, 32, 0.3)',
     },
     adjustmentTitle: {
-        color: 'white',
+        color: Colors.theme.softWhite,
         fontSize: 20,
         fontWeight: 'bold',
         marginBottom: 20,
@@ -450,9 +470,11 @@ const styles = StyleSheet.create({
     adjustmentInput: {
         width: '100%',
         height: 60,
-        backgroundColor: 'rgba(255,255,255,0.1)',
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.15)',
         borderRadius: 15,
-        color: 'white',
+        color: Colors.theme.softWhite,
         fontSize: 32,
         fontWeight: 'bold',
         textAlign: 'center',
@@ -466,7 +488,9 @@ const styles = StyleSheet.create({
     adjustCancelBtn: {
         flex: 1,
         height: 45,
-        backgroundColor: 'rgba(255,255,255,0.1)',
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.15)',
         borderRadius: 10,
         justifyContent: 'center',
         alignItems: 'center',
@@ -474,17 +498,22 @@ const styles = StyleSheet.create({
     adjustSaveBtn: {
         flex: 1,
         height: 45,
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.theme.harvestGold,
         borderRadius: 10,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    adjustBtnText: {
-        color: 'black',
+    adjustCancelBtnText: {
+        color: Colors.theme.softWhite,
+        fontWeight: 'bold',
+    },
+    adjustSaveBtnText: {
+        color: Colors.theme.matteBlack,
         fontWeight: 'bold',
     },
     sectionLabel: {
-        color: 'rgba(255,255,255,0.6)',
+        color: Colors.theme.dust,
+        opacity: 0.6,
         fontSize: 12,
         fontWeight: 'bold',
         textTransform: 'uppercase',
@@ -493,10 +522,12 @@ const styles = StyleSheet.create({
     },
     calendarContainer: {
         width: '100%',
-        backgroundColor: 'rgba(255,255,255,0.05)',
+        backgroundColor: 'rgba(255,255,255,0.03)',
         borderRadius: 15,
         padding: 10,
         marginBottom: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.05)',
     },
     calendarHeader: {
         flexDirection: 'row',
@@ -505,7 +536,7 @@ const styles = StyleSheet.create({
         marginBottom: 15,
     },
     calendarMonthText: {
-        color: 'white',
+        color: Colors.theme.softWhite,
         fontSize: 16,
         fontWeight: 'bold',
     },
@@ -516,7 +547,8 @@ const styles = StyleSheet.create({
     dayHeader: {
         width: `${100 / 7}%`,
         textAlign: 'center',
-        color: 'rgba(255,255,255,0.4)',
+        color: Colors.theme.dust,
+        opacity: 0.4,
         fontSize: 12,
         marginBottom: 10,
     },
@@ -527,14 +559,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     dayButtonActive: {
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.theme.harvestGold,
         borderRadius: 8,
     },
     dayText: {
-        color: 'white',
+        color: Colors.theme.softWhite,
     },
     dayTextActive: {
-        color: 'black',
+        color: Colors.theme.matteBlack,
         fontWeight: 'bold',
     },
 });

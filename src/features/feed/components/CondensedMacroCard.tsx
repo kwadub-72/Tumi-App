@@ -2,6 +2,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View, TouchableWithoutFeedback } from 'react-native';
 import { Colors } from '@/src/shared/theme/Colors';
+import { ActivityIcon } from '../../../shared/components/ActivityIcon';
 import { formatTimeAgo } from '@/src/shared/services/SupabasePostService';
 import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
 
@@ -105,20 +106,13 @@ export function CondensedMacroCard({
                         <Text style={styles.authorHandle} numberOfLines={1}>{formattedHandle}</Text>
                         {authorStatus === 'natural' && <MaterialCommunityIcons name="leaf" size={14} color="#1BB607" />}
                         {authorStatus === 'enhanced' && <MaterialCommunityIcons name="hammer" size={14} color="rgba(255,255,255,0.8)" />}
-                        {authorActivityIcon && (
-                            <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-                                <MaterialCommunityIcons
-                                    name={authorActivityIcon as any}
-                                    size={14}
-                                    color='white'
-                                />
-                                {authorActivity?.toLowerCase().includes('bulk') && (
-                                    <Text style={{ color: 'white', fontSize: 8, fontWeight: 'bold', marginLeft: 1, marginTop: -2 }}>+</Text>
-                                )}
-                                {authorActivity?.toLowerCase().includes('cut') && (
-                                    <Text style={{ color: 'white', fontSize: 8, fontWeight: 'bold', marginLeft: 1, marginTop: -2 }}>-</Text>
-                                )}
-                            </View>
+                        {(!!authorActivity || !!authorActivityIcon) && (
+                            <ActivityIcon 
+                                activity={authorActivity || ''} 
+                                icon={authorActivityIcon} 
+                                size={14} 
+                                color={Colors.theme.harvestGold}
+                            />
                         )}
                     </TouchableOpacity>
                     
@@ -133,10 +127,10 @@ export function CondensedMacroCard({
                     {isMenuOpen && (
                         <View style={styles.floatingButtonsWrapper}>
                             <TouchableOpacity style={styles.floatingTribeBtn} onPress={() => { setIsMenuOpen(false); onPressTribeCopy(); }}>
-                                <TabonoLogo size={16} color="white" />
+                                <TabonoLogo size={16} color={Colors.theme.matteBlack} />
                             </TouchableOpacity>
                             <TouchableOpacity style={styles.floatingCopyBtn} onPress={() => { setIsMenuOpen(false); onPressStandardCopy(); }}>
-                                <Ionicons name="copy-outline" size={14} color="white" />
+                                <Ionicons name="copy-outline" size={14} color={Colors.theme.matteBlack} />
                             </TouchableOpacity>
                         </View>
                     )}
@@ -152,7 +146,7 @@ export function CondensedMacroCard({
             {/* Metrics Row */}
             <View style={styles.metricsContainer}>
                 <View style={styles.metricItem}>
-                    <MaterialCommunityIcons name="fire" size={16} color={calsColor} />
+                    <MaterialCommunityIcons name="fire" size={16} color={isDeltaRow ? calsColor : Colors.theme.harvestGold} />
                     <Text style={[styles.metricValue, { color: calsColor }]}>{formatVal(calories, true)}</Text>
                 </View>
                 
@@ -251,12 +245,12 @@ export function CondensedMacroCard({
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: Colors.card, // Tribe Green (#A6B89D) equivalent from theme
+        backgroundColor: Colors.theme.charcoal,
         borderRadius: 30,
         padding: 16,
         marginBottom: 10,
         borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.05)',
+        borderColor: 'rgba(218, 165, 32, 0.3)',
     },
     headerRow: {
         flexDirection: 'row',
@@ -270,8 +264,8 @@ const styles = StyleSheet.create({
         width: 44,
         height: 44,
         borderRadius: 22,
-        borderWidth: 1,
-        borderColor: '#A6B89D',
+        borderWidth: 2,
+        borderColor: Colors.theme.matteBlack,
         backgroundColor: '#E1E1E1',
     },
     headerTextContainer: {
@@ -285,7 +279,7 @@ const styles = StyleSheet.create({
         marginBottom: 2,
     },
     authorName: {
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: 'bold',
         color: 'white',
     },
@@ -313,7 +307,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     tribeButton: {
-        backgroundColor: 'white',
+        backgroundColor: Colors.theme.harvestGold,
         width: 28,
         height: 28,
         borderRadius: 14,
@@ -394,7 +388,7 @@ const styles = StyleSheet.create({
         width: 28,
         height: 28,
         borderRadius: 14,
-        backgroundColor: '#A5B79D',
+        backgroundColor: Colors.theme.harvestGold,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -402,7 +396,7 @@ const styles = StyleSheet.create({
         width: 28,
         height: 28,
         borderRadius: 14,
-        backgroundColor: '#C5D7C2',
+        backgroundColor: Colors.theme.harvestGold,
         justifyContent: 'center',
         alignItems: 'center',
     },

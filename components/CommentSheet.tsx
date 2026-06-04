@@ -211,7 +211,7 @@ export default function CommentSheet({
                         </TouchableOpacity>
                         {item.user.status && (item.user.status === 'natural' || item.user.status === 'enhanced') && (
                             item.user.status === 'enhanced' ? (
-                                <MaterialCommunityIcons name="lightning-bolt" size={12} color="#FFD700" style={styles.badge} />
+                                <MaterialCommunityIcons name="lightning-bolt" size={12} color={Colors.theme.burntSienna} style={styles.badge} />
                             ) : (
                                 <Ionicons name="leaf" size={12} color={Colors.success} style={styles.badge} />
                             )

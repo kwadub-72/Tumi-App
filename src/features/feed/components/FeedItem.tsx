@@ -2,7 +2,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { AVPlaybackStatusSuccess, ResizeMode, Video } from 'expo-av';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Image, LayoutAnimation, StyleSheet, Text, TouchableOpacity, View, TouchableWithoutFeedback } from 'react-native';
+import { Image, LayoutAnimation, StyleSheet, Text, TouchableOpacity, View, TouchableWithoutFeedback, Modal, Alert } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { FeedPost, Snapshot, Meal, Workout, MacroUpdate } from '@/src/shared/models/types';
 import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
@@ -18,6 +18,10 @@ import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
 import { supabase } from '@/src/shared/services/supabase';
 import * as Haptics from 'expo-haptics';
 import { MacroMapDeepDiveSheet } from '@/src/features/macro-maps/components/MacroMapDeepDiveSheet';
+import { MacroMapPreviewCard } from '@/src/features/macromaps/components/MacroMapPreviewCard';
+import { DiscoveryMapCard } from '@/src/features/macromaps/components/DiscoveryMapCard';
+import { useSubscribeToLiveMap } from '@/src/features/macromaps/hooks/useSubscribeToLiveMap';
+import { MapComposerSheet } from '@/src/features/macromaps/components/MapComposerSheet';
 
 
 const BURGUNDY = Colors.theme.burntSienna; // Accent 2 (Burnt Sienna)
@@ -72,6 +76,156 @@ export default function FeedItem({
     const [isVerifiedVisible, setIsVerifiedVisible] = useState(false);
     const [isCopying, setIsCopying] = useState(false);
     const [isMacroMapSheetVisible, setIsMacroMapSheetVisible] = useState(false);
+    const [isSubscribeConfirmVisible, setIsSubscribeConfirmVisible] = useState(false);
+    const [isShareModalVisible, setIsShareModalVisible] = useState(false);
+    const [isComposerVisible, setIsComposerVisible] = useState(false);
+    const [composerCaption, setComposerCaption] = useState('');
+    const { mutateAsync: subscribeToLiveMap } = useSubscribeToLiveMap();
+    const [isAlreadySubscribedModalVisible, setIsAlreadySubscribedModalVisible] = useState(false);
+    const [checkingSubscription, setCheckingSubscription] = useState(false);
+    const [isMapComposerVisible, setIsMapComposerVisible] = useState(false);
+    const [publishCaption, setPublishCaption] = useState('');
+    const [isShareMenuVisible, setIsShareMenuVisible] = useState(false);
+
+    const [isLiked, setIsLiked] = useState(post.isLiked || false);
+    const [likesCount, setLikesCount] = useState(post.stats.likes || 0);
+
+    useEffect(() => {
+        setIsLiked(post.isLiked || false);
+    }, [post.isLiked]);
+
+    useEffect(() => {
+        setLikesCount(post.stats.likes || 0);
+    }, [post.stats.likes]);
+
+    const handleLike = () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        const nextLiked = !isLiked;
+        setIsLiked(nextLiked);
+        setLikesCount(prev => nextLiked ? prev + 1 : Math.max(0, prev - 1));
+        if (onPressLike) {
+            onPressLike();
+        }
+    };
+
+
+    const handleMapCopyPress = async () => {
+        if (!session?.user?.id || !post.macroMap) return;
+        if (checkingSubscription) return;
+        setCheckingSubscription(true);
+        try {
+            const { data, error } = await supabase
+                .from('macro_map_subscriptions')
+                .select('id')
+                .eq('user_id', session.user.id)
+                .eq('map_id', post.macroMap.id)
+                .eq('status', 'ACTIVE')
+                .maybeSingle();
+
+            if (error) throw error;
+
+            if (data) {
+                setIsAlreadySubscribedModalVisible(true);
+            } else {
+                setIsSubscribeConfirmVisible(true);
+            }
+        } catch (err) {
+            console.error('[FeedItem] Error checking subscription:', err);
+            setIsSubscribeConfirmVisible(true);
+        } finally {
+            setCheckingSubscription(false);
+        }
+    };
+
+    const handleQuickSubscribe = async () => {
+        if (!session?.user?.id || !profile || !post.macroMap) {
+            Alert.alert("Authentication Required", "Please log in to subscribe to maps.");
+            return;
+        }
+
+        try {
+            const subscriberTargetCals = profile.macro_targets?.calories || 2000;
+            await subscribeToLiveMap({
+                subscriberId: session.user.id,
+                mapId: post.macroMap.id,
+                subscriberTargetCals: subscriberTargetCals
+            });
+
+            setIsSubscribeConfirmVisible(false);
+            setIsShareModalVisible(true);
+        } catch (err: any) {
+            Alert.alert("Subscription Failed", err.message || "An error occurred during subscription.");
+        }
+    };
+
+    const handlePostMap = async () => {
+        if (!session?.user?.id || !post.macroMap) return;
+        try {
+            const mapPayload = {
+                macroMap: {
+                    id: post.macroMap.id,
+                    name: post.macroMap.name || '',
+                    mapType: post.macroMap.mapType,
+                    durationWeeks: post.macroMap.durationWeeks,
+                    avgMacroShiftPct: post.macroMap.avgMacroShiftPct || 0,
+                    isLive: post.macroMap.isLive || false,
+                    checkpoints: post.macroMap.checkpoints || [],
+                    profiles: post.macroMap.profiles || []
+                }
+            };
+            
+            await SupabasePostService.addMapPost(
+                session.user.id,
+                post.macroMap.id,
+                'map_subscribe',
+                composerCaption,
+                mapPayload
+            );
+            setComposerCaption('');
+            setIsComposerVisible(false);
+            if (onCopySuccess) onCopySuccess();
+        } catch (err: any) {
+            Alert.alert("Post Failed", err.message || "Could not publish your post.");
+            throw err;
+        }
+    };
+
+    const handleMapSharePress = () => {
+        setIsShareMenuVisible(true);
+    };
+
+    const handlePublishMap = async () => {
+        if (!session?.user?.id || !post.macroMap) return;
+        try {
+            const mapPayload = {
+                macroMap: {
+                    id: post.macroMap.id,
+                    name: post.macroMap.name || '',
+                    mapType: post.macroMap.mapType,
+                    durationWeeks: post.macroMap.durationWeeks,
+                    avgMacroShiftPct: post.macroMap.avgMacroShiftPct || 0,
+                    isLive: post.macroMap.isLive || false,
+                    checkpoints: post.macroMap.checkpoints || [],
+                    profiles: post.macroMap.profiles || []
+                }
+            };
+            
+            await SupabasePostService.addMapPost(
+                session.user.id,
+                post.macroMap.id,
+                'map_publish',
+                publishCaption,
+                mapPayload
+            );
+            setPublishCaption('');
+            setIsMapComposerVisible(false);
+            if (onCopySuccess) onCopySuccess();
+        } catch (err: any) {
+            Alert.alert("Post Failed", err.message || "Could not publish your post.");
+            throw err;
+        }
+    };
+
     const videoRef = useRef<Video>(null);
 
     const mealStore = useMealLogStore();
@@ -998,76 +1152,12 @@ export default function FeedItem({
     };
 
     const renderMacroMap = (macroMap: any) => {
-        const isLive = macroMap.isLive || macroMap.is_live;
-        
-        let heartbeatText = '';
-        let isAbandoned = false;
-        if (isLive && macroMap.checkpoints && macroMap.checkpoints.length > 0) {
-            const dates = macroMap.checkpoints.map((cp: any) => new Date(cp.date || cp.created_at || Date.now()).getTime());
-            const maxTime = Math.max(...dates);
-            const diffDays = Math.floor((Date.now() - maxTime) / (1000 * 60 * 60 * 24));
-            const days = Math.max(0, diffDays);
-            heartbeatText = `Last Updated: ${days} ${days === 1 ? 'day' : 'days'} ago`;
-            isAbandoned = days > 14;
-        }
-
         return (
-            <View style={styles.macroMapPreviewContainer}>
-                <View style={styles.macroMapPreviewHeader}>
-                    <View style={styles.macroMapHeaderTitleRow}>
-                        <MaterialCommunityIcons name="map-legend" size={24} color={Colors.theme.harvestGold} />
-                        <Text style={styles.macroMapPreviewTitle}>Macro Map Journey</Text>
-                    </View>
-                    {isLive && (
-                        <View style={[
-                            styles.liveBadge, 
-                            isAbandoned ? styles.abandonedBadge : styles.activeLiveBadge
-                        ]}>
-                            <View style={[
-                                styles.liveDot, 
-                                isAbandoned ? styles.abandonedDot : styles.activeLiveDot
-                            ]} />
-                            <Text style={[
-                                styles.liveText, 
-                                isAbandoned ? styles.abandonedText : styles.activeLiveText
-                            ]}>
-                                {isAbandoned ? 'Inactive' : 'Live'}
-                            </Text>
-                        </View>
-                    )}
-                </View>
-
-                {isLive && heartbeatText !== '' && (
-                    <View style={styles.heartbeatRow}>
-                        <Ionicons 
-                            name="heart" 
-                            size={14} 
-                            color={isAbandoned ? Colors.theme.burntSienna : Colors.theme.oliveDrab} 
-                        />
-                        <Text style={[
-                            styles.heartbeatText, 
-                            isAbandoned && { color: Colors.theme.burntSienna, fontWeight: 'bold' }
-                        ]}>
-                            {heartbeatText} {isAbandoned && '(Abandoned)'}
-                        </Text>
-                    </View>
-                )}
-
-                <View style={styles.macroMapPreviewMetrics}>
-                    <View style={styles.macroMapPreviewMetric}>
-                        <Text style={styles.macroMapPreviewLabel}>Type</Text>
-                        <Text style={styles.macroMapPreviewValue}>{macroMap.mapType}</Text>
-                    </View>
-                    <View style={styles.macroMapPreviewMetric}>
-                        <Text style={styles.macroMapPreviewLabel}>Duration</Text>
-                        <Text style={styles.macroMapPreviewValue}>{macroMap.durationWeeks} wks</Text>
-                    </View>
-                    <View style={styles.macroMapPreviewMetric}>
-                        <Text style={styles.macroMapPreviewLabel}>Avg Shift</Text>
-                        <Text style={styles.macroMapPreviewValue}>{macroMap.avgMacroShiftPct > 0 ? '+' : ''}{macroMap.avgMacroShiftPct}%</Text>
-                    </View>
-                </View>
-            </View>
+            <TouchableOpacity onPress={() => router.push({ pathname: '/map-preview', params: { map_id: macroMap.id } } as any)}>
+                <MacroMapPreviewCard 
+                    map={macroMap} 
+                />
+            </TouchableOpacity>
         );
     };
 
@@ -1080,11 +1170,33 @@ export default function FeedItem({
         return null;
     };
 
+    const discoveryMapData = (post.postType === 'map_silent' && post.macroMap) ? {
+        ...post.macroMap,
+        id: post.macroMap.id,
+        map_name: post.macroMap.name || 'Map Journey',
+        creator_id: post.user.id,
+        display_name: post.user.name,
+        creator_handle: post.user.handle,
+        username: post.user.handle,
+        avatar_url: typeof post.user.avatar === 'string' ? post.user.avatar : null,
+        is_natural: (post.macroMap as any).creator_status_snapshot === 'natural' || post.user.status === 'natural',
+        activity_type: post.user.activity || '',
+        activity_icon: post.user.activityIcon || '',
+        global_track: post.macroMap.mapType?.toUpperCase() as any,
+        is_live: post.macroMap.isLive,
+        broadcast_status: post.macroMap.isLive ? 'active' : 'inactive',
+        engine_type: (post.macroMap as any).engine_type || (post.macroMap.isLive ? 'LIVE' : 'STATIC'),
+        created_at: post.createdAt || new Date().toISOString(),
+        generation_type: (post.macroMap as any).generation_type || 'update',
+        total_duration_weeks: post.macroMap.durationWeeks,
+        global_calorie_shift_pct: post.macroMap.avgMacroShiftPct,
+    } : null;
+
     return (
         <Animated.View 
             style={[
-                styles.card, 
-                cardColor ? { backgroundColor: cardColor } : {}
+                post.postType === 'map_silent' ? { marginBottom: 16 } : styles.card, 
+                cardColor && post.postType !== 'map_silent' ? { backgroundColor: cardColor } : {}
             ]}
             // @ts-ignore
             sharedTransitionTag={sharedTransitionTag}
@@ -1124,150 +1236,322 @@ export default function FeedItem({
             )}
 
             <VerifiedModal visible={isVerifiedVisible} onClose={() => setIsVerifiedVisible(false)} status={post.user.status} />
-            <View style={[styles.header, { zIndex: 1 }]}>
-                <TouchableOpacity onPress={() => navigateToProfile(post.user)}>
-                    {post.user.avatar ? (
-                        <Image source={typeof post.user.avatar === 'string' ? { uri: post.user.avatar } : post.user.avatar} style={styles.avatar} />
-                    ) : (
-                        <View style={[styles.avatar, styles.placeholderAvatar]}>
-                            <Ionicons name="person" size={24} color={Colors.theme.dust} />
-                        </View>
-                    )}
-                </TouchableOpacity>
-                <View style={styles.headerText}>
-                    <View style={styles.nameRow}>
-                        <TouchableOpacity onPress={() => navigateToProfile(post.user)}>
-                            <Text style={styles.name}>{post.user.name}</Text>
+
+            {/* Already Subscribed Modal */}
+            <Modal
+                transparent
+                visible={isAlreadySubscribedModalVisible}
+                animationType="fade"
+                onRequestClose={() => setIsAlreadySubscribedModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Already Subscribed</Text>
+                        <Text style={styles.modalBody}>You are already actively subscribed to this map.</Text>
+                        <TouchableOpacity
+                            style={styles.errorDismissBtn}
+                            onPress={() => setIsAlreadySubscribedModalVisible(false)}
+                        >
+                            <Text style={styles.errorDismissBtnText}>Okay</Text>
                         </TouchableOpacity>
-                        {post.user.status && (post.user.status !== 'none') && (
-                            <TouchableOpacity onPress={() => setIsVerifiedVisible(true)}>
-                                <MaterialCommunityIcons
-                                    name={post.user.status === 'enhanced' ? "lightning-bolt" : "leaf"}
-                                    size={16}
-                                    color={post.user.status === 'enhanced' ? Colors.theme.harvestGold : Colors.natural}
-                                />
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Quick Subscribe Modal Dialogs */}
+            <Modal
+                transparent
+                visible={isSubscribeConfirmVisible}
+                animationType="fade"
+                onRequestClose={() => setIsSubscribeConfirmVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Confirm Subscription</Text>
+                        <Text style={styles.modalBody}>Are you sure you want to subscribe to this map?</Text>
+                        <View style={styles.modalButtonsRow}>
+                            <TouchableOpacity
+                                style={styles.modalCancelBtn}
+                                onPress={() => setIsSubscribeConfirmVisible(false)}
+                            >
+                                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.modalConfirmBtn}
+                                onPress={handleQuickSubscribe}
+                            >
+                                <Text style={styles.modalConfirmBtnText}>Yes, subscribe</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            <Modal
+                transparent
+                visible={isShareModalVisible}
+                animationType="fade"
+                onRequestClose={() => setIsShareModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Subscription Active</Text>
+                        <Text style={styles.modalBody}>Share this map to your feeds?</Text>
+                        <View style={styles.modalButtonsRow}>
+                            <TouchableOpacity
+                                style={styles.modalCancelBtn}
+                                onPress={() => setIsShareModalVisible(false)}
+                            >
+                                <Text style={styles.modalCancelBtnText}>No, keep it private</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.modalConfirmBtn}
+                                onPress={() => {
+                                    setIsShareModalVisible(false);
+                                    setIsComposerVisible(true);
+                                }}
+                            >
+                                <Text style={styles.modalConfirmBtnText}>Yes, share</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+            {/* Custom Midnight Gold Share Menu Modal */}
+            <Modal 
+                animationType="slide" 
+                onRequestClose={() => setIsShareMenuVisible(false)} 
+                transparent={true} 
+                visible={isShareMenuVisible}
+            >
+                <TouchableOpacity 
+                    activeOpacity={1} 
+                    onPress={() => setIsShareMenuVisible(false)} 
+                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}
+                >
+                    <View style={{ backgroundColor: Colors.theme.charcoal, borderRadius: 24, padding: 20, paddingBottom: 40, borderWidth: 1, borderColor: Colors.theme.harvestGold }}>
+                        <Text style={{ color: Colors.theme.softWhite, fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 20 }}>
+                            Share Map
+                        </Text>
+                        
+                        <TouchableOpacity 
+                            style={{ backgroundColor: Colors.theme.harvestGold, borderRadius: 12, padding: 16, marginBottom: 16 }}
+                            onPress={() => {
+                                setIsShareMenuVisible(false);
+                                setTimeout(() => onPressShare?.(), 300); // Tribe Mark Overlay
+                            }}
+                        >
+                            <Text style={{ color: Colors.theme.matteBlack, fontSize: 16, fontWeight: 'bold', textAlign: 'center' }}>Share Tribe Mark</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity 
+                            style={{ backgroundColor: Colors.theme.harvestGold, borderRadius: 12, padding: 16, marginBottom: 16 }}
+                            onPress={() => {
+                                setIsShareMenuVisible(false);
+                                setTimeout(() => setIsMapComposerVisible(true), 300); // Share to Feed Composer
+                            }}
+                        >
+                            <Text style={{ color: Colors.theme.matteBlack, fontSize: 16, fontWeight: 'bold', textAlign: 'center' }}>Share to Feed</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity onPress={() => setIsShareMenuVisible(false)}>
+                            <Text style={{ color: Colors.theme.dust, fontSize: 16, fontWeight: '600', textAlign: 'center', padding: 8 }}>Cancel</Text>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
+            {isComposerVisible && post.macroMap && (
+                <MapComposerSheet
+                    visible={isComposerVisible}
+                    onClose={() => setIsComposerVisible(false)}
+                    mapData={post.macroMap}
+                    postType="map_subscribe"
+                    caption={composerCaption}
+                    setCaption={setComposerCaption}
+                    onSubmit={handlePostMap}
+                />
+            )}
+            {isMapComposerVisible && post.macroMap && (
+                <MapComposerSheet
+                    visible={isMapComposerVisible}
+                    onClose={() => setIsMapComposerVisible(false)}
+                    mapData={post.macroMap as any}
+                    postType="map_publish"
+                    caption={publishCaption}
+                    setCaption={setPublishCaption}
+                    onSubmit={handlePublishMap}
+                />
+            )}
+            {post.postType !== 'map_silent' ? (
+                <>
+                    <View style={[styles.header, { zIndex: 1 }]}>
+                        <TouchableOpacity onPress={() => navigateToProfile(post.user)}>
+                            {post.user.avatar ? (
+                                <Image source={typeof post.user.avatar === 'string' ? { uri: post.user.avatar } : post.user.avatar} style={styles.avatar} />
+                            ) : (
+                                <View style={[styles.avatar, styles.placeholderAvatar]}>
+                                    <Ionicons name="person" size={24} color={Colors.theme.dust} />
+                                </View>
+                            )}
+                        </TouchableOpacity>
+                        <View style={styles.headerText}>
+                            <View style={styles.nameRow}>
+                                <TouchableOpacity onPress={() => navigateToProfile(post.user)}>
+                                    <Text style={styles.name}>{post.user.name}</Text>
+                                </TouchableOpacity>
+                                {post.user.status && (post.user.status !== 'none') && (
+                                    <TouchableOpacity onPress={() => setIsVerifiedVisible(true)}>
+                                        <MaterialCommunityIcons
+                                            name={post.user.status === 'enhanced' ? "lightning-bolt" : "leaf"}
+                                            size={16}
+                                            color={post.user.status === 'enhanced' ? Colors.theme.burntSienna : Colors.natural}
+                                        />
+                                    </TouchableOpacity>
+                                )}
+                                {(post.user.activityIcon || post.user.activity) && (() => {
+                                    const activity = post.user.activity || '';
+                                    const activityIcon = resolveActivityIcon(activity, post.user.activityIcon);
+                                    if (!activityIcon) return null;
+                                    const isPositive = activity.toLowerCase().includes('bulk') || activity.toLowerCase().includes('increase');
+                                    const isNegative = activity.toLowerCase().includes('cut') || activity.toLowerCase().includes('decrease');
+                                    const mathIndicator = isPositive ? '+' : (isNegative ? '-' : '');
+                                    const color = Colors.theme.harvestGold;
+                                    
+                                    return (
+                                        <TouchableOpacity onPress={onPressHammer} style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 6 }}>
+                                            <MaterialCommunityIcons
+                                                name={activityIcon as any}
+                                                size={16}
+                                                color={color}
+                                            />
+                                            {mathIndicator ? (
+                                                <Text style={{ color, fontSize: 10, fontWeight: 'bold', marginLeft: 1 }}>{mathIndicator}</Text>
+                                            ) : null}
+                                        </TouchableOpacity>
+                                    );
+                                })()}
+                            </View>
+                            <TouchableOpacity onPress={() => navigateToProfile(post.user)}>
+                                <Text style={styles.handle}>@{post.user.handle}</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <TouchableOpacity onPress={onPressOptions}><Ionicons name="ellipsis-horizontal" size={20} color={Colors.theme.softWhite} /></TouchableOpacity>
+                    </View>
+
+                    <TouchableOpacity activeOpacity={isSelectMode ? 1 : 0.9} onPress={handlePressBody} style={{ zIndex: 1 }}>
+                        <Text style={styles.titleText}>
+                            {post.caption || post.snapshot?.caption || post.macroUpdate?.caption || post.workout?.title || post.meal?.title}
+                        </Text>
+
+                        {(!isDetailView && !post.macroMap && post.postType !== 'map_subscribe' && post.postType !== 'map_publish') && (
+                            <TouchableOpacity onPress={toggleExpand} style={styles.expandLineTrigger}>
+                                <View style={styles.dividerHalf} />
+                                <Ionicons name="ellipsis-horizontal" size={16} color={Colors.theme.harvestGold} />
+                                <View style={styles.dividerHalf} />
                             </TouchableOpacity>
                         )}
-                        {(post.user.activityIcon || post.user.activity) && (() => {
-                            const activity = post.user.activity || '';
-                            const activityIcon = resolveActivityIcon(activity, post.user.activityIcon);
-                            if (!activityIcon) return null;
-                            const isPositive = activity.toLowerCase().includes('bulk') || activity.toLowerCase().includes('increase');
-                            const isNegative = activity.toLowerCase().includes('cut') || activity.toLowerCase().includes('decrease');
-                            const mathIndicator = isPositive ? '+' : (isNegative ? '-' : '');
-                            const color = Colors.theme.harvestGold;
-                            
-                            return (
-                                <TouchableOpacity onPress={onPressHammer} style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 6 }}>
-                                    <MaterialCommunityIcons
-                                        name={activityIcon as any}
-                                        size={16}
-                                        color={color}
+
+                        {content()}
+
+                        {(!isDetailView && !post.meal && !post.macroUpdate && !post.workout && !post.snapshot && !post.macroMap && post.postType !== 'map_subscribe' && post.postType !== 'map_publish') && (
+                            <TouchableOpacity onPress={toggleExpand} style={styles.expandLineTrigger}>
+                                <View style={styles.dividerHalf} />
+                                <Ionicons name="ellipsis-horizontal" size={16} color={Colors.theme.harvestGold} />
+                                <View style={styles.dividerHalf} />
+                            </TouchableOpacity>
+                        )}
+
+                        {post.mediaUrl && (
+                            <View style={styles.mediaFrame}>
+                                {post.mediaType === 'video' ? (
+                                    <Video ref={videoRef} source={{ uri: post.mediaUrl }} style={styles.media} resizeMode={ResizeMode.COVER} isLooping shouldPlay={isPlaying} isMuted={isMuted} onPlaybackStatusUpdate={handlePlaybackStatusUpdate} />
+                                ) : (
+                                    <Image 
+                                        source={{ uri: post.mediaUrl }} 
+                                        style={styles.media} 
+                                        resizeMode="cover"
                                     />
-                                    {mathIndicator ? (
-                                        <Text style={{ color, fontSize: 10, fontWeight: 'bold', marginLeft: 1 }}>{mathIndicator}</Text>
-                                    ) : null}
-                                </TouchableOpacity>
-                            );
-                        })()}
-                    </View>
-                    <TouchableOpacity onPress={() => navigateToProfile(post.user)}>
-                        <Text style={styles.handle}>@{post.user.handle}</Text>
-                    </TouchableOpacity>
-                </View>
-                <TouchableOpacity onPress={onPressOptions}><Ionicons name="ellipsis-horizontal" size={20} color={Colors.theme.softWhite} /></TouchableOpacity>
-            </View>
-
-            <TouchableOpacity activeOpacity={isSelectMode ? 1 : 0.9} onPress={handlePressBody} style={{ zIndex: 1 }}>
-                <Text style={styles.titleText}>
-                    {post.caption || post.snapshot?.caption || post.macroUpdate?.caption || post.workout?.title || post.meal?.title}
-                </Text>
-
-                {!isDetailView && (
-                    <TouchableOpacity onPress={toggleExpand} style={styles.expandLineTrigger}>
-                        <View style={styles.dividerHalf} />
-                        <Ionicons name="ellipsis-horizontal" size={16} color={Colors.theme.harvestGold} />
-                        <View style={styles.dividerHalf} />
-                    </TouchableOpacity>
-                )}
-
-                {content()}
-
-                {(!isDetailView && !post.meal && !post.macroUpdate && !post.workout && !post.snapshot) && (
-                    <TouchableOpacity onPress={toggleExpand} style={styles.expandLineTrigger}>
-                        <View style={styles.dividerHalf} />
-                        <Ionicons name="ellipsis-horizontal" size={16} color={Colors.theme.harvestGold} />
-                        <View style={styles.dividerHalf} />
-                    </TouchableOpacity>
-                )}
-
-                {post.mediaUrl && (
-                    <View style={styles.mediaFrame}>
-                        {post.mediaType === 'video' ? (
-                            <Video ref={videoRef} source={{ uri: post.mediaUrl }} style={styles.media} resizeMode={ResizeMode.COVER} isLooping shouldPlay={isPlaying} isMuted={isMuted} onPlaybackStatusUpdate={handlePlaybackStatusUpdate} />
-                        ) : (
-                            <Image 
-                                source={{ uri: post.mediaUrl }} 
-                                style={styles.media} 
-                                resizeMode="cover"
-                            />
-                        )}
-                    </View>
-                )}
-            </TouchableOpacity>
-
-            <View style={[styles.footerActions, { zIndex: 10 }]}>
-                <View style={styles.actionsRow}>
-                    <TouchableOpacity
-                        style={styles.actionItem}
-                        onPress={post.workout
-                            ? handleWorkoutTribeCopy
-                            : () => setIsTribeMenuOpen(!isTribeMenuOpen)
-                        }
-                    >
-                        {/* Sub-menu only shown for non-workout posts */}
-                        {isTribeMenuOpen && !post.workout && (
-                            <View style={styles.floatingButtonsWrapper}>
-                                <TouchableOpacity style={styles.floatingTribeBtn} onPress={handleTribeCopy}>
-                                    <TabonoLogo size={20} color="white" />
-                                </TouchableOpacity>
-                                <TouchableOpacity style={styles.floatingCopyBtn} onPress={handleStandardCopy}>
-                                    <Ionicons name="copy" size={18} color="white" />
-                                </TouchableOpacity>
+                                )}
                             </View>
                         )}
-                        <View style={styles.iconBox}>
-                            <View style={styles.tribeCircle}>
-                                <TabonoLogo size={20} color={Colors.theme.matteBlack} />
-                            </View>
-                        </View>
-                        <Text style={styles.actionCount}>{post.stats.shares}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.actionItem} onPress={onPressLike}>
-                        <View style={styles.iconBox}>
-                            <Ionicons name={post.isLiked ? "heart" : "heart-outline"} size={28} color={post.isLiked ? Colors.theme.harvestGold : Colors.theme.dust} />
+
+                    <View style={[styles.footerActions, { zIndex: 10 }]}>
+                        <View style={styles.actionsRow}>
+                            <TouchableOpacity
+                                style={styles.actionItem}
+                                onPress={post.postType === 'map_subscribe' || post.postType === 'map_publish'
+                                    ? handleMapCopyPress
+                                    : (post.workout
+                                        ? handleWorkoutTribeCopy
+                                        : () => setIsTribeMenuOpen(!isTribeMenuOpen)
+                                    )
+                                }
+                            >
+                                {/* Sub-menu only shown for non-workout posts */}
+                                {isTribeMenuOpen && !post.workout && (
+                                    <View style={styles.floatingButtonsWrapper}>
+                                        <TouchableOpacity style={styles.floatingTribeBtn} onPress={handleTribeCopy}>
+                                            <TabonoLogo size={20} color={Colors.theme.matteBlack} />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={styles.floatingCopyBtn} onPress={handleStandardCopy}>
+                                            <Ionicons name="copy" size={18} color={Colors.theme.matteBlack} />
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+                                <View style={styles.iconBox}>
+                                    <View style={styles.tribeCircle}>
+                                        <TabonoLogo size={20} color={Colors.theme.matteBlack} />
+                                    </View>
+                                </View>
+                                <Text style={styles.actionCount}>{post.stats.shares}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionItem} onPress={handleLike}>
+                                <View style={styles.iconBox}>
+                                    <Ionicons name={isLiked ? "heart" : "heart-outline"} size={28} color={isLiked ? Colors.theme.harvestGold : Colors.theme.dust} />
+                                </View>
+                                <Text style={styles.actionCount}>{likesCount}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionItem} onPress={onPressComment}>
+                                <View style={styles.iconBox}>
+                                    <Ionicons 
+                                        name={post.hasCommented ? "chatbubble-ellipses" : "chatbubble-ellipses-outline"} 
+                                        size={26} 
+                                        color={post.hasCommented ? Colors.theme.harvestGold : Colors.theme.dust} 
+                                    />
+                                </View>
+                                <Text style={styles.actionCount}>{post.stats.comments}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.actionItem} onPress={onPressShare || onPressSave}>
+                                <View style={styles.iconBox}>
+                                    <Ionicons name="arrow-redo-outline" size={26} color={Colors.theme.dust} />
+                                </View>
+                                <Text style={styles.actionCount}>{post.stats.shares}</Text>
+                            </TouchableOpacity>
                         </View>
-                        <Text style={styles.actionCount}>{post.stats.likes}</Text>
+                        <Text style={styles.timeLabel}>{post.timeAgo}</Text>
+                    </View>
+                </>
+            ) : (
+                discoveryMapData && (
+                    <TouchableOpacity onPress={() => setIsMacroMapSheetVisible(true)}>
+                        <DiscoveryMapCard 
+                            map={discoveryMapData as any} 
+                            onCommentPress={onPressComment}
+                            onLikePress={handleLike}
+                            onOptionsPress={onPressOptions}
+                            onSharePress={handleMapSharePress}
+                            onCopyPress={handleMapCopyPress}
+                            isLiked={isLiked}
+                            likeCount={likesCount}
+                            commentCount={post.stats.comments}
+                            subscribeCount={(post.stats as any).copies || 0}
+                            shareCount={post.stats.shares || 0}
+                        />
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.actionItem} onPress={onPressComment}>
-                        <View style={styles.iconBox}>
-                            <Ionicons 
-                                name={post.hasCommented ? "chatbubble-ellipses" : "chatbubble-ellipses-outline"} 
-                                size={26} 
-                                color={post.hasCommented ? Colors.theme.harvestGold : Colors.theme.dust} 
-                            />
-                        </View>
-                        <Text style={styles.actionCount}>{post.stats.comments}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.actionItem} onPress={onPressShare || onPressSave}>
-                        <View style={styles.iconBox}>
-                            <Ionicons name="arrow-redo-outline" size={26} color={Colors.theme.dust} />
-                        </View>
-                        <Text style={styles.actionCount}>{post.stats.shares}</Text>
-                    </TouchableOpacity>
-                </View>
-                <Text style={styles.timeLabel}>{post.timeAgo}</Text>
-            </View>
+                )
+            )}
         </Animated.View>
     );
 }
@@ -1581,7 +1865,7 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 18,
-        backgroundColor: Colors.theme.oliveDrab, // Olive
+        backgroundColor: Colors.theme.harvestGold,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -1589,7 +1873,7 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 18,
-        backgroundColor: Colors.theme.burntSienna, // Burnt Sienna
+        backgroundColor: Colors.theme.harvestGold,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -1855,5 +2139,89 @@ const styles = StyleSheet.create({
         color: Colors.theme.softWhite,
         fontSize: 16,
         fontWeight: 'bold',
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContent: {
+        width: '85%',
+        backgroundColor: Colors.theme.charcoal,
+        borderRadius: 20,
+        padding: 24,
+        borderWidth: 1,
+        borderColor: Colors.theme.harvestGold,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: Colors.theme.softWhite,
+        marginBottom: 12,
+        textAlign: 'center',
+    },
+    modalBody: {
+        fontSize: 16,
+        color: Colors.theme.dust,
+        marginBottom: 24,
+        textAlign: 'center',
+        lineHeight: 22,
+    },
+    modalButtonsRow: {
+        flexDirection: 'row',
+        gap: 12,
+        width: '100%',
+        justifyContent: 'space-between',
+    },
+    modalCancelBtn: {
+        flex: 1,
+        paddingVertical: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 12,
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    modalCancelBtnText: {
+        color: Colors.theme.dust,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    modalConfirmBtn: {
+        flex: 1,
+        paddingVertical: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 12,
+        backgroundColor: Colors.theme.harvestGold,
+    },
+    modalConfirmBtnText: {
+        color: Colors.theme.matteBlack,
+        fontSize: 14,
+        fontWeight: 'bold',
+    },
+    errorDismissBtn: {
+        backgroundColor: Colors.theme.harvestGold,
+        borderRadius: 24,
+        paddingVertical: 12,
+        width: '100%',
+        alignItems: 'center',
+        marginTop: 8,
+    },
+    errorDismissBtnText: {
+        color: Colors.theme.matteBlack,
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    feedPostContainer: {
+        marginBottom: 20,
     },
 });

@@ -409,9 +409,9 @@ export default function DiaryView({ selectedDate }: DiaryViewProps) {
                         <Ionicons
                             name={toastType === 'success' ? 'checkmark-circle' : 'close-circle'}
                             size={20}
-                            color={Colors.black}
+                            color={toastType === 'error' ? 'white' : Colors.black}
                         />
-                        <Text style={styles.toastText}>{toastMessage}</Text>
+                        <Text style={[styles.toastText, toastType === 'error' && { color: 'white' }]}>{toastMessage}</Text>
                     </TouchableOpacity>
                 </View>
             )}

@@ -48,8 +48,8 @@ const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const SHEET_MIN_Y = SCREEN_HEIGHT - 145;
 const SHEET_MAX_Y = SCREEN_HEIGHT * 0.5;
 
-type ScreenMode = 'macro-update' | 'snapshot' | 'macro-book' | 'macro-maps';
-const MODES: ScreenMode[] = ['macro-update', 'snapshot', 'macro-book', 'macro-maps'];
+type ScreenMode = 'macro-update' | 'snapshot' | 'macro-book';
+const MODES: ScreenMode[] = ['macro-update', 'snapshot', 'macro-book'];
 
 const MacroUpdateRow = ({ icon, oldVal, value, onChange, diff, editable = true }: any) => {
     const inputRef = React.useRef<TextInput>(null);
@@ -199,12 +199,14 @@ const MacroProgressBar = ({ icon, target, consumed }: any) => {
 
 export default function MacroUpdateScreen() {
     const router = useRouter();
-    const { mode: initialMode, p: paramP, c: paramC, f: paramF, calories: paramCal } = useLocalSearchParams<{ 
+    const { mode: initialMode, p: paramP, c: paramC, f: paramF, calories: paramCal, createMap, compileStudio } = useLocalSearchParams<{ 
         mode: ScreenMode; 
         p?: string; 
         c?: string; 
         f?: string; 
         calories?: string; 
+        createMap?: string;
+        compileStudio?: string;
     }>();
     const { profile } = useAuthStore();
     const userInfo = useUserStore();
@@ -319,6 +321,15 @@ export default function MacroUpdateScreen() {
             }, 100);
         }
     }, [initialMode]);
+
+    useEffect(() => {
+        if (createMap === 'true') {
+            setIsCreateMapOpen(true);
+        }
+        if (compileStudio === 'true') {
+            setIsCompileStudioOpen(true);
+        }
+    }, [createMap, compileStudio]);
 
     // Reanimated values for sheet
     const translateY = useSharedValue(SHEET_MIN_Y);
@@ -531,12 +542,6 @@ export default function MacroUpdateScreen() {
                                         onPress={() => handleModeChange('macro-book')}
                                     >
                                         <Text style={[styles.modeText, mode === 'macro-book' && styles.modeTextActive]}>Macro book</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={[styles.modeBtn, mode === 'macro-maps' && styles.modeBtnActive]}
-                                        onPress={() => handleModeChange('macro-maps')}
-                                    >
-                                        <Text style={[styles.modeText, mode === 'macro-maps' && styles.modeTextActive]}>Maps</Text>
                                     </TouchableOpacity>
                                 </View>
                             </View>
@@ -769,8 +774,8 @@ export default function MacroUpdateScreen() {
                                                         authorHandle={entry.original_author?.handle || profile?.handle || 'me'}
                                                         authorAvatar={entry.original_author?.avatar_url || profile?.avatar_url || ''}
                                                         authorStatus={entry.original_author?.status || profile?.status}
-                                                        authorActivityIcon={(entry.original_author as any)?.activityIcon || (profile as any)?.activityIcon}
-                                                        authorActivity={(entry.original_author as any)?.activity || (profile as any)?.activity}
+                                                        authorActivityIcon={entry.original_author?.activity_icon || profile?.activity_icon}
+                                                        authorActivity={entry.original_author?.activity || profile?.activity}
                                                         onPressProfile={() => {
                                                             if (entry.original_author?.handle) {
                                                                 router.push(`/user/${entry.original_author.handle}`);
@@ -825,15 +830,6 @@ export default function MacroUpdateScreen() {
                                                 ))
                                             )}
                                         </ScrollView>
-                                    )}
-
-                                    {item === 'macro-maps' && (
-                                        <MapsLandingView 
-                                            onFindMap={() => router.push('/discovery')}
-                                            onLaunch={() => router.push('/live-broadcast')}
-                                            onCreate={() => setIsCreateMapOpen(true)}
-                                            onSavePrevious={() => setIsCompileStudioOpen(true)}
-                                        />
                                     )}
                                 </View>
                             )}

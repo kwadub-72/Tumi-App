@@ -75,7 +75,7 @@ export default function ExploreProfileCard({
                                 <MaterialCommunityIcons
                                     name={user.status === 'enhanced' ? "lightning-bolt" : "leaf"}
                                     size={20}
-                                    color={user.status === 'enhanced' ? "#DAA520" : "#1BB607"}
+                                    color={user.status === 'enhanced' ? Colors.theme.burntSienna : '#1BB607'}
                                     style={{ marginHorizontal: 4 }}
                                 />
                             </TouchableOpacity>
@@ -85,7 +85,7 @@ export default function ExploreProfileCard({
                                 <MaterialCommunityIcons
                                     name={getEffectiveActivityIcon(user.activity, user.activityIcon) as any}
                                     size={20}
-                                    color={"white"}
+                                    color={Colors.theme.harvestGold}
                                 />
                                 {isBulk && <Text style={styles.symbol}>+</Text>}
                                 {isCut && <Text style={styles.symbol}>-</Text>}
@@ -108,7 +108,7 @@ export default function ExploreProfileCard({
                     {isSelf ? (
                         // Self-card: show a neutral "You" indicator instead of follow/match UI
                         <View style={[styles.followBtn, styles.selfBtn]}>
-                            <MaterialCommunityIcons name="account" size={24} color="#4F6352" />
+                            <MaterialCommunityIcons name="account" size={24} color={Colors.theme.harvestGold} />
                         </View>
                     ) : (
                         <TouchableOpacity
@@ -122,7 +122,7 @@ export default function ExploreProfileCard({
                             <MaterialCommunityIcons
                                 name={user.isFollowing ? "account-check" : (user.isRequested ? "account-clock" : "account-plus")}
                                 size={24}
-                                color={user.isFollowing || user.isRequested ? "#F5F5DC" : "#4F6352"}
+                                color={user.isFollowing || user.isRequested ? Colors.theme.matteBlack : Colors.theme.harvestGold}
                             />
                         </TouchableOpacity>
                     )}
@@ -145,17 +145,17 @@ export default function ExploreProfileCard({
             {isExpanded && (
                 <View style={styles.metricsRow}>
                     <View style={styles.metricItem}>
-                        <MaterialCommunityIcons name="fire" size={28} color="#2F3A27" />
+                        <MaterialCommunityIcons name="fire" size={28} color={Colors.theme.harvestGold} />
                         <Text style={styles.metricValue}>{user.stats?.meals || 0}</Text>
                         <Text style={styles.metricLabel}>meals</Text>
                     </View>
                     <View style={styles.metricItem}>
-                        <MaterialCommunityIcons name="dumbbell" size={28} color="#2F3A27" />
+                        <MaterialCommunityIcons name="dumbbell" size={28} color={Colors.theme.harvestGold} />
                         <Text style={styles.metricValue}>{user.stats?.workouts || 0}</Text>
                         <Text style={styles.metricLabel}>workouts</Text>
                     </View>
                     <View style={styles.metricItem}>
-                        <Ionicons name="stats-chart" size={28} color="#2F3A27" />
+                        <Ionicons name="stats-chart" size={28} color={Colors.theme.harvestGold} />
                         <Text style={styles.metricValue}>{user.stats?.updates || 0}</Text>
                         <Text style={styles.metricLabel}>macros</Text>
                     </View>
@@ -172,12 +172,12 @@ export default function ExploreProfileCard({
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: '#A8C0A8', // Sage green as per image
+        backgroundColor: Colors.theme.charcoal,
         borderRadius: 25,
         padding: 15,
         marginBottom: 15,
         borderWidth: 1,
-        borderColor: '#8FA88F',
+        borderColor: 'rgba(255, 255, 255, 0.05)',
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
         height: 100,
         borderRadius: 50,
         borderWidth: 1.5,
-        borderColor: 'rgba(255,255,255,0.4)',
+        borderColor: Colors.theme.dust,
     },
     rankIndicator: {
         position: 'absolute',
@@ -222,7 +222,7 @@ const styles = StyleSheet.create({
     name: {
         fontSize: 19,
         fontWeight: 'bold',
-        color: 'white',
+        color: Colors.theme.softWhite,
         marginRight: 4,
     },
     activityContainer: {
@@ -230,25 +230,25 @@ const styles = StyleSheet.create({
         alignItems: 'flex-start',
     },
     symbol: {
-        color: 'white',
+        color: Colors.theme.harvestGold,
         fontSize: 12,
         fontWeight: 'bold',
         marginTop: -3,
     },
     handle: {
-        color: 'rgba(255,255,255,0.7)',
+        color: Colors.theme.dust,
         fontSize: 16,
         fontWeight: '500',
         marginBottom: 2,
     },
     statsText: {
-        color: 'white',
+        color: Colors.theme.dust,
         fontSize: 13,
         fontWeight: '600',
         marginBottom: 2,
     },
     tribeName: {
-        color: '#421C1C', // Dark brownish red as per image
+        color: Colors.theme.burntSienna,
         fontSize: 18,
         fontWeight: '900',
         fontStyle: 'italic',
@@ -267,24 +267,26 @@ const styles = StyleSheet.create({
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: 'white',
+        backgroundColor: Colors.theme.charcoal,
+        borderWidth: 1,
+        borderColor: Colors.theme.harvestGold,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 4,
     },
     followingBtn: {
-        backgroundColor: '#2F3A27', // Dark green
+        backgroundColor: Colors.theme.harvestGold,
     },
     requestedBtn: {
-        backgroundColor: 'gray', // Gray for pending
+        backgroundColor: Colors.theme.dust,
     },
     selfBtn: {
-        backgroundColor: 'rgba(79, 99, 82, 0.15)',
+        backgroundColor: 'rgba(218, 165, 32, 0.1)',
         borderWidth: 1,
-        borderColor: 'rgba(79, 99, 82, 0.3)',
+        borderColor: 'rgba(218, 165, 32, 0.3)',
     },
     matchText: {
-        color: 'rgba(255,255,255,0.8)',
+        color: Colors.theme.dust,
         fontSize: 10,
         fontWeight: 'bold',
     },
@@ -292,7 +294,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-around',
         borderTopWidth: 1,
-        borderTopColor: 'rgba(255,255,255,0.2)',
+        borderTopColor: 'rgba(255, 255, 255, 0.05)',
         paddingTop: 15,
         marginTop: 10,
     },
@@ -303,12 +305,11 @@ const styles = StyleSheet.create({
     metricValue: {
         fontSize: 14,
         fontWeight: 'bold',
-        color: 'white',
+        color: Colors.theme.softWhite,
         marginTop: 4,
     },
     metricLabel: {
         fontSize: 12,
-        color: 'rgba(255,255,255,0.8)',
+        color: Colors.theme.dust,
     }
 });
-

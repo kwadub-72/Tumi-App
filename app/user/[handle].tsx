@@ -358,7 +358,7 @@ export default function OtherUserProfileScreen() {
                         {(targetProfile.status === 'enhanced' || targetProfile.status === 'natural') && (
                             <TouchableOpacity onPress={() => setVerifiedModalVisible(true)}>
                                 {targetProfile.status === 'enhanced' ? (
-                                    <MaterialCommunityIcons name="lightning-bolt" size={18} color="#FFD700" style={{ marginLeft: 4 }} />
+                                    <MaterialCommunityIcons name="lightning-bolt" size={18} color={Colors.theme.burntSienna} style={{ marginLeft: 4 }} />
                                 ) : (
                                     <Ionicons name="leaf" size={18} color={Colors.natural} style={{ marginLeft: 4 }} />
                                 )}

@@ -16,6 +16,7 @@ export interface LiveMapSubscriberState {
     clearPendingUpdate: () => void;
     disconnect: () => void;
     subscribeToMap: (mapId: string) => Promise<void>;
+    unsubscribeFromMap: (mapId: string) => Promise<void>;
 }
 
 export const useLiveMapSubscriberStore = create<LiveMapSubscriberState>((set, get) => ({
@@ -138,6 +139,24 @@ export const useLiveMapSubscriberStore = create<LiveMapSubscriberState>((set, ge
 
         } catch (error) {
             console.error('[subscribeToMap] Failed:', error);
+        }
+    },
+
+    unsubscribeFromMap: async (mapId: string) => {
+        const userId = useAuthStore.getState().session?.user?.id;
+        if (!userId) return;
+
+        try {
+            const { error } = await supabase
+                .from('macro_map_subscriptions')
+                .update({ status: 'PAUSED' })
+                .eq('map_id', mapId)
+                .eq('user_id', userId);
+
+            if (error) throw error;
+        } catch (error) {
+            console.error('[unsubscribeFromMap] Failed:', error);
+            throw error;
         }
     }
 }));

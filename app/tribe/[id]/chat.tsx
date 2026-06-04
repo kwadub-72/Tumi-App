@@ -274,7 +274,7 @@ export default function TribeChatScreen() {
                                                     <MaterialCommunityIcons
                                                         name={item.sender.status === 'enhanced' ? "lightning-bolt" : "leaf"}
                                                         size={13}
-                                                        color={item.sender.status === 'enhanced' ? "#DAA520" : "#1BB607"}
+                                                        color={item.sender.status === 'enhanced' ? C.sienna : "#1BB607"}
                                                         style={{ marginLeft: 4 }}
                                                     />
                                                 )}

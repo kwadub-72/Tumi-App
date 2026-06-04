@@ -1,4 +1,4 @@
-import { Session, User } from '@supabase/supabase-js';
+import { Session } from '@supabase/supabase-js';
 import { create } from 'zustand';
 import { supabase } from '../src/shared/services/supabase';
 import { UserStatus, useUserStore } from './UserStore';
@@ -130,7 +130,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     },
 
     refreshProfile: async () => {
-        const userId = get().session?.user?.id;
+        let userId = get().session?.user?.id;
+        if (!userId) {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user?.id) {
+                userId = session.user.id;
+                set({ session });
+            }
+        }
         if (!userId) return;
 
         const { data, error } = await supabase
@@ -159,16 +166,43 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     },
 
     updateProfile: async (updates) => {
-        const userId = get().session?.user?.id;
+        let userId = get().session?.user?.id;
+        if (!userId) {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user?.id) {
+                userId = session.user.id;
+                set({ session });
+            }
+        }
         if (!userId) return 'Not signed in';
 
-        const { error } = await supabase
+        console.log(`[AuthStore] Attempting profile update for user ${userId}:`, updates);
+
+        const { data, error, status, statusText } = await supabase
             .from('profiles')
             .update(updates)
-            .eq('id', userId);
+            .eq('id', userId)
+            .select();
 
-        if (error) return error.message;
-        await get().refreshProfile();
+        if (error) {
+            console.error('[AuthStore] updateProfile database error:', error);
+            return error.message;
+        }
+
+        if (!data || data.length === 0) {
+            const rlsMsg = `[AuthStore] updateProfile silent rejection: 0 rows updated. Check Row Level Security (RLS) policies for table 'profiles' and command 'UPDATE' for user: ${userId}. HTTP Status: ${status} (${statusText})`;
+            console.error(rlsMsg);
+            return 'Update silently rejected by database policies (RLS)';
+        }
+
+        console.log('[AuthStore] Profile updated successfully:', data[0]);
+        set({ profile: data[0] as DbProfile });
+
+        // Keep legacy UserStore status in sync to avoid any UI lag/inconsistency
+        if (updates.status) {
+            useUserStore.getState().setStatus(updates.status);
+        }
+
         return null;
     },
 }));

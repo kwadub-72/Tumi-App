@@ -1,7 +1,8 @@
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import React, { useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View, TouchableWithoutFeedback } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import React from 'react';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Colors } from '@/src/shared/theme/Colors';
+import { ActivityIcon } from '../../../shared/components/ActivityIcon';
 import { formatTimeAgo } from '@/src/shared/services/SupabasePostService';
 import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
 
@@ -58,20 +59,13 @@ export function CondensedLiftCard({
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
                         {authorStatus === 'natural' && <MaterialCommunityIcons name="leaf" size={14} color="#1BB607" />}
                         {authorStatus === 'enhanced' && <MaterialCommunityIcons name="hammer" size={14} color="rgba(255,255,255,0.8)" />}
-                        {authorActivityIcon && (
-                            <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-                                <MaterialCommunityIcons
-                                    name={authorActivityIcon as any}
-                                    size={14}
-                                    color='white'
-                                />
-                                {authorActivity?.toLowerCase().includes('bulk') && (
-                                    <Text style={{ color: 'white', fontSize: 8, fontWeight: 'bold', marginLeft: 1, marginTop: -2 }}>+</Text>
-                                )}
-                                {authorActivity?.toLowerCase().includes('cut') && (
-                                    <Text style={{ color: 'white', fontSize: 8, fontWeight: 'bold', marginLeft: 1, marginTop: -2 }}>-</Text>
-                                )}
-                            </View>
+                        {(!!authorActivity || !!authorActivityIcon) && (
+                            <ActivityIcon 
+                                activity={authorActivity || ''} 
+                                icon={authorActivityIcon} 
+                                size={14} 
+                                color={Colors.theme.harvestGold}
+                            />
                         )}
                     </View>
                 </TouchableOpacity>
@@ -104,7 +98,7 @@ export function CondensedLiftCard({
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: Colors.card, // Tribe Green (#A6B89D) equivalent from theme
+        backgroundColor: Colors.theme.charcoal,
         borderRadius: 40, // Pill shape
         padding: 12,
         paddingRight: 16,
@@ -112,7 +106,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.05)',
+        borderColor: 'rgba(218, 165, 32, 0.3)',
     },
     avatar: {
         width: 50,
@@ -153,7 +147,7 @@ const styles = StyleSheet.create({
         paddingRight: 8,
     },
     title: {
-        fontSize: 17,
+        fontSize: 15,
         fontWeight: 'bold',
         color: 'white',
     },
@@ -178,7 +172,7 @@ const styles = StyleSheet.create({
         paddingVertical: 4,
     },
     tribeButton: {
-        backgroundColor: 'white',
+        backgroundColor: Colors.theme.harvestGold,
         width: 28.88,
         height: 28.88,
         borderRadius: 14.44,

@@ -10,14 +10,47 @@ import { ACTIVITIES, resolveActivityIcon } from '@/src/shared/constants/Activiti
 import { ActivityIcon } from '@/src/shared/components/ActivityIcon';
 import { formatTimeAgo } from '@/utils/time';
 
-export function DiscoveryMapCard({ map, isOnboarding }: { map: DiscoveryMap; isOnboarding?: boolean }) {
+import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
+
+export interface DiscoveryMapCardProps {
+    map: DiscoveryMap;
+    isOnboarding?: boolean;
+    onOptionsPress?: () => void;
+    onLikePress?: () => void;
+    onCommentPress?: () => void;
+    onSharePress?: () => void;
+    onCopyPress?: () => void;
+    isLiked?: boolean;
+    likeCount?: number;
+    commentCount?: number;
+    subscribeCount?: number;
+    shareCount?: number;
+}
+
+export function DiscoveryMapCard({
+    map,
+    isOnboarding,
+    onOptionsPress,
+    onLikePress,
+    onCommentPress,
+    onSharePress,
+    onCopyPress,
+    isLiked = false,
+    likeCount = 0,
+    commentCount = 0,
+    subscribeCount = 0,
+    shareCount = 0
+}: DiscoveryMapCardProps) {
     const router = useRouter();
     const { navigateToProfile } = useProfileNavigation();
     const [heartbeatDays, setHeartbeatDays] = useState<number>(0);
     const [trajectory, setTrajectory] = useState<{ shift: number, p: number, c: number, f: number } | null>(null);
 
-    const isLiveActive = map.is_live === true || map.broadcast_status === 'active' || map.broadcast_status === 'ACTIVE';
-    const isLiveEnded = map.broadcast_status === 'ended' || map.broadcast_status === 'ENDED' || map.broadcast_status === 'inactive' || map.broadcast_status === 'INACTIVE' || (map.engine_type === 'LIVE' && !map.is_live);
+    const isLiveActive = map.engine_type?.toUpperCase() === 'LIVE' && (map.is_live === true || map.broadcast_status === 'active' || map.broadcast_status === 'ACTIVE');
+    const isLiveEnded = map.engine_type?.toUpperCase() === 'LIVE' && (map.broadcast_status === 'ended' || map.broadcast_status === 'ENDED' || map.broadcast_status === 'inactive' || map.broadcast_status === 'INACTIVE' || !map.is_live);
+
+    const rawGoal = (map.global_track || 'MAINTENANCE').toUpperCase();
+    const goalText = rawGoal.includes('CUT') ? 'CUT' : (rawGoal.includes('BULK') ? 'BULK' : 'MAINT');
 
     useEffect(() => {
         // Calculate heartbeat days simply using map created_at for now as per instructions
@@ -52,101 +85,129 @@ export function DiscoveryMapCard({ map, isOnboarding }: { map: DiscoveryMap; isO
         }
     };
 
+    const rawEngine = (map.engine_type || '').toUpperCase();
+    let engineText = 'Created'; // Safe default
+
+    if (rawEngine === 'ALGORITHMIC_CREATED') {
+        engineText = 'Created';
+    } else if (rawEngine === 'EXPERIENTIAL' || rawEngine === 'HISTORICAL') {
+        engineText = map.generation_type === 'meal_log' ? 'Meal log' : 'Update';
+    } else if (rawEngine === 'LIVE' || map.is_live === true || map.broadcast_status === 'active') {
+        engineText = 'Live';
+    } else {
+        // Fallback for legacy maps missing an explicit engine_type
+        engineText = map.generation_type === 'meal_log' ? 'Meal log' : (map.generation_type === 'update' ? 'Update' : 'Created');
+    }
+
     return (
         <TouchableOpacity 
             activeOpacity={0.8}
             onPress={() => router.push({ pathname: '/map-preview', params: { map_id: map.id, isOnboarding: isOnboarding ? 'true' : undefined } } as any)}
             style={styles.card}
         >
-            {/* Creator Metadata */}
-            <View style={styles.cardHeader}>
-                <Pressable 
-                    style={styles.creatorInfo} 
-                    onPress={isOnboarding ? undefined : () => navigateToProfile({ id: map.creator_id, handle: map.username || map.creator_handle || '' })}
-                    disabled={isOnboarding}
-                >
-                    {map.avatar_url ? (
-                        <Image 
-                            source={{ uri: map.avatar_url }} 
-                            style={styles.avatar} 
-                        />
-                    ) : (
-                        <Ionicons name="person-circle" size={44} color={Colors.theme.dust} style={{ marginRight: 12 }} />
-                    )}
-                    <View style={styles.creatorText}>
-                        <View style={styles.creatorNameRow}>
-                            <Text style={styles.creatorName}>{map.display_name || 'Anonymous'}</Text>
-                            <Pressable 
-                                onPress={(e) => {
-                                    e.stopPropagation();
-                                    Alert.alert('Status Verification', map.is_natural === false ? 'This creator has marked themselves as enhanced.' : 'This creator has verified natural status.');
-                                }}
-                            >
-                                <MaterialCommunityIcons 
-                                    name={map.is_natural === false ? "needle" : "leaf"} 
-                                    size={14} 
-                                    color={map.is_natural === false ? Colors.theme.burntSienna : Colors.theme.naturalGreen} 
-                                    style={styles.statusIcon} 
-                                />
-                            </Pressable>
-                            <Pressable 
-                                onPress={(e) => {
-                                    e.stopPropagation();
-                                    const actMatch = ACTIVITIES.find(a => a.name === map.activity_type);
-                                    const displayName = actMatch?.displayName || map.activity_type || 'Moderate';
-                                    Alert.alert('Training Focus', `Training Focus: ${displayName}`);
-                                }}
-                            >
-                                <ActivityIcon 
-                                    activity={map.activity_type || ''}
-                                    icon={resolveActivityIcon(map.activity_type, map.activity_icon)}
-                                    size={14} 
-                                    color={Colors.theme.harvestGold} 
-                                 />
-                            </Pressable>
+            {/* Creator Metadata & Title Row Combined */}
+            <View style={[styles.cardHeader, { position: 'relative', marginBottom: 0 }]}>
+                {onOptionsPress && (
+                    <TouchableOpacity
+                        style={{ position: 'absolute', top: 0, right: 0, zIndex: 10, padding: 4 }}
+                        onPress={(e) => {
+                            e.stopPropagation();
+                            onOptionsPress();
+                        }}
+                    >
+                        <Ionicons name="ellipsis-horizontal" size={20} color={Colors.theme.softWhite} />
+                    </TouchableOpacity>
+                )}
+
+                {/* Left Column Wrapper */}
+                <View style={{ flex: 1, justifyContent: 'space-between', paddingRight: 12, marginTop: 28 }}>
+                    <Pressable 
+                        style={styles.creatorInfo} 
+                        onPress={isOnboarding ? undefined : () => navigateToProfile({ id: map.creator_id, handle: map.username || map.creator_handle || '' })}
+                        disabled={isOnboarding}
+                    >
+                        {map.avatar_url ? (
+                            <Image 
+                                source={{ uri: map.avatar_url }} 
+                                style={styles.avatar} 
+                            />
+                        ) : (
+                            <Ionicons name="person-circle" size={44} color={Colors.theme.dust} style={{ marginRight: 12 }} />
+                        )}
+                        <View style={styles.creatorText}>
+                            <View style={styles.creatorNameRow}>
+                                <Text style={styles.creatorName}>{map.display_name || 'Anonymous'}</Text>
+                                <Pressable 
+                                    onPress={(e) => {
+                                        e.stopPropagation();
+                                        Alert.alert('Status Verification', map.is_natural === false ? 'This creator has marked themselves as enhanced.' : 'This creator has verified natural status.');
+                                    }}
+                                >
+                                    <MaterialCommunityIcons 
+                                        name={map.is_natural === false ? "lightning-bolt" : "leaf"} 
+                                        size={14} 
+                                        color={map.is_natural === false ? Colors.theme.burntSienna : Colors.theme.naturalGreen} 
+                                        style={styles.statusIcon} 
+                                    />
+                                </Pressable>
+                                <Pressable 
+                                    onPress={(e) => {
+                                        e.stopPropagation();
+                                        const actMatch = ACTIVITIES.find(a => a.name === map.activity_type);
+                                        const displayName = actMatch?.displayName || map.activity_type || 'Moderate';
+                                        Alert.alert('Training Focus', `Training Focus: ${displayName}`);
+                                    }}
+                                >
+                                    <ActivityIcon 
+                                        activity={map.activity_type || ''}
+                                        icon={resolveActivityIcon(map.activity_type, map.activity_icon)}
+                                        size={14} 
+                                        color={Colors.theme.harvestGold} 
+                                     />
+                                </Pressable>
+                            </View>
+                            <Text style={styles.creatorBio} numberOfLines={1}>
+                                {'@' + (map.username || map.creator_handle || 'creator').replace('@', '')}
+                            </Text>
                         </View>
-                        <Text style={styles.creatorBio} numberOfLines={1}>
-                            {'@' + (map.username || map.creator_handle || 'creator').replace('@', '')}
-                        </Text>
+                    </Pressable>
+
+                    {/* Map Title and Live/Ended Badges */}
+                    <View style={styles.titleRow}>
+                        <Text style={styles.mapTitle}>{map.map_name}</Text>
+                        {isLiveActive && (
+                            <View style={[styles.statusBadge, styles.activeBadge]}>
+                                <Text style={styles.activeBadgeText}>ACTIVE</Text>
+                            </View>
+                        )}
+                        {isLiveEnded && (
+                            <View style={[styles.statusBadge, styles.endedBadge]}>
+                                <Text style={styles.endedBadgeText}>INACTIVE</Text>
+                            </View>
+                        )}
                     </View>
-                </Pressable>
+                </View>
+
+                {/* Right Column Wrapper */}
                 <View style={styles.badgesContainer}>
                     <View style={styles.goalBadge}>
-                        <Text style={styles.goalText}>{map.global_track}</Text>
+                        <Text style={styles.goalText}>{goalText}</Text>
                     </View>
                     <View style={styles.engineBadge}>
                         <Text style={styles.engineText}>
-                            {(isLiveActive || isLiveEnded)
-                                ? 'Live' 
-                                : map.generation_type === 'update' 
-                                    ? 'Update' 
-                                    : map.generation_type === 'meal_log' 
-                                        ? 'Meal log' 
-                                        : 'Created'
-                            }
+                            {engineText}
                         </Text>
+                    </View>
+                    <View style={styles.durationBadge}>
+                        <Text style={styles.durationBadgeText}>{map.total_duration_weeks || 12} Weeks</Text>
                     </View>
                 </View>
             </View>
-
-            {/* Map Title and Live/Ended Badges */}
-            <View style={styles.titleRow}>
-                <Text style={styles.mapTitle}>{map.map_name}</Text>
-                {isLiveActive && (
-                    <View style={[styles.statusBadge, styles.activeBadge]}>
-                        <Text style={styles.activeBadgeText}>ACTIVE</Text>
-                    </View>
-                )}
-                {isLiveEnded && (
-                    <View style={[styles.statusBadge, styles.endedBadge]}>
-                        <Text style={styles.endedBadgeText}>INACTIVE</Text>
-                    </View>
-                )}
-            </View>
+            <View style={{ width: '100%', height: 1, backgroundColor: 'rgba(255, 255, 255, 0.05)', marginTop: 6, marginBottom: 12 }} />
 
             {/* Blueprint Averages Box (rendered for ALL maps) */}
             <View style={styles.trajectoryBox}>
-                <Text style={styles.trajectoryBoxTitle}>MAP AVERAGES</Text>
+                <Text style={[styles.trajectoryBoxTitle, { marginBottom: 12 }]}>MAP AVERAGES</Text>
                 <View style={styles.averagesRow}>
                     <View style={styles.averageItem}>
                         <Text style={styles.averageLabel}>Total calorie shift</Text>
@@ -193,6 +254,71 @@ export function DiscoveryMapCard({ map, isOnboarding }: { map: DiscoveryMap; isO
                     : `Posted: ${formatTimeAgo(map.published_at ? new Date(map.published_at) : new Date(map.created_at))}`
                 }
             </Text>
+
+            {(onLikePress || onCommentPress || onCopyPress || onSharePress) && (
+                <View style={styles.footerActions}>
+                    <View style={styles.actionsRow}>
+                        {onCopyPress && (
+                            <TouchableOpacity
+                                style={styles.actionItem}
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    onCopyPress();
+                                }}
+                            >
+                                <View style={styles.iconBox}>
+                                    <View style={styles.tribeCircle}>
+                                        <TabonoLogo size={20} color={Colors.theme.matteBlack} />
+                                    </View>
+                                </View>
+                                <Text style={styles.actionCount}>{subscribeCount || 0}</Text>
+                            </TouchableOpacity>
+                        )}
+                        {onLikePress && (
+                            <TouchableOpacity 
+                                style={styles.actionItem} 
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    onLikePress();
+                                }}
+                            >
+                                <View style={styles.iconBox}>
+                                    <Ionicons name={isLiked ? "heart" : "heart-outline"} size={28} color={isLiked ? Colors.theme.harvestGold : Colors.theme.dust} />
+                                </View>
+                                <Text style={styles.actionCount}>{likeCount}</Text>
+                            </TouchableOpacity>
+                        )}
+                        {onCommentPress && (
+                            <TouchableOpacity 
+                                style={styles.actionItem} 
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    onCommentPress();
+                                }}
+                            >
+                                <View style={styles.iconBox}>
+                                    <Ionicons name="chatbubble-ellipses-outline" size={26} color={Colors.theme.dust} />
+                                </View>
+                                <Text style={styles.actionCount}>{commentCount}</Text>
+                            </TouchableOpacity>
+                        )}
+                        {onSharePress && (
+                            <TouchableOpacity 
+                                style={styles.actionItem} 
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    onSharePress();
+                                }}
+                            >
+                                <View style={styles.iconBox}>
+                                    <Ionicons name="arrow-redo-outline" size={26} color={Colors.theme.dust} />
+                                </View>
+                                <Text style={styles.actionCount}>{shareCount || 0}</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </View>
+            )}
         </TouchableOpacity>
     );
 }
@@ -209,13 +335,12 @@ const styles = StyleSheet.create({
     cardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: 16,
+        alignItems: 'stretch',
+        marginBottom: 0,
     },
     creatorInfo: {
         flexDirection: 'row',
         alignItems: 'center',
-        flex: 1,
     },
     avatar: {
         width: 44,
@@ -250,6 +375,7 @@ const styles = StyleSheet.create({
         flexDirection: 'column',
         alignItems: 'flex-end',
         gap: 6,
+        marginTop: 28,
     },
     goalBadge: {
         backgroundColor: 'rgba(218, 165, 32, 0.15)',
@@ -273,6 +399,17 @@ const styles = StyleSheet.create({
         fontSize: 11,
         fontWeight: '600',
     },
+    durationBadge: {
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    durationBadgeText: {
+        color: Colors.theme.dust,
+        fontSize: 10,
+        fontWeight: '600',
+    },
     mapTitle: {
         color: Colors.theme.softWhite,
         fontSize: 20,
@@ -283,7 +420,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 16,
+        marginBottom: 0,
+        marginTop: 20,
         gap: 12,
     },
     statusBadge: {
@@ -354,6 +492,8 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0, 0, 0, 0.2)',
         borderRadius: 12,
         padding: 16,
+        marginTop: 8,
+        marginHorizontal: -8,
     },
     trajectoryBoxTitle: {
         color: Colors.theme.dust,
@@ -377,7 +517,7 @@ const styles = StyleSheet.create({
     },
     averageValue: {
         color: Colors.theme.softWhite,
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: 'bold',
     },
     averageDivider: {
@@ -430,7 +570,47 @@ const styles = StyleSheet.create({
         fontSize: 11,
         fontWeight: '600',
         textAlign: 'right',
-        marginTop: 10,
+        marginTop: 12,
         opacity: 0.8,
-    }
+        alignSelf: 'flex-end',
+    },
+    footerActions: {
+        marginTop: 15,
+        paddingTop: 10,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255, 255, 255, 0.05)',
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    actionsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 32,
+    },
+    actionItem: {
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+    },
+    iconBox: {
+        width: 32,
+        height: 32,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    actionCount: {
+        color: Colors.theme.softWhite,
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    tribeCircle: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: Colors.theme.harvestGold,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
 });

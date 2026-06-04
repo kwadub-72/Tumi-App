@@ -16,7 +16,6 @@ import TribeShareModal from '@/src/features/feed/components/TribeShareModal';
 import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
 import * as Haptics from 'expo-haptics';
 import { useAuthStore } from '@/store/AuthStore';
-import { useMacrobookStore } from '@/src/store/useMacrobookStore';
 
 type NavTab = 'Following' | 'Diary' | 'Tribe';
 
@@ -36,7 +35,6 @@ export default function PostDetailScreen() {
     const router = useRouter();
     const userInfo = useUserStore();
     const session = useAuthStore((state) => state.session);
-    const macrobookStore = useMacrobookStore();
     const insets = useSafeAreaInsets();
     
     const [post, setPost] = useState<FeedPost | null>(null);
@@ -211,7 +209,7 @@ export default function PostDetailScreen() {
                         <Text style={styles.commentHandle}>{item.user.handle}</Text>
                         {item.user.status && (item.user.status === 'natural' || item.user.status === 'enhanced') && (
                             item.user.status === 'enhanced' ? (
-                                <MaterialCommunityIcons name="lightning-bolt" size={12} color="#FFD700" style={{ marginLeft: 2 }} />
+                                <MaterialCommunityIcons name="lightning-bolt" size={12} color={Colors.theme.burntSienna} style={{ marginLeft: 2 }} />
                             ) : (
                                 <Ionicons name="leaf" size={12} color={Colors.natural} style={{ marginLeft: 2 }} />
                             )
@@ -343,58 +341,32 @@ export default function PostDetailScreen() {
 
     const handleAddToMacroBook = async () => {
         if (!post || !session?.user?.id) return;
-        
-        let itemsToAdd: { targets: any, label: string }[] = [];
-
-        if (isSelectMode && selectedItems.length > 0) {
-            for (const key of selectedItems) {
-                if (key === 'old' && post.macroUpdate) {
-                    itemsToAdd.push({ 
-                        targets: post.macroUpdate.oldTargets, 
-                        label: `Old targets (${post.macroUpdate.oldDate || 'Previous'}) from ${post.user.handle}` 
-                    });
-                } else if ((key === 'new' || key === 'diff') && post.macroUpdate) {
-                    itemsToAdd.push({ 
-                        targets: post.macroUpdate.newTargets, 
-                        label: `New targets from ${post.user.handle}` 
-                    });
-                } else if ((key === 'snapshot' || key === 'targets') && post.snapshot) {
-                    itemsToAdd.push({ 
-                        targets: post.snapshot.targets, 
-                        label: `Snapshot from ${post.user.handle}` 
-                    });
-                }
-            }
-        } else {
-            const targets = post.macroUpdate?.newTargets || post.snapshot?.targets;
-            if (targets) {
-                itemsToAdd.push({ 
-                    targets, 
-                    label: post.caption || `Macros from ${post.user.handle}` 
-                });
-            }
-        }
-
-        if (itemsToAdd.length === 0) return;
 
         setOptionsModalVisible(false);
         setIsSelectMode(false);
         
         try {
-            for (const item of itemsToAdd) {
-                macrobookStore.addEntry({
-                    label: item.label,
-                    calories: Math.abs(item.targets.p * 4 + item.targets.c * 4 + item.targets.f * 9),
-                    p: Math.abs(item.targets.p),
-                    c: Math.abs(item.targets.c),
-                    f: Math.abs(item.targets.f)
-                });
+            if (isSelectMode && selectedItems.length > 0) {
+                for (const key of selectedItems) {
+                    let type: 'old' | 'new' | 'targets' | 'delta' | null = null;
+                    if (key === 'old' && post.macroUpdate) type = 'old';
+                    else if (key === 'new' && post.macroUpdate) type = 'new';
+                    else if (key === 'diff' && post.macroUpdate) type = 'delta';
+                    else if ((key === 'snapshot' || key === 'targets') && post.snapshot) type = 'targets';
+                    
+                    if (type) {
+                        await SupabasePostService.addToMacroBook(session.user.id, post.id, type);
+                    }
+                }
+            } else {
+                const type = post.macroUpdate ? 'delta' : 'targets';
+                await SupabasePostService.addToMacroBook(session.user.id, post.id, type);
             }
             
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             setToastType('success');
             setShowDeleteToast(true);
-            setToastMessage(`${itemsToAdd.length} macro set${itemsToAdd.length > 1 ? 's' : ''} added to Macro book`);
+            setToastMessage('Added to Macro book');
             setTimeout(() => {
                 setShowDeleteToast(false);
             }, 2000);
@@ -402,6 +374,12 @@ export default function PostDetailScreen() {
             setSelectedItems([]);
         } catch (error) {
             console.error('Failed to add to macro book:', error);
+            setToastType('error');
+            setToastMessage('Failed to add to Macro book');
+            setShowDeleteToast(true);
+            setTimeout(() => {
+                setShowDeleteToast(false);
+            }, 2000);
         }
     };
 
@@ -466,9 +444,9 @@ export default function PostDetailScreen() {
                             <Ionicons 
                                 name={toastType === 'error' ? "close-circle" : "checkmark-circle"} 
                                 size={20} 
-                                color={toastType === 'error' ? "white" : "#F5F5DC"} 
+                                color={toastType === 'error' ? "white" : Colors.black} 
                             />
-                            <Text style={[styles.toastText, toastType === 'error' && { color: 'white' }]}>
+                            <Text style={[styles.toastText, toastType === 'error' ? { color: 'white' } : { color: Colors.black }]}>
                                 {toastMessage}
                             </Text>
                         </TouchableOpacity>
@@ -760,7 +738,7 @@ const styles = StyleSheet.create({
     toast: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#4F6352',
+        backgroundColor: Colors.primary,
         paddingHorizontal: 20,
         paddingVertical: 14,
         borderRadius: 16,
@@ -776,7 +754,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#825858',
     },
     toastText: {
-        color: '#F5F5DC',
+        color: Colors.black,
         fontSize: 15,
         fontWeight: '600',
         flexShrink: 1,
