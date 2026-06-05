@@ -46,6 +46,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "0e542030-8c49-433f-8064-0342777e9cd4"
+      }
+    },
+    "owner": "kwadub"
   }
 }

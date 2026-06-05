@@ -11,6 +11,7 @@ import { useAuthStore, DbProfile } from '../store/AuthStore';
 import { useNetworkStore } from '@/src/store/NetworkStore';
 import { supabase } from '@/src/shared/services/supabase';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { usePushNotifications } from '../src/shared/hooks/usePushNotifications';
 
 const queryClient = new QueryClient();
 
@@ -22,6 +23,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const segments = useSegments();
     const rootNavigationState = useRootNavigationState();
+
+    usePushNotifications();
 
     useEffect(() => {
         initialize();
@@ -105,6 +108,7 @@ export default function RootLayout() {
                             <Stack.Screen name="scan-result" options={{ presentation: 'transparentModal', animation: 'fade' }} />
                             <Stack.Screen name="camera-capture" options={{ presentation: 'fullScreenModal' }} />
                             <Stack.Screen name="chiefs-chamber" options={{ presentation: 'fullScreenModal' }} />
+                            <Stack.Screen name="notifications" />
                         </Stack>
                     </AuthGate>
                     <StatusBar style="dark" />

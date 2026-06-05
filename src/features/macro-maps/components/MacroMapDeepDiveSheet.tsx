@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, TouchableWithoutFeedback } from 'react-native';
 import { Colors } from '@/src/shared/theme/Colors';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { MacroMapFeedData, MacroMapCheckpoint } from '@/src/shared/models/types';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useMapStore } from '@/src/features/macromaps/store/useMapStore';
 
 interface DeepDiveSheetProps {
     visible: boolean;
@@ -16,6 +16,14 @@ interface DeepDiveSheetProps {
 export function MacroMapDeepDiveSheet({ visible, onClose, mapData, isCreator, onToggleOutlierFlare }: DeepDiveSheetProps) {
     const [flaredCheckpoints, setFlaredCheckpoints] = useState<Set<string>>(new Set());
 
+    const { activeMapProgress, fetchMapProgress, jumpToCheckpoint, markCheckpointComplete } = useMapStore();
+
+    useEffect(() => {
+        if (visible && mapData.id) {
+            fetchMapProgress(mapData.id);
+        }
+    }, [visible, mapData.id, fetchMapProgress]);
+
     const toggleFlare = (id: string) => {
         const newSet = new Set(flaredCheckpoints);
         const isNowFlared = !newSet.has(id);
@@ -25,16 +33,34 @@ export function MacroMapDeepDiveSheet({ visible, onClose, mapData, isCreator, on
         if (onToggleOutlierFlare) onToggleOutlierFlare(id, isNowFlared);
     };
 
-    const renderCheckpoint = (cp: any, index: number) => {
+    const activeCheckpointId = activeMapProgress?.current_checkpoint_id || (mapData.checkpoints.length > 0 ? mapData.checkpoints[0].id : null);
+    const completed = activeMapProgress?.completed_checkpoint_ids || [];
+
+    const activeCheckpointIndex = mapData.checkpoints.findIndex(cp => cp.id === activeCheckpointId);
+    const activeCheckpoint = activeCheckpointIndex !== -1 ? mapData.checkpoints[activeCheckpointIndex] : (mapData.checkpoints.length > 0 ? mapData.checkpoints[0] : null);
+
+    const currentIndex = activeCheckpointIndex !== -1 ? activeCheckpointIndex : 0;
+    const nextCheckpoint = currentIndex + 1 < mapData.checkpoints.length ? mapData.checkpoints[currentIndex + 1] : null;
+
+    const handleSkip = () => {
+        if (nextCheckpoint) {
+            jumpToCheckpoint(mapData.id, nextCheckpoint.id);
+        }
+    };
+
+    const handleComplete = () => {
+        if (activeCheckpointId) {
+            markCheckpointComplete(mapData.id, activeCheckpointId);
+        }
+    };
+
+    const renderCheckpoint = (cp: MacroMapCheckpoint, index: number) => {
+        const cpAny = cp as any;
         const isPositive = cp.delta?.weight !== undefined && cp.delta.weight > 0;
         const deltaColor = isPositive ? Colors.theme.oliveDrab : Colors.theme.burntSienna;
 
         return (
             <View key={cp.id || `cp-${index}`} style={styles.checkpointContainer}>
-                <View style={styles.timelineColumn}>
-                    <View style={styles.timelineDot} />
-                    {index < mapData.checkpoints.length - 1 && <View style={styles.timelineLine} />}
-                </View>
                 <View style={styles.checkpointCard}>
                     <View style={styles.cardHeader}>
                         <Text style={styles.dateText}>{new Date(cp.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</Text>
@@ -74,15 +100,15 @@ export function MacroMapDeepDiveSheet({ visible, onClose, mapData, isCreator, on
                     <View style={[styles.metricsRow, { marginTop: 8 }]}>
                         <View style={styles.metricItem}>
                             <Text style={styles.metricLabel}>Protein</Text>
-                            <Text style={styles.metricValue}>{cp.targets?.p ? `${cp.targets.p}g` : (cp.protein_ratio ? `${cp.protein_ratio}%` : '--')}</Text>
+                            <Text style={styles.metricValue}>{cp.targets?.p ? `${cp.targets.p}g` : (cpAny.protein_ratio ? `${cpAny.protein_ratio}%` : '--')}</Text>
                         </View>
                         <View style={styles.metricItem}>
                             <Text style={styles.metricLabel}>Carbs</Text>
-                            <Text style={styles.metricValue}>{cp.targets?.c ? `${cp.targets.c}g` : (cp.carbs_ratio ? `${cp.carbs_ratio}%` : '--')}</Text>
+                            <Text style={styles.metricValue}>{cp.targets?.c ? `${cp.targets.c}g` : (cpAny.carbs_ratio ? `${cpAny.carbs_ratio}%` : '--')}</Text>
                         </View>
                         <View style={styles.metricItem}>
                             <Text style={styles.metricLabel}>Fats</Text>
-                            <Text style={styles.metricValue}>{cp.targets?.f ? `${cp.targets.f}g` : (cp.fats_ratio ? `${cp.fats_ratio}%` : '--')}</Text>
+                            <Text style={styles.metricValue}>{cp.targets?.f ? `${cp.targets.f}g` : (cpAny.fats_ratio ? `${cpAny.fats_ratio}%` : '--')}</Text>
                         </View>
                     </View>
 
@@ -101,6 +127,108 @@ export function MacroMapDeepDiveSheet({ visible, onClose, mapData, isCreator, on
         );
     };
 
+    const renderActiveCheckpoint = () => {
+        if (!activeCheckpoint) return null;
+        return renderCheckpoint(activeCheckpoint, activeCheckpointIndex);
+    };
+
+    const renderTimelineHeader = () => {
+        if (!mapData.checkpoints || mapData.checkpoints.length === 0) return null;
+
+        return (
+            <View style={styles.stepperOuterContainer}>
+                <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.stepperScrollContent}
+                >
+                    {mapData.checkpoints.map((cp, idx) => {
+                        const isCompleted = completed.includes(cp.id);
+                        const isActive = cp.id === activeCheckpointId;
+                        const isFuture = !isCompleted && !isActive;
+
+                        return (
+                            <React.Fragment key={cp.id || `step-${idx}`}>
+                                <View style={styles.stepCircleWrapper}>
+                                    <TouchableOpacity 
+                                        onPress={() => jumpToCheckpoint(mapData.id, cp.id)}
+                                        style={[
+                                            styles.stepCircle,
+                                            isActive && styles.stepCircleActive,
+                                            isCompleted && styles.stepCircleCompleted,
+                                            isFuture && styles.stepCircleFuture,
+                                        ]}
+                                    >
+                                        {isCompleted ? (
+                                            <View style={styles.checkmarkBackdrop}>
+                                                <Ionicons name="checkmark" size={12} color={Colors.theme.matteBlack} />
+                                            </View>
+                                        ) : (
+                                            <Text style={[
+                                                styles.stepText,
+                                                isActive && styles.stepTextActive,
+                                                isFuture && styles.stepTextFuture,
+                                            ]}>
+                                                {idx + 1}
+                                            </Text>
+                                        )}
+                                    </TouchableOpacity>
+                                    <Text style={[
+                                        styles.stepDateLabel,
+                                        isActive && styles.stepDateLabelActive,
+                                        isCompleted && styles.stepDateLabelCompleted,
+                                    ]}>
+                                        {new Date(cp.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                    </Text>
+                                </View>
+                                {idx < mapData.checkpoints.length - 1 && (
+                                    <View style={[
+                                        styles.connectorLine,
+                                        isCompleted ? styles.connectorCompleted : styles.connectorFuture
+                                    ]} />
+                                )}
+                            </React.Fragment>
+                        );
+                    })}
+                </ScrollView>
+            </View>
+        );
+    };
+
+    const renderFooter = () => {
+        const isLast = currentIndex === mapData.checkpoints.length - 1;
+
+        return (
+            <View style={styles.footerContainer}>
+                <TouchableOpacity
+                    style={[
+                        styles.footerButton, 
+                        styles.skipButton, 
+                        isLast && styles.skipButtonDisabled
+                    ]}
+                    onPress={handleSkip}
+                    disabled={isLast}
+                >
+                    <Text style={[
+                        styles.skipButtonText, 
+                        isLast && styles.skipButtonTextDisabled
+                    ]}>
+                        Skip / Jump
+                    </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.footerButton, styles.completeButton]}
+                    onPress={handleComplete}
+                >
+                    <Text style={styles.completeButtonText}>
+                        {isLast ? 'Complete & Finish' : 'Complete & Continue'}
+                    </Text>
+                </TouchableOpacity>
+            </View>
+        );
+    };
+
     return (
         <Modal visible={visible} transparent animationType="slide">
             <TouchableWithoutFeedback onPress={onClose}>
@@ -115,9 +243,17 @@ export function MacroMapDeepDiveSheet({ visible, onClose, mapData, isCreator, on
                     </TouchableOpacity>
                 </View>
                 
-                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-                    {mapData.checkpoints.map((cp, index) => renderCheckpoint(cp, index))}
+                {renderTimelineHeader()}
+
+                <ScrollView 
+                    style={styles.scrollView}
+                    showsVerticalScrollIndicator={false} 
+                    contentContainerStyle={styles.scrollContent}
+                >
+                    {renderActiveCheckpoint()}
                 </ScrollView>
+
+                {renderFooter()}
             </View>
         </Modal>
     );
@@ -143,6 +279,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.5,
         shadowRadius: 10,
         elevation: 10,
+        flexDirection: 'column',
     },
     handleBar: {
         width: 40,
@@ -167,6 +304,9 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: Colors.theme.harvestGold,
     },
+    scrollView: {
+        flex: 1,
+    },
     scrollContent: {
         padding: 20,
         paddingBottom: 40,
@@ -174,24 +314,6 @@ const styles = StyleSheet.create({
     checkpointContainer: {
         flexDirection: 'row',
         marginBottom: 16,
-    },
-    timelineColumn: {
-        width: 24,
-        alignItems: 'center',
-        marginRight: 12,
-    },
-    timelineDot: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        backgroundColor: Colors.theme.harvestGold,
-        marginTop: 6,
-    },
-    timelineLine: {
-        flex: 1,
-        width: 2,
-        backgroundColor: Colors.theme.charcoal,
-        marginTop: 4,
     },
     checkpointCard: {
         flex: 1,
@@ -262,5 +384,131 @@ const styles = StyleSheet.create({
     flareText: {
         color: Colors.theme.dust,
         fontSize: 14,
+    },
+    stepperOuterContainer: {
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.theme.charcoal,
+        paddingVertical: 12,
+    },
+    stepperScrollContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingBottom: 16,
+    },
+    stepCircleWrapper: {
+        alignItems: 'center',
+        position: 'relative',
+        width: 60,
+    },
+    stepCircle: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    stepCircleActive: {
+        backgroundColor: Colors.theme.harvestGold,
+    },
+    stepCircleCompleted: {
+        backgroundColor: Colors.theme.charcoal,
+        borderWidth: 1.5,
+        borderColor: 'rgba(218, 165, 32, 0.3)',
+    },
+    stepCircleFuture: {
+        backgroundColor: Colors.theme.charcoal,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+    },
+    checkmarkBackdrop: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: Colors.theme.harvestGold,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    stepText: {
+        fontSize: 14,
+        fontWeight: 'bold',
+    },
+    stepTextActive: {
+        color: Colors.theme.matteBlack,
+    },
+    stepTextFuture: {
+        color: Colors.theme.dust,
+        opacity: 0.5,
+    },
+    stepDateLabel: {
+        position: 'absolute',
+        top: 36,
+        fontSize: 10,
+        color: Colors.theme.dust,
+        opacity: 0.6,
+        textAlign: 'center',
+        width: 70,
+    },
+    stepDateLabelActive: {
+        color: Colors.theme.harvestGold,
+        fontWeight: 'bold',
+        opacity: 1,
+    },
+    stepDateLabelCompleted: {
+        color: Colors.theme.softWhite,
+        opacity: 0.8,
+    },
+    connectorLine: {
+        height: 2,
+        width: 30,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    connectorCompleted: {
+        backgroundColor: Colors.theme.harvestGold,
+    },
+    connectorFuture: {
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    footerContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        borderTopWidth: 1,
+        borderTopColor: Colors.theme.charcoal,
+        backgroundColor: Colors.theme.matteBlack,
+        gap: 12,
+    },
+    footerButton: {
+        flex: 1,
+        height: 48,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    skipButton: {
+        backgroundColor: Colors.theme.charcoal,
+        borderWidth: 1.5,
+        borderColor: Colors.theme.harvestGold,
+    },
+    skipButtonDisabled: {
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    skipButtonText: {
+        color: Colors.theme.harvestGold,
+        fontSize: 15,
+        fontWeight: '600',
+    },
+    skipButtonTextDisabled: {
+        color: Colors.theme.dust,
+        opacity: 0.3,
+    },
+    completeButton: {
+        backgroundColor: Colors.theme.harvestGold,
+    },
+    completeButtonText: {
+        color: Colors.theme.matteBlack,
+        fontSize: 15,
+        fontWeight: 'bold',
     },
 });

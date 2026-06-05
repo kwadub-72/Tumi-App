@@ -1,4 +1,5 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '../src/shared/theme/Colors';
 
@@ -13,7 +14,7 @@ export default function VerifiedModal({ visible, onClose, status }: VerifiedModa
     const text = isEnhanced ? 'Self-declared Enhanced' : 'Tribe-verified natural';
     const IconComponent = isEnhanced ? MaterialCommunityIcons : Ionicons;
     const iconName = isEnhanced ? 'lightning-bolt' : 'leaf';
-    const iconColor = isEnhanced ? Colors.theme.burntSienna : Colors.success;
+    const iconColor = isEnhanced ? Colors.theme.harvestGold : '#1BB607';
 
     return (
         <Modal
@@ -48,7 +49,9 @@ const styles = StyleSheet.create({
     },
     pill: {
         flexDirection: 'row',
-        backgroundColor: '#4F6352', // Dark Green
+        backgroundColor: Colors.theme.charcoal,
+        borderWidth: 1,
+        borderColor: Colors.theme.harvestGold,
         paddingHorizontal: 32,
         paddingVertical: 16,
         borderRadius: 40,
@@ -63,7 +66,7 @@ const styles = StyleSheet.create({
         marginRight: 12,
     },
     text: {
-        color: '#F5F5DC', // Beige
+        color: Colors.theme.softWhite,
         fontSize: 20,
         fontStyle: 'italic',
         fontWeight: '600',

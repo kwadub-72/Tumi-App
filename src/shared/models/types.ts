@@ -71,6 +71,7 @@ export interface User {
         f: number;
         calories: number;
     };
+    expoPushToken?: string;
 }
 
 export interface FeedPost {
@@ -129,6 +130,11 @@ export interface MacroMapFeedData {
     checkpoints: MacroMapCheckpoint[];
     name?: string;
     profiles?: any;
+}
+
+export interface ActiveMapProgress {
+    current_checkpoint_id: string | null;
+    completed_checkpoint_ids: string[];
 }
 
 export interface Snapshot {

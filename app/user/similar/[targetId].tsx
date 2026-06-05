@@ -122,8 +122,8 @@ function ProfileSlide({
                                 size={20}
                                 color={
                                     user.status === 'enhanced'
-                                        ? Colors.theme.burntSienna
-                                        : '#4ADE80'
+                                        ? Colors.theme.harvestGold
+                                        : '#1BB607'
                                 }
                                 style={{ marginLeft: 6 }}
                             />
@@ -138,7 +138,7 @@ function ProfileSlide({
                                         ) as any
                                     }
                                     size={18}
-                                    color="white"
+                                    color={Colors.theme.harvestGold}
                                 />
                                 {isBulk && (
                                     <Text style={styles.activitySymbol}>+</Text>
@@ -200,7 +200,7 @@ function ProfileSlide({
                         <MaterialCommunityIcons
                             name="fire"
                             size={26}
-                            color="rgba(255,255,255,0.5)"
+                            color={Colors.theme.harvestGold}
                         />
                         <Text style={styles.metricValue}>
                             {user.stats?.meals ?? 0}
@@ -211,7 +211,7 @@ function ProfileSlide({
                         <MaterialCommunityIcons
                             name="dumbbell"
                             size={26}
-                            color="rgba(255,255,255,0.5)"
+                            color={Colors.theme.harvestGold}
                         />
                         <Text style={styles.metricValue}>
                             {user.stats?.workouts ?? 0}
@@ -222,7 +222,7 @@ function ProfileSlide({
                         <Ionicons
                             name="stats-chart"
                             size={26}
-                            color="rgba(255,255,255,0.5)"
+                            color={Colors.theme.harvestGold}
                         />
                         <Text style={styles.metricValue}>
                             {user.stats?.updates ?? 0}
@@ -249,12 +249,12 @@ function ProfileSlide({
                                   : 'account-plus'
                         }
                         size={20}
-                        color={isFollowing || isRequested ? '#F5F5DC' : '#4F6352'}
+                        color={isFollowing || isRequested ? Colors.theme.matteBlack : Colors.theme.harvestGold}
                     />
                     <Text
                         style={[
                             styles.followBtnText,
-                            (isFollowing || isRequested) && { color: '#F5F5DC' },
+                            (isFollowing || isRequested) && { color: Colors.theme.matteBlack },
                         ]}
                     >
                         {isFollowing
@@ -272,7 +272,8 @@ function ProfileSlide({
                     <MaterialCommunityIcons
                         name="chevron-down"
                         size={24}
-                        color="rgba(47,58,39,0.4)"
+                        color={Colors.theme.dust}
+                        style={{ opacity: 0.5 }}
                     />
                     <Text style={styles.swipeHintText}>Swipe down</Text>
                 </View>
@@ -328,7 +329,7 @@ export default function SimilarProfilesScreen() {
                     { justifyContent: 'center', alignItems: 'center' },
                 ]}
             >
-                <ActivityIndicator size="large" color={Colors.primary} />
+                <ActivityIndicator size="large" color={Colors.theme.harvestGold} />
                 <Text style={styles.loadingText}>Finding similar profiles…</Text>
             </View>
         );
@@ -346,7 +347,7 @@ export default function SimilarProfilesScreen() {
                 <MaterialCommunityIcons
                     name="alert-circle-outline"
                     size={56}
-                    color={Colors.primary}
+                    color={Colors.theme.dust}
                 />
                 <Text style={styles.errorText}>{error}</Text>
                 <TouchableOpacity style={styles.retryBtn} onPress={refresh}>
@@ -370,7 +371,7 @@ export default function SimilarProfilesScreen() {
                         <Ionicons
                             name="arrow-back"
                             size={26}
-                            color={Colors.primary}
+                            color={Colors.theme.harvestGold}
                         />
                     </TouchableOpacity>
                     <Text style={styles.screenTitle}>Similar profiles</Text>
@@ -381,7 +382,8 @@ export default function SimilarProfilesScreen() {
                     <MaterialCommunityIcons
                         name="account-group-outline"
                         size={80}
-                        color="rgba(47,58,39,0.2)"
+                        color={Colors.theme.dust}
+                        style={{ opacity: 0.5 }}
                     />
                     <Text style={styles.emptyTitle}>No matches found</Text>
                     <Text style={styles.emptySubtitle}>
@@ -411,7 +413,7 @@ export default function SimilarProfilesScreen() {
                     <Ionicons
                         name="arrow-back"
                         size={26}
-                        color={Colors.primary}
+                        color={Colors.theme.harvestGold}
                     />
                 </TouchableOpacity>
 
@@ -469,7 +471,7 @@ const CARD_HEIGHT = height - 120;
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: Colors.background,
+        backgroundColor: Colors.theme.matteBlack,
     },
     list: {
         flex: 1,
@@ -485,7 +487,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 16,
         paddingBottom: 12,
-        backgroundColor: Colors.background,
+        backgroundColor: Colors.theme.matteBlack,
         zIndex: 20,
     },
     backBtn: {
@@ -501,11 +503,11 @@ const styles = StyleSheet.create({
     screenTitle: {
         fontSize: 18,
         fontWeight: '800',
-        color: Colors.primary,
+        color: Colors.theme.harvestGold,
     },
     screenSubtitle: {
         fontSize: 12,
-        color: 'rgba(47,58,39,0.5)',
+        color: Colors.theme.dust,
         fontWeight: '500',
         marginTop: 1,
     },
@@ -516,7 +518,7 @@ const styles = StyleSheet.create({
     counterText: {
         fontSize: 13,
         fontWeight: '700',
-        color: Colors.primary,
+        color: Colors.theme.harvestGold,
     },
 
     slide: {
@@ -536,22 +538,22 @@ const styles = StyleSheet.create({
         width: 6,
         height: 6,
         borderRadius: 3,
-        backgroundColor: 'rgba(47,58,39,0.2)',
+        backgroundColor: 'rgba(255,255,255,0.2)',
     },
     pipActive: {
-        backgroundColor: Colors.primary,
+        backgroundColor: Colors.theme.harvestGold,
         width: 20,
     },
 
     // ── Card
     card: {
         width: '100%',
-        backgroundColor: '#A8C0A8',
+        backgroundColor: Colors.theme.charcoal,
         borderRadius: 28,
         padding: 24,
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: '#8FA88F',
+        borderColor: 'rgba(255, 255, 255, 0.05)',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.12,
@@ -567,14 +569,16 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: 16,
         right: 16,
-        backgroundColor: 'rgba(47,58,39,0.85)',
+        backgroundColor: Colors.theme.matteBlack,
         borderRadius: 14,
+        borderWidth: 1,
+        borderColor: Colors.theme.harvestGold,
         paddingHorizontal: 10,
         paddingVertical: 5,
         alignItems: 'center',
     },
     matchBadgeText: {
-        color: '#F5F5DC',
+        color: Colors.theme.harvestGold,
         fontSize: 20,
         fontWeight: '900',
         lineHeight: 22,
@@ -608,7 +612,7 @@ const styles = StyleSheet.create({
         height: 124,
         borderRadius: 62,
         borderWidth: 2.5,
-        borderColor: 'rgba(255,255,255,0.5)',
+        borderColor: Colors.theme.dust,
         marginTop: 8,
         marginBottom: 14,
     },
@@ -625,7 +629,7 @@ const styles = StyleSheet.create({
     name: {
         fontSize: 25,
         fontWeight: 'bold',
-        color: 'white',
+        color: Colors.theme.softWhite,
         textAlign: 'center',
     },
     activityRow: {
@@ -634,13 +638,13 @@ const styles = StyleSheet.create({
         marginLeft: 6,
     },
     activitySymbol: {
-        color: 'white',
+        color: Colors.theme.harvestGold,
         fontSize: 11,
         fontWeight: 'bold',
         marginTop: -2,
     },
     handle: {
-        color: 'rgba(255,255,255,0.7)',
+        color: Colors.theme.dust,
         fontSize: 17,
         fontWeight: '500',
         marginTop: 2,
@@ -650,7 +654,7 @@ const styles = StyleSheet.create({
     statsRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.15)',
+        backgroundColor: 'rgba(255,255,255,0.05)',
         borderRadius: 16,
         paddingVertical: 12,
         paddingHorizontal: 16,
@@ -664,15 +668,15 @@ const styles = StyleSheet.create({
     statPillDivider: {
         width: 1,
         height: 32,
-        backgroundColor: 'rgba(255,255,255,0.25)',
+        backgroundColor: 'rgba(255,255,255,0.1)',
     },
     statValue: {
-        color: 'white',
+        color: Colors.theme.softWhite,
         fontSize: 17,
         fontWeight: '700',
     },
     statLabel: {
-        color: 'rgba(255,255,255,0.65)',
+        color: Colors.theme.dust,
         fontSize: 11,
         fontWeight: '500',
         marginTop: 2,
@@ -680,21 +684,21 @@ const styles = StyleSheet.create({
 
     // ── Activity pill
     activityPill: {
-        backgroundColor: 'rgba(47,58,39,0.4)',
+        backgroundColor: 'rgba(218, 165, 32, 0.1)',
         borderRadius: 20,
         paddingHorizontal: 16,
         paddingVertical: 5,
         marginBottom: 10,
     },
     activityPillText: {
-        color: 'white',
+        color: Colors.theme.harvestGold,
         fontSize: 13,
         fontWeight: '700',
     },
 
     // ── Tribe name
     tribeName: {
-        color: '#421C1C',
+        color: Colors.theme.burntSienna,
         fontSize: 18,
         fontWeight: '900',
         fontStyle: 'italic',
@@ -706,7 +710,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-around',
         borderTopWidth: 1,
-        borderTopColor: 'rgba(255,255,255,0.2)',
+        borderTopColor: 'rgba(255,255,255,0.05)',
         paddingTop: 12,
         marginTop: 4,
         width: '100%',
@@ -719,12 +723,12 @@ const styles = StyleSheet.create({
     metricValue: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: 'white',
+        color: Colors.theme.softWhite,
         marginTop: 4,
     },
     metricLabel: {
         fontSize: 11,
-        color: 'rgba(255,255,255,0.7)',
+        color: Colors.theme.dust,
         marginTop: 1,
     },
 
@@ -733,21 +737,23 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        backgroundColor: 'white',
+        backgroundColor: Colors.theme.charcoal,
+        borderWidth: 1,
+        borderColor: Colors.theme.harvestGold,
         borderRadius: 24,
         paddingVertical: 12,
         paddingHorizontal: 28,
     },
     followBtnActive: {
-        backgroundColor: '#2F3A27',
+        backgroundColor: Colors.theme.harvestGold,
     },
     followBtnRequested: {
-        backgroundColor: 'gray',
+        backgroundColor: Colors.theme.dust,
     },
     followBtnText: {
         fontSize: 17,
         fontWeight: '700',
-        color: '#4F6352',
+        color: Colors.theme.harvestGold,
     },
 
     // ── Swipe hint
@@ -758,7 +764,7 @@ const styles = StyleSheet.create({
     },
     swipeHintText: {
         fontSize: 12,
-        color: 'rgba(47,58,39,0.6)',
+        color: Colors.theme.dust,
         fontWeight: '500',
         marginTop: 2,
     },
@@ -767,39 +773,41 @@ const styles = StyleSheet.create({
     loadingText: {
         marginTop: 14,
         fontSize: 15,
-        color: Colors.primary,
+        color: Colors.theme.harvestGold,
         fontWeight: '500',
     },
     errorText: {
         marginTop: 12,
         fontSize: 15,
-        color: Colors.primary,
+        color: Colors.theme.harvestGold,
         fontWeight: '500',
         textAlign: 'center',
         paddingHorizontal: 32,
     },
     retryBtn: {
         marginTop: 16,
-        backgroundColor: Colors.primary,
+        backgroundColor: Colors.theme.charcoal,
+        borderWidth: 1,
+        borderColor: Colors.theme.harvestGold,
         paddingHorizontal: 28,
         paddingVertical: 12,
         borderRadius: 24,
     },
     retryBtnText: {
-        color: 'white',
+        color: Colors.theme.harvestGold,
         fontWeight: '700',
         fontSize: 15,
     },
     emptyTitle: {
         fontSize: 20,
         fontWeight: '800',
-        color: Colors.primary,
+        color: Colors.theme.harvestGold,
         marginTop: 16,
         textAlign: 'center',
     },
     emptySubtitle: {
         fontSize: 14,
-        color: 'rgba(47,58,39,0.5)',
+        color: Colors.theme.dust,
         marginTop: 8,
         textAlign: 'center',
         paddingHorizontal: 32,

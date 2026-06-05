@@ -92,13 +92,14 @@ export default function OtherUserProfileScreen() {
         if (!silent) setRefreshing(true);
         
         try {
-            const formattedHandle = handle.startsWith('@') ? handle : `@${handle}`;
+            const decodedHandle = decodeURIComponent(handle as string);
+            const cleanHandle = decodedHandle.replace(/^@/, '');
             
             // 1. Fetch targeted profile
             const { data: profileData, error: profileErr } = await supabase
                 .from('profiles')
                 .select('*')
-                .eq('handle', formattedHandle)
+                .or(`handle.eq.${cleanHandle},handle.eq.@${cleanHandle}`)
                 .single();
                 
             if (profileErr || !profileData) {
@@ -323,15 +324,15 @@ export default function OtherUserProfileScreen() {
     };
 
     const renderHeaderContent = () => (
-        <View pointerEvents="box-none" style={{ backgroundColor: Colors.background, paddingTop: insets.top }}>
+        <View pointerEvents="box-none" style={{ backgroundColor: Colors.theme.matteBlack, paddingTop: insets.top }}>
             {/* Top Bar */}
             <View style={styles.topBar}>
                 <TouchableOpacity onPress={() => router.back()} style={{ padding: 8 }}>
-                    <Ionicons name="arrow-back" size={28} color={Colors.primary} />
+                    <Ionicons name="arrow-back" size={28} color={Colors.theme.softWhite} />
                 </TouchableOpacity>
                 <View style={{ flex: 1 }} />
                 <TouchableOpacity style={{ padding: 8 }}>
-                    <Ionicons name="ellipsis-horizontal" size={28} color={Colors.primary} />
+                    <Ionicons name="ellipsis-horizontal" size={28} color={Colors.theme.softWhite} />
                 </TouchableOpacity>
             </View>
 
@@ -400,7 +401,7 @@ export default function OtherUserProfileScreen() {
                             }}
                             style={[styles.socialIconBtn, !targetProfile.instagram_link && styles.socialIconInactive]}
                         >
-                            <MaterialCommunityIcons name="instagram" size={24} color={targetProfile.instagram_link ? Colors.primary : '#C0C0C0'} />
+                            <MaterialCommunityIcons name="instagram" size={24} color={targetProfile.instagram_link ? Colors.theme.softWhite : '#C0C0C0'} />
                         </TouchableOpacity>
                         <TouchableOpacity
                             onPress={() => {
@@ -408,7 +409,7 @@ export default function OtherUserProfileScreen() {
                             }}
                             style={[styles.socialIconBtn, !targetProfile.tiktok_link && styles.socialIconInactive]}
                         >
-                            <Ionicons name="logo-tiktok" size={22} color={targetProfile.tiktok_link ? Colors.primary : '#C0C0C0'} />
+                            <Ionicons name="logo-tiktok" size={22} color={targetProfile.tiktok_link ? Colors.theme.softWhite : '#C0C0C0'} />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -440,7 +441,7 @@ export default function OtherUserProfileScreen() {
                     >
                         <Text style={[
                             styles.actionButtonText, 
-                            (followState === 'following' || followState === 'requested') && { color: 'white' }
+                            (followState === 'following' || followState === 'requested') && { color: Colors.theme.matteBlack }
                         ]}>
                             {followState === 'following' ? 'Following' : (followState === 'requested' ? 'Requested' : 'Follow')}
                         </Text>
@@ -483,7 +484,7 @@ export default function OtherUserProfileScreen() {
     );
 
     const renderTabBar = (props: any) => (
-        <View style={{ backgroundColor: Colors.background }}>
+        <View style={{ backgroundColor: Colors.theme.matteBlack }}>
             <View style={styles.tabsContainer}>
                 {tabs.map((tab, index) => (
                     <Pressable 
@@ -495,6 +496,9 @@ export default function OtherUserProfileScreen() {
                                 alignItems: 'center',
                                 borderBottomWidth: 3,
                                 borderBottomColor: activeTab === tab ? Colors.theme.harvestGold : 'transparent',
+                                borderTopWidth: 2,
+                                borderTopColor: activeTab === tab ? Colors.theme.harvestGold : 'transparent',
+                                paddingTop: 8,
                             }
                         ]} 
                         onPress={() => {
@@ -590,7 +594,7 @@ export default function OtherUserProfileScreen() {
             <Tabs.Container
                 renderHeader={renderHeaderContent}
                 renderTabBar={renderTabBar}
-                headerContainerStyle={{ backgroundColor: Colors.background, shadowOpacity: 0, elevation: 0 }}
+                headerContainerStyle={{ backgroundColor: Colors.theme.matteBlack, shadowOpacity: 0, elevation: 0 }}
                 initialTabName={initialTab && tabs.includes(initialTab) ? initialTab : 'meals'}
                 onIndexChange={(index) => {
                     setActiveTab(tabs[index]);
@@ -676,10 +680,10 @@ export default function OtherUserProfileScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: Colors.background,
+        backgroundColor: Colors.theme.matteBlack,
     },
     headerContainer: {
-        backgroundColor: Colors.background,
+        backgroundColor: Colors.theme.matteBlack,
         paddingBottom: 20,
     },
     topBar: {
@@ -702,6 +706,8 @@ const styles = StyleSheet.create({
         height: 100,
         borderRadius: 50,
         backgroundColor: 'rgba(0,0,0,0.05)',
+        borderWidth: 2,
+        borderColor: Colors.theme.dust,
     },
     placeholderAvatar: {
         justifyContent: 'center',
@@ -717,7 +723,7 @@ const styles = StyleSheet.create({
     name: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: Colors.primary,
+        color: Colors.theme.softWhite,
         marginBottom: 2,
     },
     handleRow: {
@@ -727,7 +733,7 @@ const styles = StyleSheet.create({
     },
     handle: {
         fontSize: 16,
-        color: '#999',
+        color: Colors.theme.dust,
         fontWeight: '600',
     },
     tribeRow: {
@@ -744,7 +750,7 @@ const styles = StyleSheet.create({
     },
     statsText: {
         fontSize: 14,
-        color: Colors.primary,
+        color: Colors.theme.dust,
         fontWeight: '600',
         marginBottom: 6,
     },
@@ -771,25 +777,25 @@ const styles = StyleSheet.create({
     },
     actionButton: {
         flex: 1,
-        backgroundColor: '#E8F0E5',
+        backgroundColor: Colors.theme.charcoal,
         paddingVertical: 12,
         borderRadius: 25,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.5)',
+        borderColor: Colors.theme.harvestGold,
     },
     actionButtonActive: {
-        backgroundColor: Colors.primary,
-        borderColor: Colors.primary,
+        backgroundColor: Colors.theme.harvestGold,
+        borderColor: Colors.theme.harvestGold,
     },
     actionButtonRequested: {
-        backgroundColor: 'gray',
-        borderColor: 'gray',
+        backgroundColor: Colors.theme.dust,
+        borderColor: Colors.theme.dust,
     },
     actionButtonText: {
         fontSize: 14,
-        color: Colors.primary,
+        color: Colors.theme.harvestGold,
         fontWeight: 'bold',
     },
     followStatsRow: {
@@ -803,11 +809,11 @@ const styles = StyleSheet.create({
     followValue: {
         fontSize: 28,
         fontWeight: 'bold',
-        color: Colors.primary,
+        color: Colors.theme.harvestGold,
     },
     followLabel: {
         fontSize: 14,
-        color: '#888',
+        color: Colors.theme.dust,
     },
     tabsContainer: {
         flexDirection: 'row',
@@ -827,7 +833,7 @@ const styles = StyleSheet.create({
     },
     bioText: {
         fontSize: 14,
-        color: Colors.primary,
+        color: Colors.theme.dust,
     },
     tabLabel: {
         fontSize: 10,

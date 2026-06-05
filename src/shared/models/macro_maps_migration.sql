@@ -439,3 +439,21 @@ WHERE m.is_published = true OR m.is_live = true
 ORDER BY sort_date DESC;
 
 GRANT SELECT ON public.public_discovery_maps TO authenticated;
+
+-- 13. USER MAP PROGRESS TRACKING (STATEFUL JOURNEY)
+CREATE TABLE public.user_map_progress (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  map_id UUID NOT NULL REFERENCES public.macro_maps(id) ON DELETE CASCADE,
+  current_checkpoint_id UUID REFERENCES public.macro_map_checkpoints(id) ON DELETE SET NULL,
+  completed_checkpoint_ids UUID[] NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(user_id, map_id)
+);
+
+ALTER TABLE public.user_map_progress ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can manage their own map progress" ON public.user_map_progress
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+

@@ -31,6 +31,7 @@ export interface DbProfile {
     highest_streak?: number;
     last_logged_date?: string | null;
     timezone?: string;
+    expo_push_token?: string | null;
 }
 
 interface AuthState {

@@ -4,6 +4,7 @@ import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'reac
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/src/shared/theme/Colors';
 import { useLocalSearchParams, router } from 'expo-router';
+import { useNotificationStore } from '@/src/shared/stores/NotificationStore';
 
 // Views
 import DiaryView from '@/src/features/home/components/DiaryView';
@@ -25,6 +26,7 @@ export default function HomeScreen() {
     const { init, selectedTribe, selectTribe } = useUserTribeStore();
     const session = useAuthStore(state => state.session);
     const userId = session?.user?.id;
+    const { unreadCount, fetchNotifications } = useNotificationStore();
 
     const [currentTab, setCurrentTab] = useState<NavTab>('Following');
     const [selectedDate, setSelectedDate] = useState(new Date());
@@ -36,6 +38,7 @@ export default function HomeScreen() {
     useEffect(() => {
         if (userId) {
             init(userId);
+            fetchNotifications();
         }
     }, [userId]);
 
@@ -93,29 +96,43 @@ export default function HomeScreen() {
             <MacroMapInterceptor />
             {/* Top Navigation */}
             <View style={styles.topNavWrapper}>
-                <View style={styles.tabsContainer}>
-                    {(['Following', 'Diary', 'Tribe'] as NavTab[]).map((tab) => {
-                        const isActive = currentTab === tab;
-                        return (
-                            <TouchableOpacity
-                                key={tab}
-                                style={[
-                                    styles.tabButton,
-                                    isActive && { backgroundColor: '#DAA520' }
-                                ]}
-                                onPress={() => handleTabPress(tab)}
-                            >
-                                <Text style={[
-                                    styles.tabText,
-                                    isActive ? { color: '#262525' } : { color: '#EDE8D5' }
-                                ]}>
-                                    {tab}
-                                </Text>
-                            </TouchableOpacity>
-                        );
-                    })}
+                <View style={styles.headerRow}>
+                    <View style={styles.headerSpacer} />
+                    <View style={styles.tabsContainer}>
+                        {(['Following', 'Diary', 'Tribe'] as NavTab[]).map((tab) => {
+                            const isActive = currentTab === tab;
+                            return (
+                                <TouchableOpacity
+                                    key={tab}
+                                    style={[
+                                        styles.tabButton,
+                                        isActive && { backgroundColor: '#DAA520' }
+                                    ]}
+                                    onPress={() => handleTabPress(tab)}
+                                >
+                                    <Text style={[
+                                        styles.tabText,
+                                        isActive ? { color: '#262525' } : { color: '#EDE8D5' }
+                                    ]}>
+                                        {tab}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                    <TouchableOpacity 
+                        style={styles.bellButton} 
+                        onPress={() => router.push('/notifications')}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                        <Ionicons name="notifications-outline" size={24} color={Colors.theme.softWhite} />
+                        {unreadCount > 0 && (
+                            <View style={styles.badgeContainer}>
+                                <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
                 </View>
-
                 {currentTab === 'Diary' && (
                     <TouchableOpacity
                         style={[
@@ -233,12 +250,47 @@ const styles = StyleSheet.create({
         paddingBottom: 5,
         backgroundColor: Colors.background,
     },
+    headerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        width: '100%',
+        paddingHorizontal: 16,
+    },
+    headerSpacer: {
+        width: 40,
+    },
+    bellButton: {
+        width: 40,
+        height: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+        position: 'relative',
+    },
+    badgeContainer: {
+        position: 'absolute',
+        top: 2,
+        right: 2,
+        backgroundColor: Colors.theme.burntSienna,
+        borderRadius: 8,
+        minWidth: 16,
+        height: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 2,
+    },
+    badgeText: {
+        color: '#FFFFFF',
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
     tabsContainer: {
         flexDirection: 'row',
         backgroundColor: Colors.topNavBackground,
         borderRadius: 25,
         padding: 5,
-        width: '80%',
+        flex: 1,
+        marginHorizontal: 12,
         justifyContent: 'space-between',
     },
     tabButton: {

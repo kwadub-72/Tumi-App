@@ -40,10 +40,12 @@ export default function NetworkScreen() {
         
         try {
             // 1. Get target profile ID
+            const decodedHandle = decodeURIComponent(handle as string);
+            const cleanHandle = decodedHandle.replace(/^@/, '');
             const { data: profile } = await supabase
                 .from('profiles')
                 .select('id, handle')
-                .eq('handle', handle.startsWith('@') ? handle : `@${handle}`)
+                .or(`handle.eq.${cleanHandle},handle.eq.@${cleanHandle}`)
                 .single();
 
             if (!profile) throw new Error("Profile not found");
@@ -178,16 +180,16 @@ export default function NetworkScreen() {
             {/* Search Bar */}
             <View style={styles.searchContainer}>
                 <View style={styles.searchBar}>
-                    <Ionicons name="search" size={20} color={Colors.theme.softWhite} />
+                    <Ionicons name="search" size={20} color={Colors.theme.dust} />
                     <TextInput 
                         style={styles.searchInput}
                         placeholder={`Search ${activeTab}...`}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
-                        placeholderTextColor="rgba(255,255,255,0.4)"
+                        placeholderTextColor={Colors.theme.dust + '66'}
                     />
                     <TouchableOpacity>
-                        <Ionicons name="arrow-forward" size={20} color={Colors.theme.softWhite} />
+                        <Ionicons name="arrow-forward" size={20} color={Colors.theme.dust} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -247,10 +249,10 @@ const styles = StyleSheet.create({
     },
     tabBackground: {
         flexDirection: 'row',
-        backgroundColor: Colors.theme.matteBlack, // Dark background instead of dominant olive
+        backgroundColor: Colors.theme.charcoal,
         borderRadius: 20,
         borderWidth: 1,
-        borderColor: Colors.theme.oliveDrab, // Subtle olive border
+        borderColor: Colors.theme.harvestGold,
         padding: 2,
         width: '60%',
     },
@@ -278,9 +280,9 @@ const styles = StyleSheet.create({
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'transparent',
+        backgroundColor: Colors.theme.charcoal,
         borderWidth: 1,
-        borderColor: Colors.theme.softWhite,
+        borderColor: 'rgba(255, 255, 255, 0.05)',
         borderRadius: 25,
         paddingHorizontal: 15,
         height: 44,
@@ -289,7 +291,7 @@ const styles = StyleSheet.create({
         flex: 1,
         marginHorizontal: 10,
         fontSize: 16,
-        color: Colors.theme.softWhite,
+        color: Colors.theme.dust,
         fontWeight: '600',
     },
     listContent: {

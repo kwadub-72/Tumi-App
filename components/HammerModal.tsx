@@ -1,6 +1,8 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '../src/shared/theme/Colors';
+import { resolveActivityIcon } from '../src/shared/constants/Activities';
 
 interface HammerModalProps {
     visible: boolean;
@@ -19,6 +21,9 @@ export default function HammerModal({ visible, onClose, activityName = '', activ
     if (isBulk) symbol = '+';
     if (isCut) symbol = '-';
 
+    // Resolve the icon dynamically to handle null/empty strings correctly
+    const finalIcon = resolveActivityIcon(safeName, activityIcon || undefined);
+
     return (
         <Modal
             visible={visible}
@@ -32,9 +37,9 @@ export default function HammerModal({ visible, onClose, activityName = '', activ
                         <Text style={styles.activityText}>{activityName}</Text>
                         <View style={styles.iconContainer}>
                             <MaterialCommunityIcons
-                                name={activityIcon as any}
+                                name={finalIcon as any}
                                 size={28}
-                                color={"#F5F5DC"}
+                                color={Colors.theme.harvestGold}
                             />
                             {symbol !== '' && (
                                 <Text style={[styles.symbol]}>{symbol}</Text>
@@ -60,7 +65,9 @@ const styles = StyleSheet.create({
     },
     capsule: {
         flexDirection: 'row',
-        backgroundColor: '#4F6352', // Dark Green from image
+        backgroundColor: Colors.theme.charcoal,
+        borderWidth: 1,
+        borderColor: Colors.theme.harvestGold,
         paddingHorizontal: 30,
         paddingVertical: 18,
         borderRadius: 100,
@@ -73,7 +80,7 @@ const styles = StyleSheet.create({
         elevation: 8,
     },
     activityText: {
-        color: '#F5F5DC', // Light Beige
+        color: Colors.theme.softWhite,
         fontSize: 26,
         fontWeight: '600',
         fontStyle: 'italic',
@@ -83,7 +90,7 @@ const styles = StyleSheet.create({
         alignItems: 'flex-start',
     },
     symbol: {
-        color: '#F5F5DC',
+        color: Colors.theme.harvestGold,
         fontSize: 18,
         fontWeight: 'bold',
         marginTop: -4,
