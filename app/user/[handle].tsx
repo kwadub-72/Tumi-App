@@ -241,6 +241,7 @@ export default function OtherUserProfileScreen() {
             if (tab === 'meals') return p.meal;
             if (tab === 'workouts') return p.workout;
             if (tab === 'macros') return p.macroUpdate || p.snapshot;
+            if (tab === 'maps') return p.macroMap || p.postType?.includes('map');
             return false;
         });
     };
@@ -305,11 +306,22 @@ export default function OtherUserProfileScreen() {
     const displayName = targetProfile.name ?? '--';
 
     const handleOptions = (post: FeedPost) => {
-        // Option modal for viewing other user's post
-        Alert.alert('Options', undefined, [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Report', style: 'destructive' }
-        ]);
+        const options: any[] = [
+            { text: 'Cancel', style: 'cancel' }
+        ];
+        if (post.macroMap) {
+            options.push({
+                text: 'Save to Map Book',
+                onPress: async () => {
+                    if (session?.user?.id) {
+                        await SupabasePostService.toggleSaveMap(session.user.id, post.macroMap!.id);
+                        Alert.alert("Success", "Map saved to your Map Book!");
+                    }
+                }
+            });
+        }
+        options.push({ text: 'Report', style: 'destructive' });
+        Alert.alert('Options', undefined, options);
     };
 
     const handleCommentPress = (post: FeedPost) => {
@@ -355,7 +367,7 @@ export default function OtherUserProfileScreen() {
                     <Text style={styles.name}>{displayName}</Text>
 
                     <View style={styles.handleRow}>
-                        <Text style={styles.handle}>{targetProfile.handle}</Text>
+                        <Text style={styles.handle}>@{targetProfile.handle.replace(/^@/, '')}</Text>
                         {(targetProfile.status === 'enhanced' || targetProfile.status === 'natural') && (
                             <TouchableOpacity onPress={() => setVerifiedModalVisible(true)}>
                                 {targetProfile.status === 'enhanced' ? (
@@ -601,36 +613,6 @@ export default function OtherUserProfileScreen() {
                 }}
             >
                 {tabs.map((tab) => {
-                    if (tab === 'maps') {
-                        const isEmpty = activeProfileMaps.length === 0;
-                        return (
-                            <Tabs.Tab name={tab} key={tab}>
-                                <Tabs.FlatList
-                                    data={activeProfileMaps}
-                                    keyExtractor={(item: any) => item.id}
-                                    renderItem={({ item }: { item: any }) => (
-                                        <View style={{ marginBottom: 16, paddingHorizontal: 16 }}>
-                                            <DiscoveryMapCard map={item} />
-                                        </View>
-                                    )}
-                                    ListEmptyComponent={renderEmptyState(tab)}
-                                    scrollEnabled={!isEmpty}
-                                    bounces={!isEmpty}
-                                    showsVerticalScrollIndicator={false}
-                                    refreshControl={
-                                        !isEmpty ? (
-                                            <RefreshControl
-                                                refreshing={refreshing}
-                                                onRefresh={() => loadData(false)}
-                                                tintColor={Colors.theme.harvestGold}
-                                            />
-                                        ) : undefined
-                                    }
-                                />
-                            </Tabs.Tab>
-                        );
-                    }
-
                     const tabPosts = getTabPosts(tab);
                     const isEmpty = tabPosts.length === 0;
                     return (
@@ -664,7 +646,7 @@ export default function OtherUserProfileScreen() {
                                         <RefreshControl
                                             refreshing={refreshing}
                                             onRefresh={() => loadData(false)}
-                                            tintColor={Colors.primary}
+                                            tintColor={Colors.theme.harvestGold}
                                         />
                                     ) : undefined
                                 }

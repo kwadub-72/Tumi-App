@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/AuthStore';
 import { ActiveMapProgress } from '@/src/shared/models/types';
 
 export interface MapState {
+    activeMapId: string | null;
     activeMapProgress: ActiveMapProgress | null;
     fetchMapProgress: (mapId: string) => Promise<void>;
     jumpToCheckpoint: (mapId: string, targetCheckpointId: string) => Promise<void>;
@@ -11,6 +12,7 @@ export interface MapState {
 }
 
 export const useMapStore = create<MapState>((set, get) => ({
+    activeMapId: null,
     activeMapProgress: null,
 
     fetchMapProgress: async (mapId: string) => {
@@ -32,6 +34,7 @@ export const useMapStore = create<MapState>((set, get) => ({
 
             if (data) {
                 set({
+                    activeMapId: mapId,
                     activeMapProgress: {
                         current_checkpoint_id: data.current_checkpoint_id,
                         completed_checkpoint_ids: data.completed_checkpoint_ids || [],
@@ -71,6 +74,7 @@ export const useMapStore = create<MapState>((set, get) => ({
 
                 if (newProgress) {
                     set({
+                        activeMapId: mapId,
                         activeMapProgress: {
                             current_checkpoint_id: newProgress.current_checkpoint_id,
                             completed_checkpoint_ids: newProgress.completed_checkpoint_ids || [],
@@ -91,6 +95,7 @@ export const useMapStore = create<MapState>((set, get) => ({
         const currentProgress = get().activeMapProgress;
         const completed = currentProgress ? currentProgress.completed_checkpoint_ids : [];
         set({
+            activeMapId: mapId,
             activeMapProgress: {
                 current_checkpoint_id: targetCheckpointId,
                 completed_checkpoint_ids: completed
@@ -150,6 +155,7 @@ export const useMapStore = create<MapState>((set, get) => ({
 
             // Instantly update local UI state
             set({
+                activeMapId: mapId,
                 activeMapProgress: {
                     current_checkpoint_id: nextCheckpointId,
                     completed_checkpoint_ids: completed

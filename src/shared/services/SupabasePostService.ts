@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { FeedPost, Comment, Ingredient } from '../models/types';
 import { resolveActivityIcon } from '../constants/Activities';
+import { useAuthStore } from '@/store/AuthStore';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -90,7 +91,8 @@ export const SupabasePostService = {
         dayEnd.setHours(23, 59, 59, 999);
 
         const allowedTypes = ['meal', 'workout', 'macro_update', 'snapshot', 'map_publish', 'map_subscribe'];
-        if (feedType === 'profile') {
+        const currentUserId = useAuthStore.getState().session?.user?.id;
+        if (feedType === 'profile' && userId === currentUserId) {
             allowedTypes.push('map_silent');
         }
 
@@ -738,5 +740,42 @@ export const SupabasePostService = {
             return null;
         }
         return data && data.length > 0 ? data[0] : null;
+    },
+
+    async toggleSaveMap(userId: string, mapId: string): Promise<boolean> {
+        try {
+            const { data, error: fetchErr } = await supabase
+                .from('saved_macro_maps')
+                .select('id')
+                .eq('user_id', userId)
+                .eq('map_id', mapId)
+                .maybeSingle();
+
+            if (fetchErr) throw fetchErr;
+
+            if (data) {
+                const { error: deleteErr } = await supabase
+                    .from('saved_macro_maps')
+                    .delete()
+                    .eq('user_id', userId)
+                    .eq('map_id', mapId);
+
+                if (deleteErr) throw deleteErr;
+                return false;
+            } else {
+                const { error: insertErr } = await supabase
+                    .from('saved_macro_maps')
+                    .insert({
+                        user_id: userId,
+                        map_id: mapId
+                    });
+
+                if (insertErr) throw insertErr;
+                return true;
+            }
+        } catch (error) {
+            console.error('[SupabasePostService.toggleSaveMap] Error:', error);
+            throw error;
+        }
     },
 };

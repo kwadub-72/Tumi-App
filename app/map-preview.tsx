@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, ActivityIndicator, Pressable, Alert, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ import { MapComposerSheet } from '@/src/features/macromaps/components/MapCompose
 import { useSubscribeToLiveMap } from '@/src/features/macromaps/hooks/useSubscribeToLiveMap';
 import { useAuthStore } from '@/store/AuthStore';
 import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
+import { useMapStore } from '@/src/features/macromaps/store/useMapStore';
 
 interface CheckpointNode {
     id: string;
@@ -43,14 +44,33 @@ export default function MapPreviewScreen(props: { isOnboarding?: boolean }) {
 
     const { mutateAsync: subscribeToLiveMap } = useSubscribeToLiveMap();
     const { profile, session } = useAuthStore();
+    const {
+        fetchMapProgress,
+        activeMapProgress,
+        jumpToCheckpoint,
+        markCheckpointComplete
+    } = useMapStore();
 
-    useEffect(() => {
-        if (map_id) {
-            fetchData();
+    const activeCheckpointId = activeMapProgress?.current_checkpoint_id || (checkpoints.length > 0 ? checkpoints[0].id : null);
+    const completed = activeMapProgress?.completed_checkpoint_ids || [];
+
+    const activeCheckpointIndex = checkpoints.findIndex(cp => cp.id === activeCheckpointId);
+    const currentIndex = activeCheckpointIndex !== -1 ? activeCheckpointIndex : 0;
+    const nextCheckpoint = currentIndex + 1 < checkpoints.length ? checkpoints[currentIndex + 1] : null;
+
+    const handleSkip = () => {
+        if (nextCheckpoint && map_id) {
+            jumpToCheckpoint(map_id as string, nextCheckpoint.id);
         }
-    }, [map_id, session?.user?.id]);
+    };
 
-    const fetchData = async () => {
+    const handleComplete = () => {
+        if (activeCheckpointId && map_id) {
+            markCheckpointComplete(map_id as string, activeCheckpointId);
+        }
+    };
+
+    const fetchData = useCallback(async () => {
         setLoading(true);
         try {
             const [checkpointsRes, mapRes] = await Promise.all([
@@ -104,7 +124,14 @@ export default function MapPreviewScreen(props: { isOnboarding?: boolean }) {
         } finally {
             setLoading(false);
         }
-    };
+    }, [map_id, session?.user?.id]);
+
+    useEffect(() => {
+        if (map_id) {
+            fetchData();
+            fetchMapProgress(map_id as string);
+        }
+    }, [map_id, session?.user?.id, fetchMapProgress, fetchData]);
 
     const handleSubscribe = async () => {
         if (isOnboarding) {
@@ -169,6 +196,7 @@ export default function MapPreviewScreen(props: { isOnboarding?: boolean }) {
                         ? mapData.global_calorie_shift_pct 
                         : (mapData?.avgMacroShiftPct || 0),
                     isLive: mapData?.is_live || false,
+                    creator_id: mapData?.creator_id,
                     creator_status_snapshot: mapData?.creator_status_snapshot,
                     creator_activity_snapshot: mapData?.creator_activity_snapshot,
                     creator_activity_icon_snapshot: mapData?.creator_activity_icon_snapshot,
@@ -185,7 +213,7 @@ export default function MapPreviewScreen(props: { isOnboarding?: boolean }) {
                 mapPayload
             );
             setCaption('');
-            router.push('/');
+            router.push('/(tabs)');
         } catch (err: any) {
             Alert.alert("Post Failed", err.message || "Could not publish your post.");
             throw err;
@@ -202,6 +230,10 @@ export default function MapPreviewScreen(props: { isOnboarding?: boolean }) {
                 {isOnboarding ? (
                     <TouchableOpacity onPress={() => router.push('/onboarding/tribe')}>
                         <Text style={{ color: Colors.theme.harvestGold, fontSize: 16, fontWeight: 'bold' }}>Skip for now</Text>
+                    </TouchableOpacity>
+                ) : isSubscribed ? (
+                    <TouchableOpacity onPress={handleUnsubscribe}>
+                        <Text style={styles.unsubscribeHeaderBtn}>Unsubscribe</Text>
                     </TouchableOpacity>
                 ) : (
                     <View style={{ width: 28 }} />
@@ -241,6 +273,10 @@ export default function MapPreviewScreen(props: { isOnboarding?: boolean }) {
                                 const isPositiveCal = calShift > 0;
                                 const prevCp = index > 0 ? checkpoints[index - 1] : undefined;
 
+                                const isCompleted = completed.includes(cp.id);
+                                const isActive = cp.id === activeCheckpointId;
+                                const isFuture = !isCompleted && !isActive;
+
                                 const renderMacroBlock = (letter: string, currentRatio: number, prevRatio?: number) => {
                                     const val = Math.round(Number(currentRatio) * 100);
                                     const prevVal = prevRatio !== undefined ? Math.round(Number(prevRatio) * 100) : null;
@@ -276,8 +312,43 @@ export default function MapPreviewScreen(props: { isOnboarding?: boolean }) {
                                 return (
                                     <View key={cp.id} style={styles.checkpointContainer}>
                                         <View style={styles.timelineColumn}>
-                                            <View style={styles.timelineDot} />
-                                            {index < checkpoints.length - 1 && <View style={styles.timelineLine} />}
+                                            {isSubscribed ? (
+                                                <TouchableOpacity
+                                                    onPress={() => jumpToCheckpoint(map_id as string, cp.id)}
+                                                    style={[
+                                                        styles.timelineStepCircle,
+                                                        isActive && styles.timelineStepActive,
+                                                        isCompleted && styles.timelineStepCompleted,
+                                                        isFuture && styles.timelineStepFuture,
+                                                    ]}
+                                                >
+                                                    {isCompleted ? (
+                                                        <View style={styles.checkmarkBackdrop}>
+                                                            <Ionicons name="checkmark" size={10} color={Colors.theme.matteBlack} />
+                                                        </View>
+                                                    ) : (
+                                                        <Text style={[
+                                                            styles.timelineStepText,
+                                                            isActive && styles.timelineStepTextActive,
+                                                            isFuture && styles.timelineStepTextFuture,
+                                                        ]}>
+                                                            {cp.sequence_index}
+                                                        </Text>
+                                                    )}
+                                                </TouchableOpacity>
+                                            ) : (
+                                                <View style={[styles.timelineStepCircle, styles.timelineStepFuture]}>
+                                                    <Text style={[styles.timelineStepText, styles.timelineStepTextFuture]}>
+                                                        {cp.sequence_index}
+                                                    </Text>
+                                                </View>
+                                            )}
+                                            {index < checkpoints.length - 1 && (
+                                                <View style={[
+                                                    styles.timelineLine,
+                                                    isSubscribed && isCompleted ? styles.timelineLineCompleted : styles.timelineLineFuture
+                                                ]} />
+                                            )}
                                         </View>
                                         <View style={styles.checkpointCard}>
                                             <View style={styles.cardHeader}>
@@ -334,12 +405,33 @@ export default function MapPreviewScreen(props: { isOnboarding?: boolean }) {
             {!loading && checkpoints.length > 0 && (
                 <View style={styles.footer}>
                     {isSubscribed ? (
-                        <TouchableOpacity 
-                            style={[styles.subscribeButton, { backgroundColor: Colors.theme.burntSienna }]}
-                            onPress={handleUnsubscribe}
-                        >
-                            <Text style={[styles.subscribeText, { color: Colors.theme.softWhite }]}>Unsubscribe from Map</Text>
-                        </TouchableOpacity>
+                        <View style={styles.navFooter}>
+                            <TouchableOpacity
+                                style={[
+                                    styles.footerButton, 
+                                    styles.skipButton, 
+                                    !nextCheckpoint && styles.skipButtonDisabled
+                                ]}
+                                onPress={handleSkip}
+                                disabled={!nextCheckpoint}
+                            >
+                                <Text style={[
+                                    styles.skipButtonText, 
+                                    !nextCheckpoint && styles.skipButtonTextDisabled
+                                ]}>
+                                    Skip / Jump
+                                </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.footerButton, styles.completeButton]}
+                                onPress={handleComplete}
+                            >
+                                <Text style={styles.completeButtonText}>
+                                    {!nextCheckpoint ? 'Complete & Finish' : 'Complete & Continue'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
                     ) : (
                         <TouchableOpacity 
                             style={styles.subscribeButton}
@@ -378,6 +470,7 @@ export default function MapPreviewScreen(props: { isOnboarding?: boolean }) {
                                                         ? mapData.global_calorie_shift_pct 
                                                         : (mapData?.avgMacroShiftPct || 0),
                                                     isLive: mapData?.is_live || false,
+                                                    creator_id: mapData?.creator_id,
                                                     creator_status_snapshot: mapData?.creator_status_snapshot,
                                                     creator_activity_snapshot: mapData?.creator_activity_snapshot,
                                                     creator_activity_icon_snapshot: mapData?.creator_activity_icon_snapshot,
@@ -504,25 +597,63 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     timelineColumn: {
-        width: 30,
+        width: 34,
         alignItems: 'center',
+        marginRight: 10,
+        position: 'relative',
     },
-    timelineDot: {
-        width: 14,
-        height: 14,
-        borderRadius: 7,
-        backgroundColor: Colors.theme.harvestGold,
-        marginTop: 6,
-        borderWidth: 3,
-        borderColor: Colors.theme.matteBlack,
+    timelineStepCircle: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
         zIndex: 10,
+        marginTop: 6,
+    },
+    timelineStepActive: {
+        backgroundColor: Colors.theme.harvestGold,
+    },
+    timelineStepCompleted: {
+        backgroundColor: Colors.theme.charcoal,
+        borderWidth: 1.5,
+        borderColor: 'rgba(218, 165, 32, 0.3)',
+    },
+    timelineStepFuture: {
+        backgroundColor: Colors.theme.charcoal,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+    },
+    checkmarkBackdrop: {
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        backgroundColor: Colors.theme.harvestGold,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    timelineStepText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    timelineStepTextActive: {
+        color: Colors.theme.matteBlack,
+    },
+    timelineStepTextFuture: {
+        color: Colors.theme.dust,
+        opacity: 0.5,
     },
     timelineLine: {
         width: 2,
         flex: 1,
-        backgroundColor: 'rgba(218, 165, 32, 0.2)', // harvestGold low opacity
-        marginTop: -6,
+        marginTop: 4,
         marginBottom: -26,
+    },
+    timelineLineCompleted: {
+        backgroundColor: Colors.theme.harvestGold,
+    },
+    timelineLineFuture: {
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
     },
     checkpointCard: {
         flex: 1,
@@ -751,5 +882,48 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         textAlign: 'center',
         fontSize: 15,
-    }
+    },
+    navFooter: {
+        flexDirection: 'row',
+        gap: 12,
+        width: '100%',
+    },
+    footerButton: {
+        flex: 1,
+        height: 48,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    skipButton: {
+        backgroundColor: Colors.theme.charcoal,
+        borderWidth: 1.5,
+        borderColor: Colors.theme.harvestGold,
+    },
+    skipButtonDisabled: {
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    skipButtonText: {
+        color: Colors.theme.harvestGold,
+        fontSize: 15,
+        fontWeight: '600',
+    },
+    skipButtonTextDisabled: {
+        color: Colors.theme.dust,
+        opacity: 0.3,
+    },
+    completeButton: {
+        backgroundColor: Colors.theme.harvestGold,
+    },
+    completeButtonText: {
+        color: Colors.theme.matteBlack,
+        fontSize: 15,
+        fontWeight: 'bold',
+    },
+    unsubscribeHeaderBtn: {
+        color: Colors.theme.burntSienna,
+        fontSize: 14,
+        fontWeight: 'bold',
+        padding: 5,
+    },
 });

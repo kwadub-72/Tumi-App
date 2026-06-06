@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Pressable, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -9,6 +9,8 @@ import { useProfileNavigation } from '@/src/shared/hooks/useProfileNavigation';
 import { ACTIVITIES, resolveActivityIcon } from '@/src/shared/constants/Activities';
 import { ActivityIcon } from '@/src/shared/components/ActivityIcon';
 import { formatTimeAgo } from '@/utils/time';
+import { useAuthStore } from '@/store/AuthStore';
+import { useMapStore } from '@/src/features/macromaps/store/useMapStore';
 
 import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
 
@@ -43,8 +45,11 @@ export function DiscoveryMapCard({
 }: DiscoveryMapCardProps) {
     const router = useRouter();
     const { navigateToProfile } = useProfileNavigation();
-    const [heartbeatDays, setHeartbeatDays] = useState<number>(0);
     const [trajectory, setTrajectory] = useState<{ shift: number, p: number, c: number, f: number } | null>(null);
+
+    const { activeMapProgress, activeMapId } = useMapStore();
+    const [localProgress, setLocalProgress] = useState<{ completedCount: number; totalCount: number } | null>(null);
+    const [totalCheckpointsCount, setTotalCheckpointsCount] = useState<number>(0);
 
     const isLiveActive = map.engine_type?.toUpperCase() === 'LIVE' && (map.is_live === true || map.broadcast_status === 'active' || map.broadcast_status === 'ACTIVE');
     const isLiveEnded = map.engine_type?.toUpperCase() === 'LIVE' && (map.broadcast_status === 'ended' || map.broadcast_status === 'ENDED' || map.broadcast_status === 'inactive' || map.broadcast_status === 'INACTIVE' || !map.is_live);
@@ -52,24 +57,16 @@ export function DiscoveryMapCard({
     const rawGoal = (map.global_track || 'MAINTENANCE').toUpperCase();
     const goalText = rawGoal.includes('CUT') ? 'CUT' : (rawGoal.includes('BULK') ? 'BULK' : 'MAINT');
 
-    useEffect(() => {
-        // Calculate heartbeat days simply using map created_at for now as per instructions
-        const diffTime = Math.abs(new Date().getTime() - new Date(map.created_at).getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        setHeartbeatDays(diffDays);
-
-        fetchTrajectory();
-    }, [map]);
-
-    const fetchTrajectory = async () => {
+    const fetchTrajectory = useCallback(async () => {
         try {
             const { data } = await supabase
                 .from('macro_map_checkpoints')
-                .select('protein_ratio, carbs_ratio, fats_ratio, calorie_delta_pct')
+                .select('id, protein_ratio, carbs_ratio, fats_ratio, calorie_delta_pct')
                 .eq('map_id', map.id)
                 .order('sequence_index', { ascending: true });
 
             if (data && data.length > 0) {
+                setTotalCheckpointsCount(data.length);
                 // Approximate averages
                 const p = Math.round(data.reduce((acc: number, curr: any) => acc + Number(curr.protein_ratio), 0) / data.length * 100);
                 const c = Math.round(data.reduce((acc: number, curr: any) => acc + Number(curr.carbs_ratio), 0) / data.length * 100);
@@ -77,13 +74,44 @@ export function DiscoveryMapCard({
                 const shift = data.reduce((acc: number, curr: any) => acc + Number(curr.calorie_delta_pct), 0);
                 
                 setTrajectory({ shift: Math.round(shift * 10) / 10, p, c, f });
+
+                // Fetch user subscription progress if logged in
+                const userId = useAuthStore.getState().session?.user?.id;
+                if (userId) {
+                    const { data: progressData } = await supabase
+                        .from('user_map_progress')
+                        .select('completed_checkpoint_ids')
+                        .eq('user_id', userId)
+                        .eq('map_id', map.id)
+                        .maybeSingle();
+
+                    if (progressData) {
+                        setLocalProgress({
+                            completedCount: progressData.completed_checkpoint_ids?.length || 0,
+                            totalCount: data.length
+                        });
+                    } else {
+                        setLocalProgress(null);
+                    }
+                } else {
+                    setLocalProgress(null);
+                }
             } else {
                 setTrajectory(null);
+                setLocalProgress(null);
+                setTotalCheckpointsCount(0);
             }
         } catch (err) {
+            console.error('[DiscoveryMapCard] Error fetching trajectory/progress:', err);
             setTrajectory(null);
+            setLocalProgress(null);
+            setTotalCheckpointsCount(0);
         }
-    };
+    }, [map.id]);
+
+    useEffect(() => {
+        fetchTrajectory();
+    }, [map.id, fetchTrajectory]);
 
     const rawEngine = (map.engine_type || '').toUpperCase();
     let engineText = 'Created'; // Safe default
@@ -98,6 +126,16 @@ export function DiscoveryMapCard({
         // Fallback for legacy maps missing an explicit engine_type
         engineText = map.generation_type === 'meal_log' ? 'Meal log' : (map.generation_type === 'update' ? 'Update' : 'Created');
     }
+
+    const isStoreActiveMap = activeMapId === map.id;
+    const isSubscribed = isStoreActiveMap ? !!activeMapProgress : !!localProgress;
+
+    const completedCount = isStoreActiveMap
+        ? (activeMapProgress?.completed_checkpoint_ids?.length || 0)
+        : (localProgress?.completedCount || 0);
+
+    const totalCount = totalCheckpointsCount;
+    const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
     return (
         <TouchableOpacity 
@@ -246,6 +284,20 @@ export function DiscoveryMapCard({
                     </View>
                 </View>
             </View>
+
+            {isSubscribed && totalCount > 0 && (
+                <View style={styles.progressContainer}>
+                    <View style={styles.progressHeader}>
+                        <Text style={styles.progressLabel}>
+                            {completedCount}/{totalCount} Checkpoints Complete
+                        </Text>
+                        <Text style={styles.progressPercent}>{percent}%</Text>
+                    </View>
+                    <View style={styles.progressBarTrack}>
+                        <View style={[styles.progressBarFill, { width: `${percent}%` }]} />
+                    </View>
+                </View>
+            )}
 
             {/* Timestamp strictly at the very BOTTOM of the card layout */}
             <Text style={styles.footerHeartbeatText}>
@@ -612,5 +664,39 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.theme.harvestGold,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    progressContainer: {
+        marginTop: 14,
+        marginBottom: 6,
+        paddingHorizontal: 8,
+    },
+    progressHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 6,
+    },
+    progressLabel: {
+        fontSize: 12,
+        color: Colors.theme.softWhite,
+        fontWeight: '600',
+    },
+    progressPercent: {
+        fontSize: 12,
+        color: Colors.theme.harvestGold,
+        fontWeight: 'bold',
+    },
+    progressBarTrack: {
+        height: 6,
+        backgroundColor: Colors.theme.charcoal,
+        borderRadius: 3,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.05)',
+    },
+    progressBarFill: {
+        height: '100%',
+        backgroundColor: Colors.theme.harvestGold,
+        borderRadius: 3,
     },
 });

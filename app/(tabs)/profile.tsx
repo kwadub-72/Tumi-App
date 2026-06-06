@@ -169,58 +169,36 @@ export default function ProfileScreen() {
 
     const handleOptions = (post: FeedPost) => {
         const isOwnPost = post.user.handle === userInfo.handle;
+        const options: any[] = [
+            { text: 'Cancel', style: 'cancel' }
+        ];
 
-        if (Platform.OS === 'ios') {
-            if (isOwnPost) {
-                ActionSheetIOS.showActionSheetWithOptions(
-                    {
-                        options: ['Cancel', 'Delete'],
-                        destructiveButtonIndex: 1,
-                        cancelButtonIndex: 0,
-                        userInterfaceStyle: 'dark',
-                    },
-                    async (buttonIndex) => {
-                        if (buttonIndex === 1) {
-                            await SupabasePostService.deletePost(post.id);
-                            loadData(); // Reload
-                        }
+        if (post.macroMap) {
+            options.push({
+                text: 'Save to Map Book',
+                onPress: async () => {
+                    if (session?.user?.id) {
+                        await SupabasePostService.toggleSaveMap(session.user.id, post.macroMap!.id);
+                        Alert.alert("Success", "Map saved to your Map Book!");
                     }
-                );
-            } else {
-                ActionSheetIOS.showActionSheetWithOptions(
-                    {
-                        options: ['Cancel', 'Unfollow', 'Report'],
-                        destructiveButtonIndex: 2,
-                        cancelButtonIndex: 0,
-                        userInterfaceStyle: 'dark',
-                    },
-                    (buttonIndex) => {
-                        if (buttonIndex === 1) {
-                            // Unfollow logic
-                        } else if (buttonIndex === 2) {
-                            // Report logic
-                        }
-                    }
-                );
-            }
-        } else {
-            // Android Fallback
-            if (isOwnPost) {
-                Alert.alert('Options', undefined, [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Delete', style: 'destructive', onPress: async () => {
-                        await SupabasePostService.deletePost(post.id);
-                        loadData();
-                    }}
-                ]);
-            } else {
-                Alert.alert('Options', undefined, [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Unfollow' },
-                    { text: 'Report', style: 'destructive' }
-                ]);
-            }
+                }
+            });
         }
+
+        if (isOwnPost) {
+            options.push({
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                    await SupabasePostService.deletePost(post.id);
+                    loadData(); // Reload
+                }
+            });
+        } else {
+            options.push({ text: 'Report', style: 'destructive' });
+        }
+
+        Alert.alert('Options', undefined, options);
     };
 
     const handleCommentPress = (post: FeedPost) => {

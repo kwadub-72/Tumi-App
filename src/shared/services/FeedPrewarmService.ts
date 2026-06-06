@@ -31,6 +31,7 @@ export class FeedPrewarmService {
                     .from('posts')
                     .select('id, author_id, post_type, payload, caption, media_url, media_type, created_at')
                     .eq('author_id', userId)
+                    .neq('post_type', 'map_silent')
                     .order('created_at', { ascending: false })
                     .limit(2);
                 

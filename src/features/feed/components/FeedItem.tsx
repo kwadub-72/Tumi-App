@@ -773,7 +773,11 @@ export default function FeedItem({
                         )}
                     </View>
                 )}
-                <View style={[styles.macroLabelBox, isSelectMode && selectionKey ? { paddingLeft: 28 } : {}]}>
+                <View style={[
+                    styles.macroLabelBox, 
+                    { width: isSelectMode ? 130 : 85, flex: 0 },
+                    isSelectMode && selectionKey ? { paddingLeft: 28 } : {}
+                ]}>
                     <Text
                         style={[
                             styles.macroLabelText,
@@ -786,21 +790,11 @@ export default function FeedItem({
                         {label}
                     </Text>
                 </View>
-                <View style={styles.macroValuesRow}>
-                    <View style={{ width: 70, marginRight: 24 }}>
-                        {renderMacroValue('fire', Math.abs(vals.calories), ' cals', colors.calories, false, 'small', 70)}
-                    </View>
-                    <View style={styles.macroSubRow}>
-                        <View style={styles.macroCol}>
-                            {renderMacroValue('food-drumstick', Math.abs(vals.p), 'g', colors.p, false, 'small')}
-                        </View>
-                        <View style={styles.macroCol}>
-                            {renderMacroValue('barley', Math.abs(vals.c), 'g', colors.c, false, 'small')}
-                        </View>
-                        <View style={styles.macroCol}>
-                            {renderMacroValue('water', Math.abs(vals.f), 'g', colors.f, false, 'small')}
-                        </View>
-                    </View>
+                <View style={styles.ingMacrosFixed}>
+                    {renderMacroColumn('fire', Math.abs(vals.calories), ' cals', isSelectMode ? 75 : 85, colors.calories, 'small')}
+                    {renderMacroColumn('food-drumstick', Math.abs(vals.p), 'g', isSelectMode ? 42 : 55, colors.p, 'small')}
+                    {renderMacroColumn('barley', Math.abs(vals.c), 'g', isSelectMode ? 42 : 55, colors.c, 'small')}
+                    {renderMacroColumn('water', Math.abs(vals.f), 'g', isSelectMode ? 42 : 55, colors.f, 'small')}
                 </View>
             </TouchableOpacity>
         );
@@ -861,7 +855,7 @@ export default function FeedItem({
 
         const renderRow = (label: string, vals: { calories: number, p: number, c: number, f: number }, colors: { calories: string, p: string, c: string, f: string }, selectionKey?: string, isDelta = false) => (
             <TouchableOpacity
-                activeOpacity={isSelectMode ? 0.7 : 1}
+                activeOpacity={isSelectMode && selectionKey ? 0.7 : 1}
                 onPress={() => isSelectMode && selectionKey && onToggleSelect?.(selectionKey, 'macro')}
                 style={styles.macroUpdateRow}
             >
@@ -878,6 +872,7 @@ export default function FeedItem({
                 )}
                 <View style={[
                     styles.macroLabelBox, 
+                    { width: isSelectMode ? 130 : 85, flex: 0 },
                     (isSelectMode && selectionKey) && { paddingLeft: 28 }
                 ]}>
                     <Text 
@@ -893,21 +888,11 @@ export default function FeedItem({
                         {label}
                     </Text>
                 </View>
-                <View style={styles.macroValuesRow}>
-                    <View style={{ width: 70, marginRight: 24 }}>
-                        {renderMacroValue('fire', vals.calories, ' cals', colors.calories, isDelta, 'small', 70)}
-                    </View>
-                    <View style={styles.macroSubRow}>
-                        <View style={styles.macroCol}>
-                            {renderMacroValue('food-drumstick', vals.p, 'g', colors.p, isDelta, 'small')}
-                        </View>
-                        <View style={styles.macroCol}>
-                            {renderMacroValue('barley', vals.c, 'g', colors.c, isDelta, 'small')}
-                        </View>
-                        <View style={styles.macroCol}>
-                            {renderMacroValue('water', vals.f, 'g', colors.f, isDelta, 'small')}
-                        </View>
-                    </View>
+                <View style={styles.ingMacrosFixed}>
+                    {renderMacroColumn('fire', Math.abs(vals.calories), ' cals', isSelectMode ? 75 : 85, colors.calories, 'small')}
+                    {renderMacroColumn('food-drumstick', Math.abs(vals.p), 'g', isSelectMode ? 42 : 55, colors.p, 'small')}
+                    {renderMacroColumn('barley', Math.abs(vals.c), 'g', isSelectMode ? 42 : 55, colors.c, 'small')}
+                    {renderMacroColumn('water', Math.abs(vals.f), 'g', isSelectMode ? 42 : 55, colors.f, 'small')}
                 </View>
             </TouchableOpacity>
         );
@@ -1170,18 +1155,30 @@ export default function FeedItem({
         return null;
     };
 
-    const discoveryMapData = (post.postType === 'map_silent' && post.macroMap) ? {
+    const resolvedCaption = (post.caption || post.snapshot?.caption || post.macroUpdate?.caption || post.workout?.title || post.meal?.title || '').trim();
+    const hasCaption = resolvedCaption !== '';
+    const renderAsDiscoveryCard = false;
+
+    const mapCreatorProfile = post.macroMap?.profiles 
+        ? (Array.isArray(post.macroMap.profiles) ? post.macroMap.profiles[0] : post.macroMap.profiles)
+        : null;
+
+    const discoveryMapData = (renderAsDiscoveryCard && post.macroMap) ? {
         ...post.macroMap,
         id: post.macroMap.id,
         map_name: post.macroMap.name || 'Map Journey',
-        creator_id: post.user.id,
-        display_name: post.user.name,
-        creator_handle: post.user.handle,
-        username: post.user.handle,
-        avatar_url: typeof post.user.avatar === 'string' ? post.user.avatar : null,
-        is_natural: (post.macroMap as any).creator_status_snapshot === 'natural' || post.user.status === 'natural',
-        activity_type: post.user.activity || '',
-        activity_icon: post.user.activityIcon || '',
+        creator_id: (post.macroMap as any).creator_id || mapCreatorProfile?.id || mapCreatorProfile?.creator_id || post.user.id,
+        display_name: mapCreatorProfile?.name || post.user.name,
+        creator_handle: mapCreatorProfile?.handle || post.user.handle,
+        username: mapCreatorProfile?.handle || post.user.handle,
+        avatar_url: typeof mapCreatorProfile?.avatar_url === 'string' 
+            ? mapCreatorProfile.avatar_url 
+            : (typeof mapCreatorProfile?.avatarUrl === 'string'
+                ? mapCreatorProfile.avatarUrl
+                : (typeof post.user.avatar === 'string' ? post.user.avatar : null)),
+        is_natural: (post.macroMap as any).creator_status_snapshot === 'natural' || mapCreatorProfile?.status === 'natural' || post.user.status === 'natural',
+        activity_type: mapCreatorProfile?.activity || post.user.activity || '',
+        activity_icon: mapCreatorProfile?.activity_icon || mapCreatorProfile?.activityIcon || post.user.activityIcon || '',
         global_track: post.macroMap.mapType?.toUpperCase() as any,
         is_live: post.macroMap.isLive,
         broadcast_status: post.macroMap.isLive ? 'active' : 'inactive',
@@ -1195,8 +1192,8 @@ export default function FeedItem({
     return (
         <Animated.View 
             style={[
-                post.postType === 'map_silent' ? { marginBottom: 16 } : styles.card, 
-                cardColor && post.postType !== 'map_silent' ? { backgroundColor: cardColor } : {}
+                renderAsDiscoveryCard ? { marginBottom: 16 } : styles.card, 
+                cardColor && !renderAsDiscoveryCard ? { backgroundColor: cardColor } : {}
             ]}
             // @ts-ignore
             sharedTransitionTag={sharedTransitionTag}
@@ -1344,15 +1341,17 @@ export default function FeedItem({
                             <Text style={{ color: Colors.theme.matteBlack, fontSize: 16, fontWeight: 'bold', textAlign: 'center' }}>Share Tribe Mark</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity 
-                            style={{ backgroundColor: Colors.theme.harvestGold, borderRadius: 12, padding: 16, marginBottom: 16 }}
-                            onPress={() => {
-                                setIsShareMenuVisible(false);
-                                setTimeout(() => setIsMapComposerVisible(true), 300); // Share to Feed Composer
-                            }}
-                        >
-                            <Text style={{ color: Colors.theme.matteBlack, fontSize: 16, fontWeight: 'bold', textAlign: 'center' }}>Share to Feed</Text>
-                        </TouchableOpacity>
+                        {post.user.id === session?.user?.id && (
+                            <TouchableOpacity 
+                                style={{ backgroundColor: Colors.theme.harvestGold, borderRadius: 12, padding: 16, marginBottom: 16 }}
+                                onPress={() => {
+                                    setIsShareMenuVisible(false);
+                                    setTimeout(() => setIsMapComposerVisible(true), 300); // Share to Feed Composer
+                                }}
+                            >
+                                <Text style={{ color: Colors.theme.matteBlack, fontSize: 16, fontWeight: 'bold', textAlign: 'center' }}>Share to Feed</Text>
+                            </TouchableOpacity>
+                        )}
 
                         <TouchableOpacity onPress={() => setIsShareMenuVisible(false)}>
                             <Text style={{ color: Colors.theme.dust, fontSize: 16, fontWeight: '600', textAlign: 'center', padding: 8 }}>Cancel</Text>
@@ -1383,7 +1382,7 @@ export default function FeedItem({
                     onSubmit={handlePublishMap}
                 />
             )}
-            {post.postType !== 'map_silent' ? (
+            {!renderAsDiscoveryCard ? (
                 <>
                     <View style={[styles.header, { zIndex: 1 }]}>
                         <TouchableOpacity onPress={() => navigateToProfile(post.user)}>
@@ -1433,16 +1432,18 @@ export default function FeedItem({
                                 })()}
                             </View>
                             <TouchableOpacity onPress={() => navigateToProfile(post.user)}>
-                                <Text style={styles.handle}>@{post.user.handle}</Text>
+                                <Text style={styles.handle}>@{post.user.handle.replace(/^@/, '')}</Text>
                             </TouchableOpacity>
                         </View>
                         <TouchableOpacity onPress={onPressOptions}><Ionicons name="ellipsis-horizontal" size={20} color={Colors.theme.softWhite} /></TouchableOpacity>
                     </View>
 
                     <TouchableOpacity activeOpacity={isSelectMode ? 1 : 0.9} onPress={handlePressBody} style={{ zIndex: 1 }}>
-                        <Text style={styles.titleText}>
-                            {post.caption || post.snapshot?.caption || post.macroUpdate?.caption || post.workout?.title || post.meal?.title}
-                        </Text>
+                        {hasCaption && (
+                            <Text style={styles.titleText}>
+                                {post.caption || post.snapshot?.caption || post.macroUpdate?.caption || post.workout?.title || post.meal?.title}
+                            </Text>
+                        )}
 
                         {(!isDetailView && !post.macroMap && post.postType !== 'map_subscribe' && post.postType !== 'map_publish') && (
                             <TouchableOpacity onPress={toggleExpand} style={styles.expandLineTrigger}>

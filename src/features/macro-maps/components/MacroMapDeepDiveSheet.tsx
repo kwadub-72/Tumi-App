@@ -11,9 +11,11 @@ interface DeepDiveSheetProps {
     mapData: MacroMapFeedData;
     isCreator: boolean;
     onToggleOutlierFlare?: (checkpointId: string, isFlare: boolean) => void;
+    onSaveMap?: () => void;
+    isSavedMap?: boolean;
 }
 
-export function MacroMapDeepDiveSheet({ visible, onClose, mapData, isCreator, onToggleOutlierFlare }: DeepDiveSheetProps) {
+export function MacroMapDeepDiveSheet({ visible, onClose, mapData, isCreator, onToggleOutlierFlare, onSaveMap, isSavedMap }: DeepDiveSheetProps) {
     const [flaredCheckpoints, setFlaredCheckpoints] = useState<Set<string>>(new Set());
 
     const { activeMapProgress, fetchMapProgress, jumpToCheckpoint, markCheckpointComplete } = useMapStore();
@@ -199,31 +201,36 @@ export function MacroMapDeepDiveSheet({ visible, onClose, mapData, isCreator, on
         const isLast = currentIndex === mapData.checkpoints.length - 1;
 
         return (
-            <View style={styles.footerContainer}>
-                <TouchableOpacity
-                    style={[
-                        styles.footerButton, 
-                        styles.skipButton, 
-                        isLast && styles.skipButtonDisabled
-                    ]}
-                    onPress={handleSkip}
-                    disabled={isLast}
-                >
-                    <Text style={[
-                        styles.skipButtonText, 
-                        isLast && styles.skipButtonTextDisabled
-                    ]}>
-                        Skip / Jump
-                    </Text>
-                </TouchableOpacity>
+            <View style={{ backgroundColor: Colors.theme.matteBlack }}>
+                <View style={styles.footerContainer}>
+                    <TouchableOpacity
+                        style={[
+                            styles.footerButton, 
+                            styles.skipButton, 
+                            isLast && styles.skipButtonDisabled
+                        ]}
+                        onPress={handleSkip}
+                        disabled={isLast}
+                    >
+                        <Text style={[
+                            styles.skipButtonText, 
+                            isLast && styles.skipButtonTextDisabled
+                        ]}>
+                            Skip / Jump
+                        </Text>
+                    </TouchableOpacity>
 
-                <TouchableOpacity
-                    style={[styles.footerButton, styles.completeButton]}
-                    onPress={handleComplete}
-                >
-                    <Text style={styles.completeButtonText}>
-                        {isLast ? 'Complete & Finish' : 'Complete & Continue'}
-                    </Text>
+                    <TouchableOpacity
+                        style={[styles.footerButton, styles.completeButton]}
+                        onPress={handleComplete}
+                    >
+                        <Text style={styles.completeButtonText}>
+                            {isLast ? 'Complete & Finish' : 'Complete & Continue'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+                <TouchableOpacity style={styles.skipButton} onPress={onSaveMap}>
+                    <Text style={styles.skipText}>{isSavedMap ? 'Remove from Map Book' : 'Save to Map Book'}</Text>
                 </TouchableOpacity>
             </View>
         );
@@ -486,11 +493,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    skipButton: {
-        backgroundColor: Colors.theme.charcoal,
-        borderWidth: 1.5,
-        borderColor: Colors.theme.harvestGold,
-    },
+    skipButton: { paddingVertical: 14, alignItems: 'center', marginTop: 8 },
+    skipText: { color: Colors.theme.dust, fontSize: 16, fontWeight: '600' },
     skipButtonDisabled: {
         borderColor: 'rgba(255, 255, 255, 0.1)',
     },
