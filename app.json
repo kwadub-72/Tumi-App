@@ -1,27 +1,31 @@
 {
   "expo": {
-    "name": "Forge",
-    "slug": "Forge",
+    "name": "Chribe",
+    "slug": "chribe",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/icon.png",
     "scheme": "forge",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.Forge"
+      "bundleIdentifier": "com.kwaku.chribe",
+      "icon": "./assets/icon.png",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "foregroundImage": "./assets/icon.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.Forge"
+      "package": "com.kwaku.chribe"
     },
     "web": {
       "output": "static",
@@ -50,7 +54,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "0e542030-8c49-433f-8064-0342777e9cd4"
+        "projectId": "9037d85a-a976-4eba-ab3b-5f61fdfe08e1"
       }
     },
     "owner": "kwadub"
