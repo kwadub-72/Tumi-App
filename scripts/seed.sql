@@ -1,4 +1,5 @@
 -- Add missing INSERT policy to profiles
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
 CREATE POLICY "Users can insert own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
 
 -- Clean up any partial state
@@ -23,17 +24,17 @@ INSERT INTO auth.users (
   created_at, updated_at, role, is_super_admin,
   confirmation_token, recovery_token, email_change_token_new, email_change
 ) VALUES
-('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'kwadub72@gmail.com', crypt('GoTribe7255!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now(), 'authenticated', false, '', '', '', ''),
-('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000000', 'authenticated', 'jordan.smith@tumiapp.dev', crypt('TestPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now(), 'authenticated', false, '', '', '', ''),
-('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000', 'authenticated', 'alex.rivera@tumiapp.dev', crypt('TestPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now(), 'authenticated', false, '', '', '', ''),
-('00000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000000', 'authenticated', 'casey.jones@tumiapp.dev', crypt('TestPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now(), 'authenticated', false, '', '', '', ''),
-('00000000-0000-0000-0000-000000000005', '00000000-0000-0000-0000-000000000000', 'authenticated', 'riley.cooper@tumiapp.dev', crypt('TestPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now(), 'authenticated', false, '', '', '', ''),
-('00000000-0000-0000-0000-000000000006', '00000000-0000-0000-0000-000000000000', 'authenticated', 'quinn.taylor@tumiapp.dev', crypt('TestPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now(), 'authenticated', false, '', '', '', ''),
-('00000000-0000-0000-0000-000000000007', '00000000-0000-0000-0000-000000000000', 'authenticated', 'morgan.bailey@tumiapp.dev', crypt('TestPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now(), 'authenticated', false, '', '', '', ''),
-('00000000-0000-0000-0000-000000000008', '00000000-0000-0000-0000-000000000000', 'authenticated', 'skyler.white@tumiapp.dev', crypt('TestPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now(), 'authenticated', false, '', '', '', ''),
-('00000000-0000-0000-0000-000000000009', '00000000-0000-0000-0000-000000000000', 'authenticated', 'peyton.reed@tumiapp.dev', crypt('TestPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now(), 'authenticated', false, '', '', '', ''),
-('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-000000000000', 'authenticated', 'parker.scott@tumiapp.dev', crypt('TestPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now(), 'authenticated', false, '', '', '', ''),
-('00000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000000', 'authenticated', 'avery.miller@tumiapp.dev', crypt('TestPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now(), 'authenticated', false, '', '', '', '');
+('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'kwadub72@gmail.com', crypt('GoTribe7255!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"handle":"@kwadub","name":"Kwaku Adubofour"}'::jsonb, now(), now(), 'authenticated', false, '', '', '', ''),
+('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000000', 'authenticated', 'jordan.smith@tumiapp.dev', crypt('TestPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"handle":"@jsmith","name":"Jordan Smith"}'::jsonb, now(), now(), 'authenticated', false, '', '', '', ''),
+('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000', 'authenticated', 'alex.rivera@tumiapp.dev', crypt('TestPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"handle":"@arivera","name":"Alex Rivera"}'::jsonb, now(), now(), 'authenticated', false, '', '', '', ''),
+('00000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000000', 'authenticated', 'casey.jones@tumiapp.dev', crypt('TestPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"handle":"@cjones","name":"Casey Jones"}'::jsonb, now(), now(), 'authenticated', false, '', '', '', ''),
+('00000000-0000-0000-0000-000000000005', '00000000-0000-0000-0000-000000000000', 'authenticated', 'riley.cooper@tumiapp.dev', crypt('TestPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"handle":"@rcooper","name":"Riley Cooper"}'::jsonb, now(), now(), 'authenticated', false, '', '', '', ''),
+('00000000-0000-0000-0000-000000000006', '00000000-0000-0000-0000-000000000000', 'authenticated', 'quinn.taylor@tumiapp.dev', crypt('TestPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"handle":"@qtaylor","name":"Quinn Taylor"}'::jsonb, now(), now(), 'authenticated', false, '', '', '', ''),
+('00000000-0000-0000-0000-000000000007', '00000000-0000-0000-0000-000000000000', 'authenticated', 'morgan.bailey@tumiapp.dev', crypt('TestPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"handle":"@mbailey","name":"Morgan Bailey"}'::jsonb, now(), now(), 'authenticated', false, '', '', '', ''),
+('00000000-0000-0000-0000-000000000008', '00000000-0000-0000-0000-000000000000', 'authenticated', 'skyler.white@tumiapp.dev', crypt('TestPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"handle":"@swhite","name":"Skyler White"}'::jsonb, now(), now(), 'authenticated', false, '', '', '', ''),
+('00000000-0000-0000-0000-000000000009', '00000000-0000-0000-0000-000000000000', 'authenticated', 'peyton.reed@tumiapp.dev', crypt('TestPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"handle":"@preed","name":"Peyton Reed"}'::jsonb, now(), now(), 'authenticated', false, '', '', '', ''),
+('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-000000000000', 'authenticated', 'parker.scott@tumiapp.dev', crypt('TestPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"handle":"@pscott","name":"Parker Scott"}'::jsonb, now(), now(), 'authenticated', false, '', '', '', ''),
+('00000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000000', 'authenticated', 'avery.miller@tumiapp.dev', crypt('TestPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"handle":"@amiller","name":"Avery Miller"}'::jsonb, now(), now(), 'authenticated', false, '', '', '', '');
 
 INSERT INTO auth.identities (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
 SELECT id, id, id::text, format('{"sub":"%s","email":"%s"}', id, email)::jsonb, 'email', now(), now(), now() FROM auth.users;
@@ -50,7 +51,20 @@ INSERT INTO public.profiles (id, handle, name, avatar_url, status, activity, act
 ('00000000-0000-0000-0000-000000000008', '@swhite', 'Skyler White', 'https://i.pravatar.cc/150?u=7', 'enhanced', 'Bodybuilder (Bulk)', 'hammer', '6''0', 245, '13%', '{"p": 300, "c": 500, "f": 110, "calories": 4270}'::jsonb, '300 lbs lean.', false),
 ('00000000-0000-0000-0000-000000000009', '@preed', 'Peyton Reed', 'https://i.pravatar.cc/150?u=8', 'none', 'Functional', 'kettlebell', '5''8', 165, '14%', '{"p": 175, "c": 260, "f": 65, "calories": 2345}'::jsonb, 'Fit for life.', true),
 ('00000000-0000-0000-0000-000000000010', '@pscott', 'Parker Scott', 'https://i.pravatar.cc/150?u=9', 'natural', 'Combat Athlete', 'karate', '5''11', 170, '8%', '{"p": 200, "c": 300, "f": 60, "calories": 2620}'::jsonb, 'Compete at 170.', false),
-('00000000-0000-0000-0000-000000000011', '@amiller', 'Avery Miller', 'https://i.pravatar.cc/150?u=10', 'natural', 'Bodybuilder (Bulk)', 'hammer', '5''9', 195, '11%', '{"p": 240, "c": 400, "f": 85, "calories": 3385}'::jsonb, 'Mass or nothing.', true);
+('00000000-0000-0000-0000-000000000011', '@amiller', 'Avery Miller', 'https://i.pravatar.cc/150?u=10', 'natural', 'Bodybuilder (Bulk)', 'hammer', '5''9', 195, '11%', '{"p": 240, "c": 400, "f": 85, "calories": 3385}'::jsonb, 'Mass or nothing.', true)
+ON CONFLICT (id) DO UPDATE SET
+  handle = EXCLUDED.handle,
+  name = EXCLUDED.name,
+  avatar_url = EXCLUDED.avatar_url,
+  status = EXCLUDED.status,
+  activity = EXCLUDED.activity,
+  activity_icon = EXCLUDED.activity_icon,
+  height = EXCLUDED.height,
+  weight_lbs = EXCLUDED.weight_lbs,
+  body_fat_pct = EXCLUDED.body_fat_pct,
+  macro_targets = EXCLUDED.macro_targets,
+  training_target = EXCLUDED.training_target,
+  is_private = EXCLUDED.is_private;
 
 -- Create follows (kwadub -> everyone else)
 INSERT INTO public.follows (follower_id, following_id)
@@ -62,18 +76,12 @@ SELECT a.id, b.id FROM public.profiles a JOIN public.profiles b ON a.id != b.id
 WHERE a.id != '00000000-0000-0000-0000-000000000001' AND b.id != '00000000-0000-0000-0000-000000000001'
 ON CONFLICT DO NOTHING;
 
--- Create tribes
+-- -- Create tribes
 INSERT INTO public.tribes (id, name, avatar_url, theme_color, tribe_type, privacy, description, tags, chief_id) VALUES
 ('b0000000-0000-0000-0000-000000000001', 'Harvard Alum League', 'https://i.pravatar.cc/150?u=100', '#9FB89F', 'accountability', 'public', 'For the alums and the grinders.', ARRAY['natural', 'active'], '00000000-0000-0000-0000-000000000002'),
 ('b0000000-0000-0000-0000-000000000002', 'Iron Brotherhood', 'https://i.pravatar.cc/150?u=101', '#3E2A4A', 'head-to-head', 'private', 'Strength athletes only.', ARRAY['natural'], '00000000-0000-0000-0000-000000000003'),
 ('b0000000-0000-0000-0000-000000000003', 'Team Flex', 'https://i.pravatar.cc/150?u=102', '#E6A8A8', 'head-to-head', 'public', 'Getting big every day.', ARRAY['active'], '00000000-0000-0000-0000-000000000008'),
 ('b0000000-0000-0000-0000-000000000004', 'The Cut Squad', 'https://i.pravatar.cc/150?u=103', '#2D3A26', 'head-to-head', 'public', 'Who can get the leanest?', ARRAY['natural', 'active'], '00000000-0000-0000-0000-000000000006');
-
--- Create competitions
-INSERT INTO public.competitions (id, tribe_id, style, metric, total_weeks, start_date, status, pts_tier_1, pts_tier_2, pts_tier_3, pts_exercise_bonus, pts_penalty_miss, pts_penalty_no_log) VALUES
-('c0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000003', 'premier', 'habits', 10, now() - interval '2 weeks', 'active', 20, 10, 5, 10, -15, -60),
-('c0000000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000004', 'faceoff', 'habits', 10, now() - interval '2 weeks', 'active', 20, 10, 5, 10, -15, -60);
-
 
 -- Add members to Team Flex (Everyone)
 INSERT INTO public.tribe_members (tribe_id, user_id, role)
@@ -82,10 +90,15 @@ SELECT 'b0000000-0000-0000-0000-000000000003', id, CASE WHEN id = '00000000-0000
 -- Add members to The Cut Squad
 INSERT INTO public.tribe_members (tribe_id, user_id, role) VALUES
 ('b0000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000006', 'chief'), -- qtaylor
-('b0000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000001', 'member'), -- kwadub
+('b0000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'member'), -- kwadub
 ('b0000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000002', 'member'), -- jsmith
 ('b0000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000004', 'member'), -- cjones
 ('b0000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000009', 'member'); -- preed
+
+-- Create competitions
+INSERT INTO public.competitions (id, tribe_id, style, metric, total_weeks, start_date, status, pts_tier_1, pts_tier_2, pts_tier_3, pts_exercise_bonus, pts_penalty_miss, pts_penalty_no_log) VALUES
+('c0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000003', 'premier', 'habits', 10, now() - interval '2 weeks', 'active', 20, 10, 5, 10, -15, -60),
+('c0000000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000004', 'faceoff', 'habits', 10, now() - interval '2 weeks', 'active', 20, 10, 5, 10, -15, -60);
 
 -- Create 12 posts for each of the 10 seed users (Skipping kwadub)
 -- 3 meals, 3 workouts, 3 macros, 3 snapshots

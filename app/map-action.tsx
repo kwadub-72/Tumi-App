@@ -56,6 +56,7 @@ export default function MapActionScreen() {
 
     const [subscribedMaps, setSubscribedMaps] = useState<any[]>([]);
     const [myMaps, setMyMaps] = useState<any[]>([]);
+    const [savedMaps, setSavedMaps] = useState<any[]>([]);
     const session = useAuthStore((state) => state.session);
 
     const fetchSubscribedMaps = useCallback(async () => {
@@ -206,13 +207,70 @@ export default function MapActionScreen() {
         }
     }, [session?.user?.id]);
 
+    const fetchSavedMaps = useCallback(async () => {
+        if (!session?.user?.id) return;
+        try {
+            const { data, error } = await supabase
+                .from('saved_macro_maps')
+                .select(`
+                    id,
+                    macro_maps (
+                        id, name, engine_type, goal_type, total_duration_weeks, is_live, created_at,
+                        creator_status_snapshot, creator_activity_snapshot, creator_activity_icon_snapshot,
+                        profiles:creator_id (
+                            id, name, handle, avatar_url, status, activity, activity_icon
+                        )
+                    )
+                `)
+                .eq('user_id', session.user.id);
+
+            if (error) throw error;
+
+            const formatted = (data ?? []).map((savedRow: any) => {
+                const mapObj = Array.isArray(savedRow.macro_maps) ? savedRow.macro_maps[0] : savedRow.macro_maps;
+                if (!mapObj) return null;
+                const profileObj = Array.isArray(mapObj.profiles) ? mapObj.profiles[0] : mapObj.profiles;
+
+                const isNatural = mapObj.creator_status_snapshot !== undefined && mapObj.creator_status_snapshot !== null
+                    ? mapObj.creator_status_snapshot === 'natural' : profileObj?.status === 'natural';
+
+                return {
+                    ...mapObj,
+                    id: mapObj.id,
+                    saved_id: savedRow.id,
+                    map_name: mapObj.name || mapObj.map_name,
+                    creator_id: mapObj.creator_id || profileObj?.id,
+                    global_track: mapObj.goal_type || mapObj.global_track,
+                    generation_type: mapObj.generation_type || 'update',
+                    is_live: mapObj.is_live,
+                    created_at: mapObj.created_at,
+                    display_name: profileObj?.name || 'Creator',
+                    avatar_url: profileObj?.avatar_url,
+                    username: profileObj?.handle,
+                    creator_handle: profileObj?.handle,
+                    is_natural: isNatural,
+                    activity_type: mapObj.creator_activity_snapshot || profileObj?.activity,
+                    activity_icon: mapObj.creator_activity_icon_snapshot || profileObj?.activity_icon,
+                    creatorName: profileObj?.name || 'Creator',
+                    creatorHandle: profileObj?.handle,
+                    creatorAvatar: profileObj?.avatar_url,
+                };
+            }).filter((m): m is Exclude<typeof m, null> => !!m && !!m.id);
+
+            setSavedMaps(formatted);
+        } catch (err: any) {
+            console.error('[MapActionScreen] fetchSavedMaps failed:', err);
+        }
+    }, [session?.user?.id]);
+
     useFocusEffect(
         useCallback(() => {
             if (mode === 'map-book' && session?.user?.id) {
                 fetchSubscribedMaps();
                 fetchMyMaps();
+                fetchSavedMaps();
             }
-        }, [mode, session?.user?.id, fetchSubscribedMaps, fetchMyMaps])
+        }, [mode, session?.user?.id, fetchSubscribedMaps, fetchMyMaps, fetchSavedMaps])
     );
 
     // Dummy callback triggers for MapsLandingView
@@ -288,6 +346,7 @@ export default function MapActionScreen() {
 
     const filteredSubscribed = getFilteredMaps(subscribedMaps);
     const filteredMy = getFilteredMaps(myMaps);
+    const filteredSaved = getFilteredMaps(savedMaps);
 
     return (
         <SafeAreaView style={styles.container}>
@@ -389,9 +448,15 @@ export default function MapActionScreen() {
                         {showSaved && (
                             <View style={styles.section}>
                                 <Text style={styles.sectionHeader}>Saved maps</Text>
-                                <View style={styles.emptyState}>
-                                    <Text style={styles.emptyStateText}>No maps found</Text>
-                                </View>
+                                {filteredSaved.length === 0 ? (
+                                    <View style={styles.emptyState}>
+                                        <Text style={styles.emptyStateText}>No maps found</Text>
+                                    </View>
+                                ) : (
+                                    filteredSaved.map((map) => (
+                                        <DiscoveryMapCard key={map.saved_id || map.id} map={map} />
+                                    ))
+                                )}
                             </View>
                         )}
                     </ScrollView>

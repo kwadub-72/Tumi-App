@@ -257,5 +257,6 @@ export interface Tribe {
         meals: number;
         workouts: number;
         macros: number;
+        maps?: number;
     };
 }

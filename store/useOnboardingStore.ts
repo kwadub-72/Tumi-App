@@ -5,6 +5,8 @@ import { decode } from 'base64-arraybuffer';
 interface OnboardingState {
     handle: string;
     name: string;
+    first_name: string;
+    last_name: string;
     email: string;
     password: string;
     dob: string; // YYYY-MM-DD
@@ -32,6 +34,8 @@ interface OnboardingState {
     // Setters
     setHandle: (handle: string) => void;
     setName: (name: string) => void;
+    setFirstName: (first_name: string) => void;
+    setLastName: (last_name: string) => void;
     setEmail: (email: string) => void;
     setPassword: (password: string) => void;
     setDob: (dob: string) => void;
@@ -62,6 +66,8 @@ interface OnboardingState {
 const initialState = {
     handle: '',
     name: '',
+    first_name: '',
+    last_name: '',
     email: '',
     password: '',
     dob: '',
@@ -92,6 +98,8 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
 
     setHandle: (handle) => set({ handle }),
     setName: (name) => set({ name }),
+    setFirstName: (first_name) => set({ first_name }),
+    setLastName: (last_name) => set({ last_name }),
     setEmail: (email) => set({ email }),
     setPassword: (password) => set({ password }),
     setDob: (dob) => set({ dob }),
@@ -203,6 +211,8 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                         data: {
                             handle: state.handle,
                             name: state.name,
+                            first_name: state.first_name,
+                            last_name: state.last_name,
                             bio: state.bio,
                             is_private: state.is_private,
                             avatar_url: state.avatarUri,
@@ -308,6 +318,8 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                 user_id: finalUserId,
                 handle: state.handle,
                 name: state.name,
+                first_name: state.first_name,
+                last_name: state.last_name,
                 height_cm: finalHeightCm ? Math.round(Number(finalHeightCm)) : null,
                 weight_lbs: finalWeightLbs ? Math.round(Number(finalWeightLbs)) : null,
                 sex: state.sex,
@@ -335,21 +347,6 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                 return { success: false, error: new Error(rpcError.message) };
             }
 
-            // Insert initial weight entry into the weights table for Day 1
-            if (payload.weight_lbs) {
-                const todayStr = new Date().toISOString().split('T')[0];
-                const { error: weightError } = await supabase
-                    .from('weights')
-                    .upsert({
-                        user_id: finalUserId,
-                        weight: payload.weight_lbs,
-                        date: todayStr
-                    }, { onConflict: 'user_id,date' });
-
-                if (weightError) {
-                    console.error('Failed to insert initial weight entry during onboarding:', weightError);
-                }
-            }
 
             // Check if session exists (it will be null if email confirmation is pending)
             const requiresEmailConfirmation = authData ? !authData.session : false;

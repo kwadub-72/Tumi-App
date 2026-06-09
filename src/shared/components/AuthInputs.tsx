@@ -102,6 +102,17 @@ export const EmailInput = forwardRef<TextInput, BaseInputProps>((props, ref) => 
     );
 });
 
+export const DisplayNameInput = forwardRef<TextInput, BaseInputProps>((props, ref) => (
+    <BaseAuthInput
+        ref={ref}
+        label="Display Name"
+        autoCapitalize="words"
+        placeholder="Display Name"
+        maxLength={10}
+        {...props}
+    />
+));
+
 export const FirstNameInput = forwardRef<TextInput, BaseInputProps>((props, ref) => (
     <BaseAuthInput
         ref={ref}

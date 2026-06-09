@@ -31,6 +31,9 @@ export default function EditProfileScreen() {
     const { setProfile } = userInfo;
 
     // Form State
+    const authProfile = useAuthStore(state => state.profile);
+    const [firstName, setFirstName] = useState(authProfile?.first_name || '');
+    const [lastName, setLastName] = useState(authProfile?.last_name || '');
     const [displayName, setDisplayName] = useState(userInfo.name);
     const [avatarUrl, setAvatarUrl] = useState(userInfo.avatar);
     const [avatarBase64, setAvatarBase64] = useState<string | null>(null);
@@ -69,6 +72,22 @@ export default function EditProfileScreen() {
     };
 
     const handleSave = async () => {
+        if (!firstName || firstName.trim().length === 0) {
+            Alert.alert('Error', 'First Name cannot be empty');
+            return;
+        }
+        if (!lastName || lastName.trim().length === 0) {
+            Alert.alert('Error', 'Last Name cannot be empty');
+            return;
+        }
+        if (!displayName || displayName.trim().length === 0) {
+            Alert.alert('Error', 'Display Name cannot be empty');
+            return;
+        }
+        if (displayName.length > 10) {
+            Alert.alert('Error', 'Display Name cannot exceed 10 characters');
+            return;
+        }
         try {
             let finalAvatarUrl = avatarUrl;
             
@@ -86,26 +105,28 @@ export default function EditProfileScreen() {
                 const filePath = `${userId}/${fileName}`;
                 
                 const { data, error } = await supabase.storage
-                    .from('avatars')
-                    .upload(filePath, arrayBuffer, {
-                        contentType: `image/${fileExt === 'png' ? 'png' : 'jpeg'}`,
-                        upsert: true
-                    });
-                    
+                     .from('avatars')
+                     .upload(filePath, arrayBuffer, {
+                         contentType: `image/${fileExt === 'png' ? 'png' : 'jpeg'}`,
+                         upsert: true
+                     });
+                     
                 if (error) {
-                    throw error;
+                     throw error;
                 }
                 
                 const { data: publicUrlData } = supabase.storage
-                    .from('avatars')
-                    .getPublicUrl(filePath);
-                    
+                     .from('avatars')
+                     .getPublicUrl(filePath);
+                     
                 finalAvatarUrl = publicUrlData.publicUrl;
             }
-
+ 
             // Sync to backend via AuthStore
             await useAuthStore.getState().updateProfile({
                 name: displayName,
+                first_name: firstName,
+                last_name: lastName,
                 avatar_url: finalAvatarUrl ? (typeof finalAvatarUrl === 'string' ? finalAvatarUrl : undefined) : undefined,
                 bio,
                 height,
@@ -255,11 +276,34 @@ export default function EditProfileScreen() {
 
                     {/* Display Name */}
                     <View style={styles.fieldRow}>
-                        <Text style={styles.label}>Display name</Text>
+                        <Text style={styles.label}>Display Name</Text>
                         <TextInput
                             style={styles.textInput}
                             value={displayName}
                             onChangeText={setDisplayName}
+                            maxLength={10}
+                        />
+                    </View>
+
+                    {/* First Name */}
+                    <View style={styles.fieldRow}>
+                        <Text style={styles.label}>First Name</Text>
+                        <TextInput
+                            style={styles.textInput}
+                            value={firstName}
+                            onChangeText={setFirstName}
+                            placeholder="First Name"
+                        />
+                    </View>
+
+                    {/* Last Name */}
+                    <View style={styles.fieldRow}>
+                        <Text style={styles.label}>Last Name</Text>
+                        <TextInput
+                            style={styles.textInput}
+                            value={lastName}
+                            onChangeText={setLastName}
+                            placeholder="Last Name"
                         />
                     </View>
 

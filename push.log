@@ -1,0 +1,94 @@
+Connecting to remote database...
+Do you want to push these migrations to the remote database?
+ • 20260606_production_baseline.sql
+
+ [Y/n] 
+Applying migration 20260606_production_baseline.sql...
+NOTICE (00000): policy "Privacy Engine for Posts" for relation "public.posts" does not exist, skipping
+NOTICE (00000): policy "Privacy Engine for Post Likes" for relation "public.post_likes" does not exist, skipping
+NOTICE (00000): function public.check_account_availability() does not exist, skipping
+NOTICE (00000): function public.handle_new_user() does not exist, skipping
+NOTICE (00000): trigger "on_auth_user_created" for relation "auth.users" does not exist, skipping
+NOTICE (00000): policy "Users can delete own profile" for relation "public.profiles" does not exist, skipping
+NOTICE (00000): function search_explore() does not exist, skipping
+NOTICE (00000): function parse_height_to_inches() does not exist, skipping
+NOTICE (00000): function parse_bf_to_numeric() does not exist, skipping
+NOTICE (00000): function get_most_similar() does not exist, skipping
+NOTICE (00000): function get_most_popular() does not exist, skipping
+NOTICE (42710): extension "pg_trgm" already exists, skipping
+NOTICE (42P07): relation "profiles_handle_trgm_idx" already exists, skipping
+NOTICE (42P07): relation "profiles_name_trgm_idx" already exists, skipping
+NOTICE (00000): function get_most_similar() does not exist, skipping
+NOTICE (00000): function get_most_popular() does not exist, skipping
+NOTICE (00000): function get_most_similar() does not exist, skipping
+NOTICE (00000): function resolve_live_weight() does not exist, skipping
+NOTICE (00000): function get_most_similar() does not exist, skipping
+NOTICE (00000): function get_most_popular() does not exist, skipping
+NOTICE (00000): function get_most_similar() does not exist, skipping
+NOTICE (00000): function sync_user_weight_to_profile() does not exist, skipping
+NOTICE (00000): trigger "on_weight_change" for relation "public.weights" does not exist, skipping
+NOTICE (00000): function public.get_explore_discovery() does not exist, skipping
+NOTICE (00000): function public.handle_post_like_increment() does not exist, skipping
+NOTICE (00000): function public.handle_post_like_decrement() does not exist, skipping
+NOTICE (00000): trigger "tr_post_like_increment" for relation "public.likes" does not exist, skipping
+NOTICE (00000): trigger "tr_post_like_decrement" for relation "public.likes" does not exist, skipping
+NOTICE (00000): function copy_exercises_to_lift_book() does not exist, skipping
+NOTICE (00000): function public.copy_exercises_to_lift_book() does not exist, skipping
+NOTICE (00000): function copy_exercises_to_lift_book() does not exist, skipping
+NOTICE (00000): function public.update_macro_targets_with_post() does not exist, skipping
+NOTICE (00000): function public.copy_to_macro_book() does not exist, skipping
+NOTICE (00000): function tribe_copy_food() does not exist, skipping
+NOTICE (42710): extension "pg_trgm" already exists, skipping
+NOTICE (00000): function public.search_tribes() does not exist, skipping
+NOTICE (00000): function sync_tribe_member_count() does not exist, skipping
+NOTICE (00000): trigger "trg_tribe_member_count" for relation "tribe_members" does not exist, skipping
+NOTICE (00000): function join_tribe() does not exist, skipping
+NOTICE (00000): function leave_tribe() does not exist, skipping
+NOTICE (00000): function public.handle_daily_activity() does not exist, skipping
+NOTICE (00000): trigger "trg_meal_log_activity" for relation "public.meal_log" does not exist, skipping
+NOTICE (00000): trigger "trg_weights_activity" for relation "public.weights" does not exist, skipping
+NOTICE (00000): trigger "trg_lift_book_activity" for relation "public.lift_book" does not exist, skipping
+NOTICE (00000): trigger "trg_macro_book_activity" for relation "public.macro_book" does not exist, skipping
+NOTICE (00000): function public.reset_expired_streaks() does not exist, skipping
+NOTICE (00000): function public.get_scoreboard_members() does not exist, skipping
+NOTICE (42710): extension "pg_cron" already exists, skipping
+NOTICE (00000): function calculate_competition_week() does not exist, skipping
+NOTICE (00000): function get_tribe_scoreboard_header() does not exist, skipping
+NOTICE (00000): function calculate_user_daily_points() does not exist, skipping
+NOTICE (00000): function commit_user_daily_points() does not exist, skipping
+NOTICE (00000): function prevent_ledger_modification() does not exist, skipping
+NOTICE (00000): function public.process_hourly_local_midnight_points() does not exist, skipping
+NOTICE (00000): function public.get_competition_scoreboard_tiebreakers() does not exist, skipping
+NOTICE (00000): function public.calculate_competition_week() does not exist, skipping
+NOTICE (00000): function public.is_competition_locked() does not exist, skipping
+NOTICE (00000): function public.calculate_competition_week() does not exist, skipping
+NOTICE (00000): function public.get_tribe_scoreboard_header() does not exist, skipping
+NOTICE (00000): function public.evaluate_competition_locks() does not exist, skipping
+NOTICE (00000): function public.qa_simulate_competition_win() does not exist, skipping
+NOTICE (00000): function generate_tribe_matchups() does not exist, skipping
+NOTICE (00000): function trg_auto_generate_faceoff_matchups() does not exist, skipping
+NOTICE (00000): trigger "trg_faceoff_matchups_on_competition_create" for relation "competitions" does not exist, skipping
+NOTICE (00000): function check_tribe_natural_eligibility() does not exist, skipping
+NOTICE (00000): function public.calculate_user_bmr() does not exist, skipping
+NOTICE (00000): function public.trigger_live_map_overwrite() does not exist, skipping
+NOTICE (00000): function public.get_published_macro_maps() does not exist, skipping
+NOTICE (00000): function public.fetch_historical_log_range() does not exist, skipping
+ERROR: syntax error at or near "RETURN" (SQLSTATE 42601)     
+At statement: 406                                            
+CREATE OR REPLACE FUNCTION public.fetch_historical_log_range(
+    target_user_id UUID,                                     
+    start_date DATE,                                         
+    end_date DATE                                            
+)                                                            
+RETURNS TABLE (                                              
+    created_at TIMESTAMPTZ,                                  
+    protein NUMERIC,                                         
+    carbs NUMERIC,                                           
+    fats NUMERIC,                                            
+    calories NUMERIC,                                        
+    weight NUMERIC,                                          
+    intent_driver VARCHAR                                    
+) AS $$                                                      
+    RETURN QUERY                                             
+    ^                                                        
+Try rerunning the command with --debug to troubleshoot the error.

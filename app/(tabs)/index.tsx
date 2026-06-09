@@ -43,8 +43,8 @@ export default function HomeScreen() {
     }, [userId]);
 
     useEffect(() => {
-        if (params.tab === 'Following') {
-            setCurrentTab('Following');
+        if (params.tab && ['Following', 'Diary', 'Tribe'].includes(params.tab as string)) {
+            setCurrentTab(params.tab as NavTab);
         }
     }, [params.tab]);
 

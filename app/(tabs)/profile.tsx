@@ -175,11 +175,11 @@ export default function ProfileScreen() {
 
         if (post.macroMap) {
             options.push({
-                text: 'Save to Map Book',
+                text: 'Save to Map book',
                 onPress: async () => {
                     if (session?.user?.id) {
                         await SupabasePostService.toggleSaveMap(session.user.id, post.macroMap!.id);
-                        Alert.alert("Success", "Map saved to your Map Book!");
+                        Alert.alert("Success", "Map saved to your Map book!");
                     }
                 }
             });
@@ -362,19 +362,13 @@ export default function ProfileScreen() {
                 {tabs.map((tab, index) => (
                     <Pressable 
                         key={tab}
-                        style={[
-                            styles.tabItem,
-                            {
-                                borderBottomWidth: 3,
-                                borderBottomColor: activeTab === tab ? Colors.theme.harvestGold : 'transparent',
-                                borderTopWidth: 2,
-                                borderTopColor: activeTab === tab ? Colors.theme.harvestGold : 'transparent',
-                            }
-                        ]} 
+                        style={[styles.tabItem]} 
                         onPress={() => {
                             props.onTabPress(tab);
                         }}
                     >
+                        {activeTab === tab && <View style={styles.activeTabIndicatorTop} />}
+                        {activeTab === tab && <View style={styles.activeTabIndicatorBottom} />}
                         {tab === 'meals' || tab === 'workouts' ? (
                             <MaterialCommunityIcons 
                                 name={tab === 'meals' ? 'fire' : 'dumbbell'} 
@@ -675,14 +669,34 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
-        borderBottomWidth: 1,
-        borderBottomColor: '#ccc',
     },
     tabItem: {
         alignItems: 'center',
-        paddingTop: 8,
         paddingBottom: 15,
         flex: 1, // Use flex instead of magic width to ensure centering and fit
+        position: 'relative',
+        paddingVertical: 10,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderColor: Colors.theme.harvestGold,
+    },
+    activeTabIndicatorTop: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 2,
+        backgroundColor: Colors.theme.harvestGold,
+        zIndex: 10,
+    },
+    activeTabIndicatorBottom: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 3,
+        backgroundColor: Colors.theme.harvestGold,
+        zIndex: 10,
     },
     bioContainer: {
         paddingHorizontal: 20,
@@ -697,16 +711,6 @@ const styles = StyleSheet.create({
         color: '#888',
         textAlign: 'center',
         marginTop: 4,
-    },
-    activeTab: {
-        // Active styling handled by conditional rendering of indicator and color
-    },
-    activeIndicator: {
-        position: 'absolute',
-        bottom: 0,
-        height: 3,
-        backgroundColor: TEST_COLORS.accent1, // Harvest Gold for active indicator
-        borderRadius: 2,
     },
     thickDivider: {
         height: 2,

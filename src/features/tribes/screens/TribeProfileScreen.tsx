@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-    View, Text, StyleSheet, Image, TouchableOpacity,
+    View, Text, StyleSheet, Image, TouchableOpacity, Pressable, Modal,
     Alert, Animated, Dimensions, ScrollView, FlatList, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { FeedPost, Tribe } from '@/src/shared/models/types';
 import { supabase } from '@/src/shared/services/supabase';
 import { SupabaseTribeService } from '@/src/shared/services/SupabaseTribeService';
@@ -20,26 +20,17 @@ import { useAuthStore } from '@/store/AuthStore';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { resolveActivityIcon } from '@/src/shared/constants/Activities';
 import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
+import { Colors } from '@/src/shared/theme/Colors';
 
 const { width } = Dimensions.get('window');
 
-// ─── Palette ─────────────────────────────────────────────────────────────────
-const C = {
-    bg: '#1A1A1A',
-    gold: '#DAA520',
-    dust: '#EDE8D5',
-    sienna: '#8B4513',
-    charcoalGray: '#787878',
-    white: '#FFFFFF',
-    natural: '#1BB607',
-};
-
 // ─── Tab definitions ──────────────────────────────────────────────────────────
-type TabId = 'meals' | 'workouts' | 'macros';
+type TabId = 'meals' | 'workouts' | 'macros' | 'maps';
 const TABS: { id: TabId; icon: string; label: string; iconLib: 'mci' | 'ion' }[] = [
     { id: 'meals',    icon: 'fire',        label: 'meals',    iconLib: 'mci' },
     { id: 'workouts', icon: 'dumbbell',    label: 'workouts', iconLib: 'mci' },
     { id: 'macros',   icon: 'stats-chart', label: 'macros',   iconLib: 'ion' },
+    { id: 'maps',     icon: 'map-legend',  label: 'maps',     iconLib: 'mci' },
 ];
 const TAB_IDS: TabId[] = TABS.map(t => t.id);
 
@@ -51,12 +42,15 @@ function filterForTab(posts: FeedPost[], tab: TabId): FeedPost[] {
         case 'meals':    return posts.filter(p => !!p.meal);
         case 'workouts': return posts.filter(p => !!p.workout);
         case 'macros':   return posts.filter(p => !!(p.macroUpdate || p.snapshot));
+        case 'maps':     return posts.filter(p => p.postType === 'map_publish' || p.postType === 'map_subscribe');
         default:         return [];
     }
 }
 
 export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
     const router = useRouter();
+    const params = useLocalSearchParams();
+    const initialTab = params.initialTab as string;
     const insets = useSafeAreaInsets();
     const session = useAuthStore(state => state.session);
     const currentUserId = session?.user?.id ?? '';
@@ -88,6 +82,7 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
     const [modalConfig, setModalConfig] = useState<any>({});
     const [winnerOverlayVisible, setWinnerOverlayVisible] = useState(false);
     const [winnerData, setWinnerData] = useState<any>(null);
+    const [showChiefTooltip, setShowChiefTooltip] = useState(false);
 
     // Horizontal pager
     const pagerRef = useRef<ScrollView>(null);
@@ -95,7 +90,7 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
 
     // Vertical scroll (collapsible header)
     const scrollY = useRef(new Animated.Value(0)).current;
-    const tabScrollOffsets = useRef<Record<TabId, number>>({ meals: 0, workouts: 0, macros: 0 });
+    const tabScrollOffsets = useRef<Record<TabId, number>>({ meals: 0, workouts: 0, macros: 0, maps: 0 });
 
     const headerTranslateY = scrollY.interpolate({
         inputRange: [0, Math.max(headerHeight, 1)],
@@ -116,8 +111,6 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
     }, [tribeId]);
 
     const fetchPosts = useCallback(async (days: number) => {
-        // Use a zero-UUID for onboarding users so the backend feed query executes,
-        // and secondary like/bookmark queries safely return empty arrays.
         const effectiveUserId = currentUserId || '00000000-0000-0000-0000-000000000000';
         const data = await SupabaseTribeService.getTribeFeed(effectiveUserId, tribeId, days);
         setPosts(data);
@@ -131,6 +124,19 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
         fetchPosts(daysBack);
     }, [fetchPosts, daysBack]);
 
+    useEffect(() => {
+        if (!tribe) return; // Wait until data loads and Pager is mounted
+
+        if (initialTab && TAB_IDS.includes(initialTab as TabId)) {
+            const tabIndex = TABS.findIndex(t => t.id === initialTab);
+            if (tabIndex !== -1) {
+                setTimeout(() => switchTab(initialTab as TabId, tabIndex), 100); 
+            }
+        } else if (initialTab === 'feed') {
+            setTimeout(() => switchTab('meals', 0), 100);
+        }
+    }, [initialTab, tribe]);
+
     // ── Check for Concluded Competition Winner Celebration ────────────────────
     useEffect(() => {
         if (!tribeId || !tribe) {
@@ -141,7 +147,6 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
         const checkCompetitionWinner = async () => {
             try {
                 console.log("[WinnerCheck] Querying completed competitions for tribeId:", resolvedTribeId);
-                // Fetch completed competition for this tribe
                 const { data: compData, error: compErr } = await supabase
                     .from('competitions')
                     .select('*')
@@ -163,7 +168,6 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
                 const competition = compData[0];
                 console.log("[WinnerCheck] Found completed competition:", competition.id);
 
-                // Check if user has already dismissed this overlay
                 const cacheKey = `TUMI_TRIBES_WINNER_OVERLAY_DISMISSED_${resolvedTribeId}`;
                 const dismissed = await AsyncStorage.getItem(cacheKey);
                 console.log("[WinnerCheck] Dismissed cache key value:", dismissed);
@@ -172,8 +176,6 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
                     return;
                 }
 
-
-                // Fetch scoreboard cache to check latest live scores
                 let cachedPointsMap: Record<string, number> = {};
                 try {
                     const cacheKeyScoreboard = `TUMI_TRIBES_SCOREBOARD_STATE_V2_${resolvedTribeId}`;
@@ -188,7 +190,6 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
                     console.log("[WinnerCheck] Error reading cached points:", cacheErr);
                 }
 
-                // Call scoreboard RPCs to fetch and sort the winning champion member
                 console.log("[WinnerCheck] Fetching scoreboard members and tiebreakers...");
                 const { data: members, error: memErr } = await supabase
                     .rpc('get_scoreboard_members', { target_tribe_id: resolvedTribeId });
@@ -223,17 +224,13 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
                         return handle.replace(/^@/, '').toLowerCase().trim();
                     };
 
-                    // First populate with cached points or fake seed points to ensure we never have 0 pts
-                    console.log("[WinnerCheck] cachedPointsMap keys & values:", Object.keys(cachedPointsMap), cachedPointsMap);
                     members.forEach((m: any) => {
                         const normH = normalizeHandle(m.handle || '');
                         const seedPts = FAKE_INITIAL_POINTS_BY_HANDLE[normH] ?? 0;
                         const cachedPts = cachedPointsMap[m.id];
                         dbPointsMap[m.id] = cachedPts ?? seedPts;
-                        console.log(`[WinnerCheck] Member: ${m.name} (${m.handle}) [ID: ${m.id}] | cachedPts: ${cachedPts} | seedPts: ${seedPts} | final: ${dbPointsMap[m.id]}`);
                     });
 
-                    // Overwrite with actual DB ledger points if available
                     if (tiebreakerRows && tiebreakerRows.length > 0) {
                         tiebreakerRows.forEach((row: any) => {
                             dbPointsMap[row.user_id] = Number(row.total_points);
@@ -247,7 +244,6 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
                         });
                     }
 
-                    // Sort exactly according to useTribeScoreboard high-fidelity tiebreaker rules
                     const sorted = [...members].sort((a, b) => {
                         const ptsA = dbPointsMap[a.id] || 0;
                         const ptsB = dbPointsMap[b.id] || 0;
@@ -272,7 +268,6 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
                     if (sorted.length > 0) {
                         const champion = sorted[0];
                         const score = dbPointsMap[champion.id] || 0;
-                        console.log("[WinnerCheck] Found champion:", champion.name, "with points:", score);
                         
                         const championData = {
                             name: champion.name || 'Anonymous User',
@@ -281,14 +276,9 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
                             points: score
                         };
 
-
                         setWinnerData(championData);
                         setWinnerOverlayVisible(true);
-                    } else {
-                        console.log("[WinnerCheck] No sorted members found.");
                     }
-                } else {
-                    console.log("[WinnerCheck] Members list is empty or null");
                 }
             } catch (err) {
                 console.error('[WinnerCheck] Error checking competition winner:', err);
@@ -302,7 +292,6 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
     useEffect(() => {
         if (!tribeId) return;
 
-        // Use a unique channel ID to avoid name collisions during updates/navigation re-runs
         const uniqueChannelId = `tribe-likes-${tribeId}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
         const channel = supabase
             .channel(uniqueChannelId)
@@ -310,14 +299,12 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'likes' },
                 async () => {
-                    // Re-fetch posts to get updated like counts
                     const effectiveUserId = currentUserId || '00000000-0000-0000-0000-000000000000';
                     const fresh = await SupabaseTribeService.getTribeFeed(effectiveUserId, tribeId, daysBack);
                     setPosts(fresh);
                 }
             );
 
-        // Strictly invoke subscribe() after registering the listener
         channel.subscribe();
 
         return () => {
@@ -344,7 +331,6 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
     // ── Interaction handlers ──────────────────────────────────────────────────
     const handleLike = useCallback(async (post: FeedPost) => {
         if (!currentUserId) return;
-        // Optimistic update
         setPosts(prev => prev.map(p =>
             p.id === post.id
                 ? {
@@ -362,10 +348,8 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
 
         if (!currentUserId) {
             if (selectedTribeIds.includes(tribe.id)) {
-                // "Leave" behavior
                 setSelectedTribeIds(selectedTribeIds.filter(id => id !== tribe.id));
             } else {
-                // "Join" behavior
                 setSelectedTribeIds([...selectedTribeIds, tribe.id]);
                 if (tribe.privacy === 'private') {
                     Alert.alert('Requested', 'Your join request has been saved for when you complete setup.');
@@ -405,12 +389,16 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
         if (isPrivate) Alert.alert('Requested', 'Your join request has been sent.');
     }, [currentUserId, isUserMember, isUserRequested, isPrivate, tribe, joinTribe, leaveTribe, fetchTribe, selectedTribeIds, setSelectedTribeIds]);
 
-
+    const switchTab = (tab: TabId, index: number) => {
+        setActiveTab(tab);
+        pagerRef.current?.scrollTo({ x: index * width, animated: true });
+        scrollY.setValue(Math.max(0, tabScrollOffsets.current[tab]));
+    };
 
     if (!tribe) {
         return (
-            <View style={{ flex: 1, backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center' }}>
-                <ActivityIndicator color={C.gold} size="large" />
+            <View style={{ flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' }}>
+                <ActivityIndicator color={Colors.theme.harvestGold} size="large" />
             </View>
         );
     }
@@ -418,12 +406,6 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
     const openModal = (config: any) => {
         setModalConfig(config);
         setModalVisible(true);
-    };
-
-    const switchTab = (tab: TabId, index: number) => {
-        setActiveTab(tab);
-        pagerRef.current?.scrollTo({ x: index * width, animated: true });
-        scrollY.setValue(Math.max(0, tabScrollOffsets.current[tab]));
     };
 
     // ── Sub-renders ───────────────────────────────────────────────────────────
@@ -451,7 +433,7 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
 
         return (
             <TouchableOpacity onPress={() => openModal({ title, description, iconName })}>
-                <MaterialCommunityIcons name={iconName} size={20} color={C.dust} />
+                <MaterialCommunityIcons name={iconName} size={20} color={Colors.theme.dust} />
             </TouchableOpacity>
         );
     };
@@ -463,7 +445,7 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
         const title = isNatural ? 'Natural' : 'Enhanced';
         const description = isNatural ? 'This tribe is 100% natural.' : 'This tribe is enhanced.';
         const iconName = isNatural ? 'leaf' : 'lightning-bolt';
-        const color = isNatural ? C.natural : C.gold;
+        const color = isNatural ? Colors.natural : Colors.theme.burntSienna;
 
         return (
             <TouchableOpacity onPress={() => openModal({ title, description, iconName })}>
@@ -487,7 +469,7 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
                 modifier: isBulk ? '+' : isCut ? '–' : undefined
             })}>
                 <View style={styles.activityIconWrapper}>
-                    <MaterialCommunityIcons name={iconName as any} size={20} color={C.dust} />
+                    <MaterialCommunityIcons name={iconName as any} size={20} color={Colors.theme.dust} />
                     {isBulk && <Text style={styles.activitySymbol}>+</Text>}
                     {isCut && <Text style={styles.activitySymbol}>–</Text>}
                 </View>
@@ -499,38 +481,38 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
         if (isUserChief) {
             return (
                 <TouchableOpacity
-                    style={styles.goldButton}
+                    style={styles.actionButton}
                     onPress={() => router.push({ pathname: '/create-tribe', params: { mode: 'edit', tribeId: tribe.id } } as any)}
                 >
-                    <Ionicons name="pencil" size={14} color={C.dust} style={{ marginRight: 4 }} />
-                    <Text style={styles.goldButtonText} numberOfLines={1}>Edit</Text>
+                    <Ionicons name="pencil" size={14} color={Colors.theme.harvestGold} style={{ marginRight: 4 }} />
+                    <Text style={styles.actionButtonText} numberOfLines={1}>Edit</Text>
                 </TouchableOpacity>
             );
         }
         if (isUserMember) {
             return (
-                <TouchableOpacity style={styles.goldButton} onPress={handleJoinPress}>
-                    <Ionicons name="checkmark-circle" size={16} color={C.dust} style={{ marginRight: 6 }} />
-                    <Text style={styles.goldButtonText}>Member</Text>
+                <TouchableOpacity style={[styles.actionButton, styles.actionButtonActive]} onPress={handleJoinPress}>
+                    <Ionicons name="checkmark-circle" size={16} color={Colors.theme.matteBlack} style={{ marginRight: 6 }} />
+                    <Text style={[styles.actionButtonText, { color: Colors.theme.matteBlack }]}>Member</Text>
                 </TouchableOpacity>
             );
         }
         if (isUserRequested) {
             return (
-                <TouchableOpacity style={[styles.goldButton, { backgroundColor: C.charcoalGray, borderColor: C.charcoalGray }]} onPress={handleJoinPress}>
-                    <Text style={styles.goldButtonText}>Requested</Text>
+                <TouchableOpacity style={[styles.actionButton, styles.actionButtonRequested]} onPress={handleJoinPress}>
+                    <Text style={[styles.actionButtonText, { color: Colors.theme.matteBlack }]}>Requested</Text>
                 </TouchableOpacity>
             );
         }
         return (
-            <TouchableOpacity style={styles.goldButton} onPress={handleJoinPress}>
-                <Text style={styles.goldButtonText}>{isPrivate ? 'Request' : 'Join'}</Text>
+            <TouchableOpacity style={styles.actionButton} onPress={handleJoinPress}>
+                <Text style={styles.actionButtonText}>{isPrivate ? 'Request' : 'Join'}</Text>
             </TouchableOpacity>
         );
     };
 
     const renderTabIcon = (tab: typeof TABS[number], isActive: boolean) => {
-        const color = isActive ? C.gold : C.dust;
+        const color = isActive ? Colors.theme.harvestGold : Colors.theme.softWhite;
         if (tab.iconLib === 'ion') {
             return <Ionicons name={tab.icon as any} size={28} color={color} />;
         }
@@ -543,7 +525,7 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
             {/* Back button */}
             <View style={{ width: '100%', alignItems: 'flex-start', marginBottom: 10 }}>
                 <TouchableOpacity onPress={() => router.back()} style={{ padding: 10 }}>
-                    <Ionicons name="arrow-back" size={26} color={C.dust} />
+                    <Ionicons name="arrow-back" size={26} color={Colors.theme.dust} />
                 </TouchableOpacity>
             </View>
 
@@ -575,36 +557,46 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
                     <MaterialCommunityIcons 
                         name={tribe.privacy === 'private' ? 'lock-outline' : 'earth'} 
                         size={20} 
-                        color={C.dust} 
+                        color={Colors.theme.dust} 
                     />
                 </TouchableOpacity>
             </View>
 
             {/* Chief handle + chief's natural/activity icons */}
             <TouchableOpacity
-                style={styles.chiefRow}
+                style={[styles.chiefRow, { position: 'relative' }]}
                 onPress={() => {
                     if (tribe.chief?.handle) {
                         router.push({ pathname: '/user/[handle]', params: { handle: tribe.chief.handle } } as any);
                     }
                 }}
             >
+                <Pressable
+                    onPress={(e) => {
+                        e.stopPropagation();
+                        setShowChiefTooltip(!showChiefTooltip);
+                    }}
+                    style={{ paddingRight: 4 }}
+                >
+                    <MaterialCommunityIcons name="crown" size={18} color={Colors.theme.harvestGold} />
+                </Pressable>
                 <Text style={styles.chiefHandle}>{tribe.chief?.handle ?? '@unknown'}</Text>
                 {tribe.chief?.status === 'natural' && (
-                    <MaterialCommunityIcons name="leaf" size={16} color={C.natural} style={{ marginLeft: 4 }} />
+                    <MaterialCommunityIcons name="leaf" size={16} color={Colors.natural} style={{ marginLeft: 4 }} />
                 )}
                 {tribe.chief?.activityIcon && (
-                    <MaterialCommunityIcons name={tribe.chief.activityIcon as any} size={14} color={C.dust} style={{ marginLeft: 2 }} />
+                    <MaterialCommunityIcons name={tribe.chief.activityIcon as any} size={14} color={Colors.theme.dust} style={{ marginLeft: 2 }} />
                 )}
+
             </TouchableOpacity>
 
             {/* Action buttons */}
             <View style={styles.buttonRow}>
                 <TouchableOpacity
-                    style={[styles.goldButton, { flex: 1 }]}
+                    style={[styles.actionButton, { flex: 1 }]}
                     onPress={() => router.push(`/tribe/${tribe.id}/chat` as any)}
                 >
-                    <Text style={styles.goldButtonText}>
+                    <Text style={styles.actionButtonText}>
                         {tribe.privacy === 'public' && (tribe.memberCount ?? 0) > 100 
                             ? 'Tribe Announcements' 
                             : 'Tribe chat'}
@@ -627,45 +619,36 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
 
             {/* Tab selector */}
             <View style={styles.tabContainer}>
-                {/* Top accent lines */}
-                <View style={styles.tabLineContainer}>
-                    {TABS.map((tab) => (
-                        <View key={tab.id} style={styles.tabLineSegment}>
-                            <View style={[styles.tabLine, { backgroundColor: activeTab === tab.id ? C.gold : C.dust }]} />
-                        </View>
-                    ))}
-                </View>
-
                 {/* Tab icons + counts */}
                 <View style={styles.tabIconsRow}>
                     {TABS.map((tab, index) => {
                         const isActive = activeTab === tab.id;
-                        const count = tribe?.stats?.[tab.id] ?? 0;
+                        const count = tab.id === 'maps' ? filterForTab(posts, 'maps').length : (tribe?.stats?.[tab.id] ?? 0);
                         return (
                             <TouchableOpacity
                                 key={tab.id}
-                                style={styles.tabItem}
+                                style={[
+                                    styles.tabItem,
+                                    {
+                                        borderTopWidth: StyleSheet.hairlineWidth,
+                                        borderBottomWidth: StyleSheet.hairlineWidth,
+                                        borderColor: Colors.theme.harvestGold,
+                                    }
+                                ]}
                                 onPress={() => switchTab(tab.id, index)}
                             >
+                                {isActive && <View style={styles.activeTabIndicatorTop} />}
+                                {isActive && <View style={styles.activeTabIndicatorBottom} />}
                                 {renderTabIcon(tab, isActive)}
-                                <Text style={[styles.tabStatVal, { color: isActive ? C.white : C.charcoalGray }]}>
+                                <Text style={[styles.tabStatVal, { color: isActive ? Colors.theme.harvestGold : Colors.theme.softWhite }]}>
                                     {count}
                                 </Text>
-                                <Text style={[styles.tabStatLabel, { color: isActive ? C.white : C.charcoalGray }]}>
+                                <Text style={[styles.tabStatLabel, { color: isActive ? Colors.theme.harvestGold : Colors.theme.softWhite }]}>
                                     {tab.label}
                                 </Text>
                             </TouchableOpacity>
                         );
                     })}
-                </View>
-
-                {/* Bottom accent lines */}
-                <View style={styles.tabLineContainer}>
-                    {TABS.map((tab) => (
-                        <View key={tab.id} style={styles.tabLineSegment}>
-                            <View style={[styles.tabLine, { backgroundColor: activeTab === tab.id ? C.gold : C.dust }]} />
-                        </View>
-                    ))}
                 </View>
             </View>
         </View>
@@ -687,7 +670,7 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
         return (
             <TouchableOpacity style={styles.loadMoreBtn} onPress={handleLoadMore} disabled={isLoadingMore}>
                 {isLoadingMore
-                    ? <ActivityIndicator color={C.gold} size="small" />
+                    ? <ActivityIndicator color={Colors.theme.harvestGold} size="small" />
                     : <Text style={styles.loadMoreText}>Load older posts (+3 days)</Text>
                 }
             </TouchableOpacity>
@@ -698,7 +681,6 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
         <SafeAreaView style={styles.container}>
             {canView ? (
                 <>
-                    {/* Horizontal swipe pager — one full-width page per tab */}
                     <Animated.ScrollView
                         ref={pagerRef as any}
                         horizontal
@@ -744,7 +726,6 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
                                                 post={item}
                                                 onPressLike={() => handleLike(item)}
                                                 onPressComment={() => {
-                                                    // Navigate to the full post detail (same as home feed tap)
                                                     router.push({ pathname: '/post/[id]', params: { id: item.id } } as any);
                                                 }}
                                                 onPressShare={() => {}}
@@ -773,7 +754,6 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
                         })}
                     </Animated.ScrollView>
 
-                    {/* Floating header — profile info + tabs — sits on top of pager */}
                     <Animated.View
                         style={[
                             styles.headerContainer, 
@@ -786,14 +766,13 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
                     </Animated.View>
                 </>
             ) : (
-                /* Private tribe — show profile + lock */
                 <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
                     {renderHeader()}
                     <View style={styles.privateLock}>
-                        <MaterialCommunityIcons name="lock" size={60} color={C.dust} />
+                        <MaterialCommunityIcons name="lock" size={60} color={Colors.theme.dust} />
                         <Text style={styles.lockText}>Join this tribe to view its feed</Text>
-                        <TouchableOpacity style={[styles.goldButton, { marginTop: 20, paddingHorizontal: 32 }]} onPress={handleJoinPress}>
-                            <Text style={styles.goldButtonText}>{isUserRequested ? 'Request Sent' : 'Request to Join'}</Text>
+                        <TouchableOpacity style={[styles.actionButton, { marginTop: 20, paddingHorizontal: 32 }]} onPress={handleJoinPress}>
+                            <Text style={styles.actionButtonText}>{isUserRequested ? 'Request Sent' : 'Request to Join'}</Text>
                         </TouchableOpacity>
                     </View>
                 </ScrollView>
@@ -813,17 +792,37 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
                 winner={winnerData}
                 themeColor={tribe?.themeColor}
             />
+
+            <Modal
+                visible={showChiefTooltip}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowChiefTooltip(false)}
+            >
+                <Pressable style={styles.overlay} onPress={() => setShowChiefTooltip(false)}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.capsule}>
+                            <Text style={styles.activityText}>Tribe Chief</Text>
+                            <MaterialCommunityIcons
+                                name="crown"
+                                size={28}
+                                color={Colors.theme.harvestGold}
+                            />
+                        </View>
+                    </View>
+                </Pressable>
+            </Modal>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: C.bg },
+    container: { flex: 1, backgroundColor: Colors.background },
     header:    { paddingHorizontal: 6, zIndex: 20 },
 
     // ── Floating header container ─────────────────────────────────────────────
     headerContainer: {
-        backgroundColor: C.bg,
+        backgroundColor: Colors.background,
         paddingBottom: 8,
     },
 
@@ -832,51 +831,124 @@ const styles = StyleSheet.create({
 
     avatar: {
         width: 110, height: 110, borderRadius: 55,
-        borderWidth: 3, borderColor: C.gold,
+        borderWidth: 3, borderColor: Colors.theme.dust,
         marginBottom: 12, alignSelf: 'center',
     },
     tribeName: {
-        fontSize: 30, fontWeight: 'bold', color: C.gold,
-        textAlign: 'center', marginBottom: 6,
+        fontSize: 24, fontWeight: 'bold', color: Colors.theme.softWhite,
+        textAlign: 'center', marginBottom: 2,
     },
     iconRow:  { flexDirection: 'row', gap: 14, marginBottom: 6, alignItems: 'center' },
     chiefRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 18 },
-    chiefHandle: { color: C.sienna, fontSize: 17, fontWeight: 'bold' },
+    chiefHandle: { color: Colors.theme.dust, fontSize: 16, fontWeight: '600' },
 
-    // ── Buttons ───────────────────────────────────────────────────────────────
+    // ── Action Buttons ────────────────────────────────────────────────────────
     buttonRow: { flexDirection: 'row', gap: 12, marginBottom: 20, width: '100%' },
-    goldButton: {
+    actionButton: {
         flex: 1,
-        backgroundColor: C.gold, borderWidth: 1.5, borderColor: C.gold,
-        paddingVertical: 12, borderRadius: 24,
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+        backgroundColor: Colors.theme.charcoal,
+        borderWidth: 1,
+        borderColor: Colors.theme.harvestGold,
+        paddingVertical: 12,
+        borderRadius: 25,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    goldButtonText: { color: C.dust, fontWeight: 'bold', fontSize: 15 },
+    actionButtonActive: {
+        backgroundColor: Colors.theme.harvestGold,
+        borderColor: Colors.theme.harvestGold,
+    },
+    actionButtonRequested: {
+        backgroundColor: Colors.theme.dust,
+        borderColor: Colors.theme.dust,
+    },
+    actionButtonText: {
+        color: Colors.theme.harvestGold,
+        fontWeight: 'bold',
+        fontSize: 14,
+    },
 
     // ── Members ───────────────────────────────────────────────────────────────
-    memberCount: { fontSize: 40, fontWeight: 'bold', color: C.white, textAlign: 'center' },
-    memberLabel: { color: C.charcoalGray, fontSize: 14, textAlign: 'center' },
+    memberCount: { fontSize: 40, fontWeight: 'bold', color: Colors.white, textAlign: 'center' },
+    memberLabel: { color: Colors.theme.dust, fontSize: 14, textAlign: 'center' },
 
     // ── Tab selector ──────────────────────────────────────────────────────────
     tabContainer:   { width: '100%', marginTop: 6, marginBottom: 4 },
-    tabLineContainer: { flexDirection: 'row', width: '100%' },
-    tabLineSegment: { flex: 1, paddingHorizontal: 2 },
-    tabLine:        { height: 2, borderRadius: 1 },
-    tabIconsRow:    { flexDirection: 'row', width: '100%', paddingVertical: 10 },
-    tabItem:        { flex: 1, alignItems: 'center', gap: 2 },
+    tabIconsRow:    { 
+        flexDirection: 'row', 
+        width: '100%', 
+    },
+    tabItem:        { 
+        flex: 1, 
+        alignItems: 'center', 
+        gap: 2, 
+        paddingVertical: 10,
+        position: 'relative',
+    },
+    activeTabIndicatorTop: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 2,
+        backgroundColor: Colors.theme.harvestGold,
+        zIndex: 10,
+    },
+    activeTabIndicatorBottom: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 3,
+        backgroundColor: Colors.theme.harvestGold,
+        zIndex: 10,
+    },
     tabStatVal:     { fontSize: 14, fontWeight: 'bold', marginTop: 4 },
     tabStatLabel:   { fontSize: 11 },
+    overlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContent: {
+        width: '90%',
+        alignItems: 'center',
+    },
+    capsule: {
+        flexDirection: 'row',
+        backgroundColor: Colors.theme.charcoal,
+        borderWidth: 1,
+        borderColor: Colors.theme.harvestGold,
+        paddingHorizontal: 30,
+        paddingVertical: 18,
+        borderRadius: 100,
+        alignItems: 'center',
+        gap: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
+        elevation: 8,
+    },
+    activityText: {
+        color: Colors.theme.softWhite,
+        fontSize: 26,
+        fontWeight: '600',
+        fontStyle: 'italic',
+    },
 
     // ── Feed ──────────────────────────────────────────────────────────────────
     postWrapper:  { paddingHorizontal: 16, marginBottom: 12 },
     emptyState:   { alignItems: 'center', marginTop: 60, opacity: 0.6, paddingHorizontal: 32 },
-    emptyText:    { color: C.dust, fontSize: 16, fontWeight: '600', marginTop: 12, textAlign: 'center' },
+    emptyText:    { color: Colors.theme.dust, fontSize: 16, fontWeight: '600', marginTop: 12, textAlign: 'center' },
     loadMoreBtn:  { alignItems: 'center', paddingVertical: 16 },
-    loadMoreText: { color: C.gold, fontSize: 14, fontWeight: '600' },
+    loadMoreText: { color: Colors.theme.harvestGold, fontSize: 14, fontWeight: '600' },
 
     // ── Private lock ──────────────────────────────────────────────────────────
     privateLock: { alignItems: 'center', marginTop: 60, paddingHorizontal: 32 },
-    lockText:    { color: C.dust, fontSize: 17, fontWeight: 'bold', marginTop: 10, textAlign: 'center' },
+    lockText:    { color: Colors.theme.dust, fontSize: 17, fontWeight: 'bold', marginTop: 10, textAlign: 'center' },
     activityIconWrapper: {
         flexDirection: 'row',
         alignItems: 'flex-start',
@@ -895,7 +967,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     endOfPostsText: {
-        color: C.charcoalGray,
+        color: Colors.theme.dust,
         fontSize: 14,
         fontWeight: '600',
         letterSpacing: 0.5,

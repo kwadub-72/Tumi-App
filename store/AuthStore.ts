@@ -32,6 +32,8 @@ export interface DbProfile {
     last_logged_date?: string | null;
     timezone?: string;
     expo_push_token?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
 }
 
 interface AuthState {

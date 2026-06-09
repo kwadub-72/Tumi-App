@@ -19,6 +19,9 @@ CREATE TABLE public.macro_maps (
   plateau_formula_json JSONB,
   is_live BOOLEAN DEFAULT false,
   is_published BOOLEAN DEFAULT false,
+  creator_status_snapshot VARCHAR,
+  creator_activity_snapshot VARCHAR,
+  creator_activity_icon_snapshot VARCHAR,
   created_at TIMESTAMPTZ DEFAULT now(),
   ended_at TIMESTAMPTZ
 );
@@ -218,6 +221,7 @@ RETURNS TABLE (
     weight NUMERIC,
     intent_driver VARCHAR
 ) AS $$
+BEGIN
     RETURN QUERY
     SELECT 
         mh.created_at,

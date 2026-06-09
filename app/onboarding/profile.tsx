@@ -11,15 +11,15 @@ import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
 import { 
     UsernameInput, 
     EmailInput, 
-    FirstNameInput, 
-    LastNameInput, 
+    DisplayNameInput, 
+    FirstNameInput,
+    LastNameInput,
     BirthdayPicker, 
     PasswordInput 
 } from '@/src/shared/components/AuthInputs';
-
 export default function ProfileScreen() {
     const router = useRouter();
-    const { handle, setHandle, name, setName, dob, setDob, bio, setBio, avatarUri, setAvatarUri, setAvatarBase64, setEmail: setStoreEmail, setPassword: setStorePassword } = useOnboardingStore();
+    const { handle, setHandle, name, setName, first_name, setFirstName, last_name, setLastName, dob, setDob, bio, setBio, avatarUri, setAvatarUri, setAvatarBase64, setEmail: setStoreEmail, setPassword: setStorePassword } = useOnboardingStore();
 
     const pickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
@@ -36,8 +36,9 @@ export default function ProfileScreen() {
     };
 
     // Local state for additional fields not directly inside the store right now
-    const [firstName, setFirstName] = useState(name ? name.split(' ')[0] : '');
-    const [lastName, setLastName] = useState(name ? name.split(' ').slice(1).join(' ') : '');
+    const [firstName, setFirstNameLocal] = useState(first_name || '');
+    const [lastName, setLastNameLocal] = useState(last_name || '');
+    const [displayName, setDisplayNameLocal] = useState(name || '');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
 
@@ -110,6 +111,7 @@ export default function ProfileScreen() {
     // Input Refs for programmatic focus management
     const firstNameRef = useRef<TextInput>(null);
     const lastNameRef = useRef<TextInput>(null);
+    const displayNameRef = useRef<TextInput>(null);
     const emailRef = useRef<TextInput>(null);
     const handleRef = useRef<TextInput>(null);
     const bioRef = useRef<TextInput>(null);
@@ -151,13 +153,18 @@ export default function ProfileScreen() {
     // Master validation gate
     const isFormValid = 
         firstName.trim().length > 0 && 
+        lastName.trim().length > 0 && 
+        displayName.trim().length > 0 && 
+        displayName.length <= 10 && 
         emailStatus === 'success' && 
         handleStatus === 'success' && 
         isPasswordStrong;
 
     const handleContinue = () => {
         if (!isFormValid) return;
-        setName(`${firstName.trim()} ${lastName.trim()}`);
+        setName(displayName.trim());
+        setFirstName(firstName.trim());
+        setLastName(lastName.trim());
         setHandle(handle);
         setStoreEmail(email);
         setStorePassword(password);
@@ -227,7 +234,7 @@ export default function ProfileScreen() {
                                 <FirstNameInput 
                                     ref={firstNameRef}
                                     value={firstName}
-                                    onChangeText={setFirstName}
+                                    onChangeText={setFirstNameLocal}
                                     returnKeyType="next"
                                     onSubmitEditing={() => lastNameRef.current?.focus()}
                                     blurOnSubmit={false}
@@ -235,10 +242,18 @@ export default function ProfileScreen() {
                                 <LastNameInput 
                                     ref={lastNameRef}
                                     value={lastName}
-                                    onChangeText={setLastName}
-                                    returnKeyType="done"
-                                    onSubmitEditing={Keyboard.dismiss}
-                                    blurOnSubmit={true}
+                                    onChangeText={setLastNameLocal}
+                                    returnKeyType="next"
+                                    onSubmitEditing={() => displayNameRef.current?.focus()}
+                                    blurOnSubmit={false}
+                                />
+                                <DisplayNameInput 
+                                    ref={displayNameRef}
+                                    value={displayName}
+                                    onChangeText={setDisplayNameLocal}
+                                    returnKeyType="next"
+                                    onSubmitEditing={() => emailRef.current?.focus()}
+                                    blurOnSubmit={false}
                                 />
                                 <BirthdayPicker 
                                     value={dob || ''}

@@ -569,4 +569,50 @@ export const SupabaseTribeService = {
         }
         return data;
     },
+
+    async approveMembership(tribeId: string, userId: string): Promise<boolean> {
+        // 1. Update the role to 'member'
+        const { error: updateErr } = await supabase
+            .from('tribe_members')
+            .update({ role: 'member' })
+            .eq('tribe_id', tribeId)
+            .eq('user_id', userId);
+
+        if (updateErr) {
+            console.error('[SupabaseTribeService.approveMembership]', updateErr.message);
+            return false;
+        }
+
+        // 2. Increment the member_count on the tribe
+        const { data: currentTribe } = await supabase
+            .from('tribes')
+            .select('member_count')
+            .eq('id', tribeId)
+            .single();
+
+        if (currentTribe) {
+            await supabase
+                .from('tribes')
+                .update({ member_count: (currentTribe.member_count ?? 0) + 1 })
+                .eq('id', tribeId);
+        }
+
+        return true;
+    },
+
+    async rejectMembership(tribeId: string, userId: string): Promise<boolean> {
+        // 1. Delete from tribe_members
+        const { error: deleteErr } = await supabase
+            .from('tribe_members')
+            .delete()
+            .eq('tribe_id', tribeId)
+            .eq('user_id', userId);
+
+        if (deleteErr) {
+            console.error('[SupabaseTribeService.rejectMembership]', deleteErr.message);
+            return false;
+        }
+
+        return true;
+    }
 };

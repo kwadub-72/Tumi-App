@@ -39,6 +39,7 @@ export default function MapPreviewScreen(props: { isOnboarding?: boolean }) {
     const [isComposerVisible, setIsComposerVisible] = useState(false);
     const [caption, setCaption] = useState('');
     const [isSubscribed, setIsSubscribed] = useState(false);
+    const [isSavedMap, setIsSavedMap] = useState(false);
     const [isShareModalVisible, setIsShareModalVisible] = useState(false);
     const [isUnsubscribedModalVisible, setIsUnsubscribedModalVisible] = useState(false);
 
@@ -118,6 +119,15 @@ export default function MapPreviewScreen(props: { isOnboarding?: boolean }) {
                 } else {
                     setIsSubscribed(false);
                 }
+
+                const { data: savedData } = await supabase
+                    .from('saved_macro_maps')
+                    .select('id')
+                    .eq('user_id', session.user.id)
+                    .eq('map_id', map_id)
+                    .maybeSingle();
+
+                setIsSavedMap(!!savedData);
             }
         } catch (err) {
             console.error(err);
@@ -180,6 +190,17 @@ export default function MapPreviewScreen(props: { isOnboarding?: boolean }) {
             setIsUnsubscribedModalVisible(true);
         } catch (err: any) {
             Alert.alert("Error", err.message || "Failed to unsubscribe.");
+        }
+    };
+
+    const handleSaveMap = async () => {
+        if (!session?.user?.id || !map_id) return;
+        try {
+            const newSavedState = await SupabasePostService.toggleSaveMap(session.user.id, map_id as string);
+            setIsSavedMap(newSavedState);
+            Alert.alert("Success", newSavedState ? "Map saved to your Map Book!" : "Map removed from your Map Book.");
+        } catch (err: any) {
+            Alert.alert("Error", err.message || "Failed to save map.");
         }
     };
 
@@ -438,6 +459,12 @@ export default function MapPreviewScreen(props: { isOnboarding?: boolean }) {
                             onPress={handleSubscribe}
                         >
                             <Text style={styles.subscribeText}>Subscribe to Map</Text>
+                        </TouchableOpacity>
+                    )}
+
+                    {!isOnboarding && (
+                        <TouchableOpacity onPress={handleSaveMap} style={styles.saveMapBtn}>
+                            <Text style={styles.saveMapBtnText}>{isSavedMap ? 'Remove from Map book' : 'Save to Map book'}</Text>
                         </TouchableOpacity>
                     )}
                 </View>
@@ -771,7 +798,7 @@ const styles = StyleSheet.create({
     },
     footer: {
         padding: 20,
-        paddingBottom: 40,
+        paddingBottom: 20,
         borderTopWidth: 1,
         borderTopColor: 'rgba(255, 255, 255, 0.05)',
         backgroundColor: Colors.theme.matteBlack,
@@ -926,4 +953,6 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         padding: 5,
     },
+    saveMapBtn: { paddingVertical: 14, alignItems: 'center', marginTop: 8 },
+    saveMapBtnText: { color: Colors.theme.dust, fontSize: 16, fontWeight: '600' },
 });

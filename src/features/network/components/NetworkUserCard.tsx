@@ -22,21 +22,21 @@ export const NetworkUserCard: React.FC<NetworkUserCardProps> = ({
         if (followState === 'following') {
             return (
                 <TouchableOpacity style={[styles.followButton, styles.buttonFollowing]} onPress={onToggleFollow}>
-                    <Ionicons name="person" size={18} color="white" />
-                    <Ionicons name="checkmark" size={12} color="white" style={styles.badgeIcon} />
+                    <Ionicons name="person" size={18} color={Colors.theme.matteBlack} />
+                    <Ionicons name="checkmark" size={12} color={Colors.theme.matteBlack} style={styles.badgeIcon} />
                 </TouchableOpacity>
             );
         } else if (followState === 'requested') {
             return (
                 <TouchableOpacity style={[styles.followButton, styles.buttonRequested]} onPress={onToggleFollow}>
-                    <Ionicons name="person" size={18} color="white" />
-                    <Ionicons name="lock-closed" size={12} color="white" style={styles.badgeIcon} />
+                    <Ionicons name="person" size={18} color={Colors.theme.matteBlack} />
+                    <Ionicons name="lock-closed" size={12} color={Colors.theme.matteBlack} style={styles.badgeIcon} />
                 </TouchableOpacity>
             );
         } else {
             return (
                 <TouchableOpacity style={[styles.followButton, styles.buttonUnfollowed]} onPress={onToggleFollow}>
-                    <Ionicons name="person-add" size={18} color={Colors.theme.matteBlack} />
+                    <Ionicons name="person-add" size={18} color={Colors.theme.harvestGold} />
                 </TouchableOpacity>
             );
         }
@@ -57,7 +57,7 @@ export const NetworkUserCard: React.FC<NetworkUserCardProps> = ({
                     <ActivityIcon 
                         activity={user.activity || ''} 
                         icon={(user.activityIcon as any) || 'hammer'} 
-                        color="white" 
+                        color={Colors.theme.harvestGold} 
                         size={16} 
                     />
                 </View>
@@ -73,12 +73,14 @@ const styles = StyleSheet.create({
     container: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: Colors.theme.matteBlack, // Dark card background for Onyx theme
+        backgroundColor: Colors.theme.charcoal,
         borderRadius: 40,
         padding: 10,
         paddingHorizontal: 15,
         marginBottom: 10,
         height: 60,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.05)',
     },
     avatar: {
         width: 44,
@@ -98,15 +100,15 @@ const styles = StyleSheet.create({
     name: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: Colors.theme.harvestGold, // Harvest Gold
+        color: Colors.theme.softWhite,
         marginRight: 4,
     },
     icon: {
         marginHorizontal: 2,
     },
     handle: {
-        fontSize: 12,
-        color: Colors.theme.burntSienna, // Burnt Sienna
+        fontSize: 13,
+        color: Colors.theme.dust,
         marginTop: -2,
     },
     metrics: {
@@ -128,10 +130,12 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.theme.harvestGold, // Harvest Gold
     },
     buttonUnfollowed: {
-        backgroundColor: 'white',
+        backgroundColor: Colors.theme.charcoal,
+        borderWidth: 1,
+        borderColor: Colors.theme.harvestGold,
     },
     buttonRequested: {
-        backgroundColor: '#666', // Gray
+        backgroundColor: Colors.theme.dust,
     },
     badgeIcon: {
         position: 'absolute',

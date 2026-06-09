@@ -311,11 +311,11 @@ export default function OtherUserProfileScreen() {
         ];
         if (post.macroMap) {
             options.push({
-                text: 'Save to Map Book',
+                text: 'Save to Map book',
                 onPress: async () => {
                     if (session?.user?.id) {
                         await SupabasePostService.toggleSaveMap(session.user.id, post.macroMap!.id);
-                        Alert.alert("Success", "Map saved to your Map Book!");
+                        Alert.alert("Success", "Map saved to your Map book!");
                     }
                 }
             });
@@ -506,17 +506,14 @@ export default function OtherUserProfileScreen() {
                             {
                                 flex: 1,
                                 alignItems: 'center',
-                                borderBottomWidth: 3,
-                                borderBottomColor: activeTab === tab ? Colors.theme.harvestGold : 'transparent',
-                                borderTopWidth: 2,
-                                borderTopColor: activeTab === tab ? Colors.theme.harvestGold : 'transparent',
-                                paddingTop: 8,
                             }
                         ]} 
                         onPress={() => {
                             props.onTabPress(tab);
                         }}
                     >
+                        {activeTab === tab && (<View style={styles.activeTabIndicatorTop} />)}
+                        {activeTab === tab && (<View style={styles.activeTabIndicatorBottom} />)}
                         {tab === 'meals' ? (
                             <MaterialCommunityIcons name="fire" size={32} color={activeTab === tab ? Colors.theme.harvestGold : Colors.theme.softWhite} />
                         ) : tab === 'workouts' ? (
@@ -613,6 +610,76 @@ export default function OtherUserProfileScreen() {
                 }}
             >
                 {tabs.map((tab) => {
+                    if (tab === 'maps') {
+                        const isEmpty = activeProfileMaps.length === 0;
+                        return (
+                            <Tabs.Tab name={tab} key={tab}>
+                                <Tabs.FlatList
+                                    data={activeProfileMaps}
+                                    keyExtractor={(item: any) => item.id}
+                                    renderItem={({ item }: { item: any }) => {
+                                        const mockPost: FeedPost = {
+                                            id: item.id,
+                                            postType: 'map_silent',
+                                            caption: item.map_name || item.name || '',
+                                            macroMap: item,
+                                            user: {
+                                                id: targetProfile.id,
+                                                name: targetProfile.name || '',
+                                                handle: targetProfile.handle || '',
+                                                avatar: targetProfile.avatar_url,
+                                                status: targetProfile.status || 'none',
+                                                activity: targetProfile.activity || '',
+                                                activityIcon: targetProfile.activity_icon || '',
+                                            },
+                                            timeAgo: new Date(item.created_at).toLocaleDateString(),
+                                            stats: {
+                                                likes: 0,
+                                                comments: 0,
+                                                shares: 0,
+                                                saves: 0,
+                                            },
+                                            isLiked: false,
+                                            isSaved: false,
+                                            hasCommented: false,
+                                            comments: [],
+                                        };
+                                        return (
+                                            <View style={{ marginBottom: 16, paddingHorizontal: 16 }}>
+                                                <FeedItem
+                                                    post={mockPost}
+                                                    onPressOptions={() => handleOptions(mockPost)}
+                                                    onPressComment={() => handleCommentPress(mockPost)}
+                                                    onPressLike={() => toggleLike(mockPost)}
+                                                    onPressVerified={() => setVerifiedModalVisible(true)}
+                                                    onPressHammer={() => setHammerModalVisible(true)}
+                                                    onPressShare={() => {
+                                                        setShareTargetPost(mockPost);
+                                                        setShareModalVisible(true);
+                                                    }}
+                                                    sharedTransitionTag={`post-${item.id}`}
+                                                />
+                                            </View>
+                                        );
+                                    }}
+                                    ListEmptyComponent={renderEmptyState(tab)}
+                                    scrollEnabled={!isEmpty}
+                                    bounces={!isEmpty}
+                                    showsVerticalScrollIndicator={false}
+                                    refreshControl={
+                                        !isEmpty ? (
+                                            <RefreshControl
+                                                refreshing={refreshing}
+                                                onRefresh={() => loadData(false)}
+                                                tintColor={Colors.theme.harvestGold}
+                                            />
+                                        ) : undefined
+                                    }
+                                />
+                            </Tabs.Tab>
+                        );
+                    }
+
                     const tabPosts = getTabPosts(tab);
                     const isEmpty = tabPosts.length === 0;
                     return (
@@ -801,13 +868,34 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
-        borderBottomWidth: 1,
-        borderBottomColor: '#ccc',
     },
     tabItem: {
         alignItems: 'center',
         paddingBottom: 15,
         flex: 1,
+        position: 'relative',
+        paddingVertical: 10,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderColor: Colors.theme.harvestGold,
+    },
+    activeTabIndicatorTop: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 2,
+        backgroundColor: Colors.theme.harvestGold,
+        zIndex: 10,
+    },
+    activeTabIndicatorBottom: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 3,
+        backgroundColor: Colors.theme.harvestGold,
+        zIndex: 10,
     },
     bioContainer: {
         paddingHorizontal: 20,

@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Colors } from '@/src/shared/theme/Colors';
 import { useNotificationStore, Notification } from '@/src/shared/stores/NotificationStore';
+import { useUserTribeStore } from '@/src/store/UserTribeStore';
 
 export default function NotificationScreen() {
     const router = useRouter();
@@ -25,8 +26,10 @@ export default function NotificationScreen() {
         markAsRead, 
         markAllAsRead 
     } = useNotificationStore();
+    const { selectTribe } = useUserTribeStore();
 
     const [refreshing, setRefreshing] = useState(false);
+    const [expandedId, setExpandedId] = useState<string | null>(null);
 
     useEffect(() => {
         fetchNotifications();
@@ -49,7 +52,8 @@ export default function NotificationScreen() {
             if (routeData.postId) {
                 router.push(`/post/${routeData.postId}`);
             } else if (routeData.tribeId) {
-                router.push(`/tribe/${routeData.tribeId}`);
+                selectTribe(routeData.tribeId);
+                router.push({ pathname: '/(tabs)', params: { tab: 'Tribe' } } as any);
             } else if (routeData.handle) {
                 router.push(`/user/${routeData.handle}`);
             }
@@ -110,9 +114,23 @@ export default function NotificationScreen() {
                     ]}>
                         {item.title}
                     </Text>
-                    <Text style={styles.notificationBody} numberOfLines={2}>
+                    <Text style={styles.notificationBody} numberOfLines={expandedId === item.id ? undefined : 2}>
                         {item.body}
                     </Text>
+                    
+                    <TouchableOpacity 
+                        style={{ alignSelf: 'flex-start', paddingVertical: 4, marginTop: 2, zIndex: 10 }}
+                        onPress={(e) => {
+                            e.stopPropagation(); // Stop routing trigger
+                            setExpandedId(expandedId === item.id ? null : item.id);
+                        }}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                        <Text style={{ color: Colors.theme.harvestGold, fontSize: 12, fontWeight: 'bold' }}>
+                            {expandedId === item.id ? 'Show less' : 'Show more'}
+                        </Text>
+                    </TouchableOpacity>
+
                     <Text style={styles.timestamp}>
                         {formatTimeAgo(item.created_at)}
                     </Text>

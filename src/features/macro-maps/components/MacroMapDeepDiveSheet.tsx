@@ -201,7 +201,7 @@ export function MacroMapDeepDiveSheet({ visible, onClose, mapData, isCreator, on
         const isLast = currentIndex === mapData.checkpoints.length - 1;
 
         return (
-            <View style={{ backgroundColor: Colors.theme.matteBlack }}>
+            <View style={{ backgroundColor: Colors.theme.matteBlack, paddingBottom: 25, paddingTop: 10 }}>
                 <View style={styles.footerContainer}>
                     <TouchableOpacity
                         style={[
@@ -229,8 +229,8 @@ export function MacroMapDeepDiveSheet({ visible, onClose, mapData, isCreator, on
                         </Text>
                     </TouchableOpacity>
                 </View>
-                <TouchableOpacity style={styles.skipButton} onPress={onSaveMap}>
-                    <Text style={styles.skipText}>{isSavedMap ? 'Remove from Map Book' : 'Save to Map Book'}</Text>
+                <TouchableOpacity style={styles.saveMapBtn} onPress={onSaveMap}>
+                    <Text style={styles.saveMapBtnText}>{isSavedMap ? 'Remove from Map book' : 'Save to Map book'}</Text>
                 </TouchableOpacity>
             </View>
         );
@@ -493,8 +493,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    skipButton: { paddingVertical: 14, alignItems: 'center', marginTop: 8 },
-    skipText: { color: Colors.theme.dust, fontSize: 16, fontWeight: '600' },
+    skipButton: {
+        backgroundColor: Colors.theme.charcoal,
+        borderWidth: 1.5,
+        borderColor: Colors.theme.harvestGold,
+    },
+    saveMapBtn: { paddingVertical: 14, alignItems: 'center', marginTop: 8 },
+    saveMapBtnText: { color: Colors.theme.dust, fontSize: 16, fontWeight: '600' },
     skipButtonDisabled: {
         borderColor: 'rgba(255, 255, 255, 0.1)',
     },

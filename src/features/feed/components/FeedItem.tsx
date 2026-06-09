@@ -1204,6 +1204,12 @@ export default function FeedItem({
                     onClose={() => setIsMacroMapSheetVisible(false)} 
                     mapData={post.macroMap as any} 
                     isCreator={post.user.id === session?.user?.id}
+                    onSaveMap={async () => {
+                        if (session?.user?.id && post.macroMap) {
+                            await SupabasePostService.toggleSaveMap(session.user.id, post.macroMap.id);
+                            Alert.alert("Success", "Map Book updated!");
+                        }
+                    }}
                 />
             )}
             

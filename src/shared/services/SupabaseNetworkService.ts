@@ -52,6 +52,25 @@ export const SupabaseNetworkService = {
         return data.map((row: any) => row.following_id);
     },
 
+    async getPendingFollowRequests(userId: string): Promise<User[]> {
+        const { data, error } = await supabase
+            .from('follow_requests')
+            .select(`
+                follower:profiles!follow_requests_follower_id_fkey (
+                    id, name, handle, avatar_url, status, activity, activity_icon, height, weight_lbs, body_fat_pct, is_private
+                )
+            `)
+            .eq('following_id', userId)
+            .eq('status', 'pending');
+
+        if (error) {
+            console.error('[SupabaseNetworkService.getPendingFollowRequests]', error.message);
+            return [];
+        }
+
+        return (data || []).map((row: any) => this.mapProfileToUser(row.follower));
+    },
+
     async getFollowCounts(userId: string): Promise<{ followers: number; following: number }> {
         const [followersResult, followingResult] = await Promise.all([
             supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', userId),
