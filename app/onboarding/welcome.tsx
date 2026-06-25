@@ -214,7 +214,7 @@ export default function WelcomeScreen() {
         <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
             <View style={styles.content}>
                 <TabonoLogo size={180} color={Colors.theme.harvestGold} />
-                <Text style={styles.title}>Welcome to Tribe</Text>
+                <Text style={styles.title}>Welcome to Chribe</Text>
                 <Text style={styles.subtitle}>{"Let's do it together"}</Text>
             </View>
 
@@ -224,7 +224,7 @@ export default function WelcomeScreen() {
                         <Ionicons name="mail-unread-outline" size={64} color={Colors.theme.harvestGold} style={{ marginBottom: 16 }} />
                         <Text style={styles.waitingTitle}>Check your email!</Text>
                         <Text style={styles.waitingSubtitle}>
-                            We sent a verification link to your inbox. Tap it to activate your Tribe account.
+                            We sent a verification link to your inbox. Tap it to activate your Chribe account.
                         </Text>
 
                         <View style={styles.waitingButtons}>

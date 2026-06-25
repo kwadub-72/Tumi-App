@@ -10,6 +10,7 @@ import {
     TouchableOpacity,
     View,
     Modal,
+    ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { USDAFoodItem } from '../src/shared/services/USDAFoodService';
@@ -200,7 +201,7 @@ export default function MealEntryScreen() {
                 const parts = itemInCart.amount.split(' ');
                 if (parts.length > 1) {
                     const label = parts.slice(1).join(' ');
-                    const idx = servingUnits.findIndex(u => u.label === label);
+                    const idx = servingUnits.findIndex(u => u.unit === label || u.label === label);
                     if (idx !== -1) setSelectedUnitIndex(idx);
                 }
             }
@@ -306,7 +307,13 @@ export default function MealEntryScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss} accessible={false}>
+            <ScrollView 
+                style={{ flex: 1 }}
+                contentContainerStyle={{ flexGrow: 1 }}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+            >
+                <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss} accessible={false}>
                 {/* ── Header ── */}
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => router.back()}>
@@ -362,6 +369,7 @@ export default function MealEntryScreen() {
                                 keyboardType="decimal-pad"
                                 placeholderTextColor="#666"
                                 textAlign="center"
+                                selectTextOnFocus={true}
                             />
                         </View>
                     </View>
@@ -427,7 +435,8 @@ export default function MealEntryScreen() {
                 <TouchableOpacity style={styles.addCircle} onPress={handleAdd}>
                     <Ionicons name="add" size={32} color={Colors.theme.matteBlack} />
                 </TouchableOpacity>
-            </Pressable>
+                </Pressable>
+            </ScrollView>
 
             {/* ── Dropdown Modal ── */}
             <Modal
@@ -513,7 +522,7 @@ const styles = StyleSheet.create({
     addCircle: {
         width: 60, height: 60, borderRadius: 30, backgroundColor: Colors.theme.harvestGold,
         justifyContent: 'center', alignItems: 'center', alignSelf: 'center',
-        marginTop: 'auto', marginBottom: -25,
+        marginTop: 30, marginBottom: 15,
         // Optional floating shadow
         shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 5, elevation: 4
     },

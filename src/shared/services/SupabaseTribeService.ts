@@ -373,7 +373,7 @@ export const SupabaseTribeService = {
                 activity_icon: args.activityIcon ?? null,
                 natural_status: args.naturalStatus ?? null,
                 chief_id: args.userId,
-                member_count: 0,
+                member_count: 1,
             })
             .select('id')
             .single();
@@ -385,23 +385,22 @@ export const SupabaseTribeService = {
 
         const tribeId = tribeRow.id as string;
 
-        // 2. Add creator as chief (join_tribe handles role assignment)
-        const { error: joinErr } = await supabase.rpc('join_tribe', {
-            p_user_id: args.userId,
-            p_tribe_id: tribeId,
-        });
-        if (joinErr) {
-            console.error('[SupabaseTribeService.createAndPersistTribe] join_tribe', joinErr.message);
+        // 2. Add creator explicitly as chief
+        const { error: memberErr } = await supabase
+            .from('tribe_members')
+            .insert({
+                tribe_id: tribeId,
+                user_id: args.userId,
+                role: 'chief'
+            });
+
+        if (memberErr) {
+            console.error('[SupabaseTribeService.createAndPersistTribe] chief insert', memberErr.message);
+            // Even if this fails, we shouldn't completely crash the return, 
+            // but we log it to trace any RLS constraints blocking the insert.
         }
 
-        // 3. Promote to chief role explicitly (join_tribe defaults to 'member')
-        await supabase
-            .from('tribe_members')
-            .update({ role: 'chief' })
-            .eq('tribe_id', tribeId)
-            .eq('user_id', args.userId);
-
-        // 4. Create competition if configured — the DB trigger auto-generates matchups for faceoff style
+        // 3. Create competition if configured — the DB trigger auto-generates matchups for faceoff style
         if (args.competition) {
             await SupabaseTribeService.createCompetition({
                 tribeId,
@@ -409,7 +408,7 @@ export const SupabaseTribeService = {
             });
         }
 
-        // 5. Return the full Tribe record
+        // 4. Return the full Tribe record
         return SupabaseTribeService.getTribe(tribeId);
     },
 

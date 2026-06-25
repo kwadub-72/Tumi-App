@@ -53,9 +53,9 @@ export default function SignupUpdatePlan() {
 
                 <View style={styles.cardsContainer}>
                     <OptionCard
-                        title="Tribe-generated"
+                        title="Chribe-generated"
                         subtitle="Recommended"
-                        desc="Tribe recommends weekly macro adjustments"
+                        desc="Chribe recommends weekly macro adjustments"
                         isSelected={strategy === 'tribe'}
                         onPress={() => setStrategy('tribe')}
                     />

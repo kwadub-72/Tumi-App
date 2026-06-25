@@ -176,7 +176,7 @@ export default function SignupTribeMacros() {
             </View>
 
             <ScrollView contentContainerStyle={styles.content}>
-                <Text style={styles.title}>Tribe-generated macros</Text>
+                <Text style={styles.title}>Chribe-generated macros</Text>
 
                 <Text style={styles.sectionTitle}>Body metrics</Text>
                 <View style={styles.form}>

@@ -68,7 +68,7 @@ export default function ChiefsChamberScreen() {
             try {
                 const tribeData = await SupabaseTribeService.getTribe(resolvedTribeId);
                 if (!tribeData) {
-                    Alert.alert('Error', 'Failed to fetch tribe details.');
+                    Alert.alert('Error', 'Failed to fetch chribe details.');
                     router.back();
                     return;
                 }
@@ -206,7 +206,7 @@ export default function ChiefsChamberScreen() {
                 });
 
                 const createTimeout = new Promise<null>((_, reject) =>
-                    setTimeout(() => reject(new Error('Database timed out generating matchups. Please check tribe roster and try again.')), 15000)
+                    setTimeout(() => reject(new Error('Database timed out generating matchups. Please check chribe roster and try again.')), 15000)
                 );
 
                 createCompPromiseResolved = await Promise.race([createCompPromise, createTimeout]);
@@ -229,7 +229,7 @@ export default function ChiefsChamberScreen() {
                 });
             }
 
-            Alert.alert('Chamber Updated', 'Tribe configuration and active season parameters saved successfully.', [
+            Alert.alert('Chamber Updated', 'Chribe configuration and active season parameters saved successfully.', [
                 { text: 'OK', onPress: () => router.back() }
             ]);
         } catch (err: any) {
@@ -267,7 +267,7 @@ export default function ChiefsChamberScreen() {
         return (
             <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={Colors.theme.harvestGold} />
-                <Text style={styles.loadingText}>Entering Chief's Chamber...</Text>
+                <Text style={styles.loadingText}>{"Entering Chief's Chamber..."}</Text>
             </View>
         );
     }
@@ -280,9 +280,9 @@ export default function ChiefsChamberScreen() {
                         <Ionicons name="arrow-back" size={24} color={Colors.theme.harvestGold} />
                     </TouchableOpacity>
                     <View style={styles.headerTitleContainer}>
-                        <Text style={styles.headerTitle}>CHIEF'S CHAMBER</Text>
+                        <Text style={styles.headerTitle}>{"CHIEF'S CHAMBER"}</Text>
                         <Text style={styles.headerSubtitle} numberOfLines={1}>
-                            {tribe?.name?.toUpperCase() ?? 'TRIBE'}
+                            {tribe?.name?.toUpperCase() ?? 'CHRIBE'}
                         </Text>
                     </View>
                     <View style={{ width: 40 }} />
@@ -302,7 +302,7 @@ export default function ChiefsChamberScreen() {
                                     <Text style={styles.seasonStatusTitle}>ACTIVE SEASON</Text>
                                 </View>
                                 <Text style={styles.seasonDetailText}>
-                                    Mode: {tribe?.type === 'accountability' ? 'Accountability' : `${tribe?.type === 'head-to-head' ? 'Head-to-Head' : 'Tribe vs Tribe'} • ${activeComp.style === 'faceoff' ? 'Faceoff' : 'Premier'}`}
+                                    Mode: {tribe?.type === 'accountability' ? 'Accountability' : `${tribe?.type === 'head-to-head' ? 'Head-to-Head' : 'Chribe vs Chribe'} • ${activeComp.style === 'faceoff' ? 'Faceoff' : 'Premier'}`}
                                 </Text>
                                 <Text style={styles.seasonDetailText}>
                                     Metric: {activeComp.metric === 'habits' ? 'Daily Macro Tracking' : 'Weekly Weight Change'}
@@ -324,7 +324,7 @@ export default function ChiefsChamberScreen() {
 
                         {/* Section 1: Tribe Type */}
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                            <Text style={[styles.sectionLabel, { marginBottom: 0 }]}>Tribe Type</Text>
+                            <Text style={[styles.sectionLabel, { marginBottom: 0 }]}>Chribe Type</Text>
                             <TouchableOpacity onPress={() => setShowModeInfo(!showModeInfo)} style={{ padding: 4 }}>
                                 <MaterialCommunityIcons name="information-outline" size={20} color={Colors.theme.harvestGold} />
                             </TouchableOpacity>
@@ -333,8 +333,8 @@ export default function ChiefsChamberScreen() {
                         {showModeInfo && (
                             <View style={styles.infoCard}>
                                 <Text style={styles.infoCardText}><Text style={{fontWeight: 'bold', color: Colors.theme.harvestGold}}>Accountability:</Text> Default state. No scores, just tracking consistency.</Text>
-                                <Text style={styles.infoCardText}><Text style={{fontWeight: 'bold', color: Colors.theme.harvestGold}}>Head-to-Head:</Text> Internal tribe 1v1 matchups.</Text>
-                                <Text style={styles.infoCardText}><Text style={{fontWeight: 'bold', color: Colors.theme.harvestGold}}>Tribe vs Tribe:</Text> Compete globally against other tribes.</Text>
+                                <Text style={styles.infoCardText}><Text style={{fontWeight: 'bold', color: Colors.theme.harvestGold}}>Head-to-Head:</Text> Internal chribe 1v1 matchups.</Text>
+                                <Text style={styles.infoCardText}><Text style={{fontWeight: 'bold', color: Colors.theme.harvestGold}}>Chribe vs Chribe:</Text> Compete globally against other chribes.</Text>
                             </View>
                         )}
 
@@ -342,7 +342,7 @@ export default function ChiefsChamberScreen() {
                             {[
                                 { id: 'accountability', label: 'Accountability', icon: 'shield-check-outline' },
                                 { id: 'head-to-head', label: 'Head-to-Head', icon: 'account-switch-outline' },
-                                { id: 'tribe-vs-tribe', label: 'Tribe vs Tribe', icon: 'account-group-outline' },
+                                { id: 'tribe-vs-tribe', label: 'Chribe vs Chribe', icon: 'account-group-outline' },
                             ].map((typeOption) => {
                                 const isSel = selectedType === typeOption.id;
                                 return (
@@ -351,7 +351,7 @@ export default function ChiefsChamberScreen() {
                                         style={[styles.typeCard, isSel && styles.typeCardActive]}
                                         onPress={() => {
                                             if (typeOption.id === 'tribe-vs-tribe') {
-                                                Alert.alert('Coming Soon', 'Tribe vs Tribe is currently in development. Check back soon!');
+                                                Alert.alert('Coming Soon', 'Chribe vs Chribe is currently in development. Check back soon!');
                                                 return;
                                             }
                                             setSelectedType(typeOption.id as TribeType);

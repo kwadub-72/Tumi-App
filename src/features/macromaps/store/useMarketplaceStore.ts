@@ -40,6 +40,7 @@ interface MarketplaceState {
     setSearchQuery: (query: string) => void;
     fetchDiscoveryFeed: () => Promise<void>;
     applyFilters: () => void;
+    hideReportedMap: (mapId: string) => void;
 }
 
 const toggleFilterLogic = (currentArray: string[], option: string): string[] => {
@@ -179,5 +180,13 @@ export const useMarketplaceStore = create<MarketplaceState>((set, get) => ({
         });
 
         set({ filteredMaps: filtered });
-    }
+    },
+
+    hideReportedMap: (mapId) => {
+        set((state) => ({
+            discoveryMaps: state.discoveryMaps.filter(m => m.id !== mapId),
+            filteredMaps: state.filteredMaps.filter(m => m.id !== mapId),
+        }));
+        get().applyFilters();
+    },
 }));

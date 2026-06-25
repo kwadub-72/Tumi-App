@@ -207,8 +207,8 @@ export default function TribeChatScreen() {
                 </Text>
                 <Text style={{ marginTop: 8, fontSize: 14, color: C.dust, textAlign: 'center' }}>
                     {isOnboardingLocked 
-                        ? 'You must complete your account setup to enter the chat room and connect with your tribe.' 
-                        : 'You must join this tribe to view and participate in the chat.'}
+                        ? 'You must complete your account setup to enter the chat room and connect with your chribe.' 
+                        : 'You must join this chribe to view and participate in the chat.'}
                 </Text>
                 <TouchableOpacity style={{ marginTop: 24, padding: 12 }} onPress={() => router.back()}>
                     <Text style={{ fontSize: 16, fontWeight: 'bold', color: C.gold }}>Go Back</Text>
@@ -217,7 +217,7 @@ export default function TribeChatScreen() {
         );
     }
 
-    const title = isLargePublicTribe ? "Tribe Announcements" : "Tribe Chat";
+    const title = isLargePublicTribe ? "Chribe Announcements" : "Chribe Chat";
 
     return (
         <View style={styles.container}>
@@ -317,7 +317,7 @@ export default function TribeChatScreen() {
                     <View style={[styles.inputContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }]}>
                         <TextInput
                             style={styles.input}
-                            placeholder="Message your Tribe..."
+                            placeholder="Message your Chribe..."
                             placeholderTextColor={C.charcoalGray}
                             value={inputText}
                             onChangeText={setInputText}
@@ -333,7 +333,7 @@ export default function TribeChatScreen() {
                     </View>
                 ) : (
                     <View style={[styles.readOnlyContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }]}>
-                        <Text style={styles.readOnlyText}>Only the Tribe Chief can post messages.</Text>
+                        <Text style={styles.readOnlyText}>Only the Chribe Chief can post messages.</Text>
                     </View>
                 )}
             </KeyboardAvoidingView>

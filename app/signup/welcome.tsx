@@ -162,7 +162,7 @@ export default function SignupWelcome() {
             <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
                 <TabonoLogo size={120} color={CREAM_COLOR} />
 
-                <Text style={styles.title}>Welcome to{'\n'}Tribe</Text>
+                <Text style={styles.title}>Welcome to{'\n'}Chribe</Text>
 
                 <TouchableOpacity style={styles.enterButton} onPress={handleEnter} disabled={loading}>
                     {loading ? (

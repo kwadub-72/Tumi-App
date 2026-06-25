@@ -80,8 +80,8 @@ export default function CreateTribeScreen() {
         if (!userId || !tribeId) return;
 
         Alert.alert(
-            'Leave Tribe & Resign',
-            'Are you sure you want to leave this tribe? If other members exist, leadership will be auto-assigned to the longest-tenured member. If no other members exist, this tribe will be permanently deleted.',
+            'Leave Chribe & Resign',
+            'Are you sure you want to leave this chribe? If other members exist, leadership will be auto-assigned to the longest-tenured member. If no other members exist, this chribe will be permanently deleted.',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -92,14 +92,14 @@ export default function CreateTribeScreen() {
                         try {
                             await SupabaseTribeService.leaveTribe(userId, tribeId as string);
                             await refreshMyTribes(userId);
-                            Alert.alert('Left Tribe', 'You have successfully resigned and left the tribe.', [
+                            Alert.alert('Left Chribe', 'You have successfully resigned and left the chribe.', [
                                 {
                                     text: 'OK',
                                     onPress: () => router.replace('/(tabs)')
                                 }
                             ]);
                         } catch (err: any) {
-                            Alert.alert('Error', err.message || 'Failed to leave tribe.');
+                            Alert.alert('Error', err.message || 'Failed to leave chribe.');
                         } finally {
                             setIsSubmitting(false);
                         }
@@ -130,7 +130,7 @@ export default function CreateTribeScreen() {
             if (user.status !== 'natural') {
                 Alert.alert(
                     'Verification Blocked',
-                    'Only athletes with verified Natural status can establish or manage a Natural Tribe.'
+                    'Only athletes with verified Natural status can establish or manage a Natural Chribe.'
                 );
                 return;
             }
@@ -141,7 +141,7 @@ export default function CreateTribeScreen() {
                 if (!eligible) {
                     Alert.alert(
                         'Roster Violation',
-                        'Cannot convert to a Natural Tribe while non-natural or unverified members belong to the roster.'
+                        'Cannot convert to a Natural Chribe while non-natural or unverified members belong to the roster.'
                     );
                     return;
                 }
@@ -152,7 +152,7 @@ export default function CreateTribeScreen() {
 
     const handleSubmit = async () => {
         if (!name.trim()) {
-            Alert.alert('Missing Information', 'Please enter a tribe name.');
+            Alert.alert('Missing Information', 'Please enter a chribe name.');
             return;
         }
 
@@ -168,13 +168,13 @@ export default function CreateTribeScreen() {
                 // Secondary check for security on final submit
                 if (naturalStatus === true) {
                     if (user.status !== 'natural') {
-                        Alert.alert('Verification Blocked', 'Only athletes with verified Natural status can establish or manage a Natural Tribe.');
+                        Alert.alert('Verification Blocked', 'Only athletes with verified Natural status can establish or manage a Natural Chribe.');
                         setIsSubmitting(false);
                         return;
                     }
                     const eligible = await SupabaseTribeService.checkTribeNaturalEligibility(tribeId as string);
                     if (!eligible) {
-                        Alert.alert('Roster Violation', 'Cannot convert to a Natural Tribe while non-natural or unverified members belong to the roster.');
+                        Alert.alert('Roster Violation', 'Cannot convert to a Natural Chribe while non-natural or unverified members belong to the roster.');
                         setIsSubmitting(false);
                         return;
                     }
@@ -191,18 +191,18 @@ export default function CreateTribeScreen() {
                 });
 
                 if (!updated) {
-                    Alert.alert('Error', 'Failed to update tribe. Please try again.');
+                    Alert.alert('Error', 'Failed to update chribe. Please try again.');
                     return;
                 }
 
                 await refreshMyTribes(userId);
-                Alert.alert('Success', 'Tribe updated successfully!', [
+                Alert.alert('Success', 'Chribe updated successfully!', [
                     { text: 'OK', onPress: () => router.push(`/tribe/${tribeId}`) }
                 ]);
             } else {
                 // Create Mode Condition A check
                 if (naturalStatus === true && user.status !== 'natural') {
-                    Alert.alert('Verification Blocked', 'Only athletes with verified Natural status can establish or manage a Natural Tribe.');
+                    Alert.alert('Verification Blocked', 'Only athletes with verified Natural status can establish or manage a Natural Chribe.');
                     setIsSubmitting(false);
                     return;
                 }
@@ -213,18 +213,23 @@ export default function CreateTribeScreen() {
                     avatarUrl: avatar,
                     tribeType: 'accountability',
                     privacy: isPrivate ? 'private' : 'public',
-                    description: `A tribe for ${activity.name}.`,
+                    description: `A chribe for ${activity.name}.`,
                     activityType: activity.name,
                     activityIcon: activity.icon as string,
                     naturalStatus: naturalStatus ?? undefined,
                 });
 
                 if (!created) {
-                    Alert.alert('Error', 'Failed to create tribe. Please try again.');
+                    Alert.alert('Error', 'Failed to create chribe. Please try again.');
                     return;
                 }
 
-                await refreshMyTribes(userId);
+                // Forcefully inject and select the newly created Chribe locally to bypass any DB replication lag
+                const store = useUserTribeStore.getState();
+                store.createTribe(created);
+
+                // Optionally refresh in the background, but proceed to navigate immediately
+                store.refreshMyTribes(userId).catch(console.error);
                 router.push('/(tabs)');
             }
         } catch (err: any) {
@@ -251,7 +256,7 @@ export default function CreateTribeScreen() {
                         <Ionicons name="arrow-back" size={28} color={Colors.theme.harvestGold} />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>
-                        {isEditMode ? 'Edit Tribe' : 'Create a Tribe'}
+                        {isEditMode ? 'Edit Chribe' : 'Create a Chribe'}
                     </Text>
                     <View style={{ width: 28 }} />
                 </View>
@@ -274,16 +279,16 @@ export default function CreateTribeScreen() {
                                 <MaterialCommunityIcons name="pencil" size={12} color="white" />
                             </View>
                         </TouchableOpacity>
-                        <Text style={styles.symbolText}>Edit tribe symbol</Text>
+                        <Text style={styles.symbolText}>Edit chribe symbol</Text>
                     </View>
 
                     <View style={styles.form}>
                         {/* Tribe Name */}
                         <View style={styles.fieldColumn}>
-                            <Text style={styles.label}>Tribe name</Text>
+                            <Text style={styles.label}>Chribe name</Text>
                             <TextInput
                                 style={styles.input}
-                                placeholder="Enter tribe name..."
+                                placeholder="Enter chribe name..."
                                 placeholderTextColor="rgba(237, 232, 213, 0.3)"
                                 maxLength={20}
                                 value={name}
@@ -347,7 +352,7 @@ export default function CreateTribeScreen() {
 
                         {/* Tribe Activity Dropdown */}
                         <View style={styles.fieldRow}>
-                            <Text style={styles.label}>Tribe activity</Text>
+                            <Text style={styles.label}>Chribe activity</Text>
                             <TouchableOpacity style={styles.pillSelector} onPress={() => setActivityModalVisible(true)}>
                                 <Text style={styles.pillText}>{activity.name}</Text>
                                 <MaterialCommunityIcons name={activity.icon as any} size={16} color={Colors.theme.harvestGold} />
@@ -359,7 +364,7 @@ export default function CreateTribeScreen() {
                                 onPress={handleLeaveTribe}
                             >
                                 <Ionicons name="exit-outline" size={16} color="#FF6B6B" style={{ marginRight: 6 }} />
-                                <Text style={styles.leaveTribeButtonText}>Leave Tribe</Text>
+                                <Text style={styles.leaveTribeButtonText}>Leave Chribe</Text>
                             </TouchableOpacity>
                         )}
                     </View>
@@ -395,7 +400,7 @@ export default function CreateTribeScreen() {
                 <Modal visible={activityModalVisible} transparent animationType="slide">
                     <TouchableOpacity style={styles.modalOverlay} onPress={() => setActivityModalVisible(false)}>
                         <View style={styles.modalContent}>
-                            <Text style={styles.modalTitle}>Select Tribe Activity</Text>
+                            <Text style={styles.modalTitle}>Select Chribe Activity</Text>
                             <FlatList
                                 data={ACTIVITIES}
                                 keyExtractor={item => item.name}

@@ -15,7 +15,7 @@ import TribeView from '@/src/features/home/components/TribeView';
 import TribeSelectionModal from '@/src/features/home/components/TribeSelectionModal';
 import TribeScoreboardModal from '@/src/features/tribes/components/TribeScoreboardModal';
 
-type NavTab = 'Following' | 'Diary' | 'Tribe';
+type NavTab = 'Following' | 'Diary' | 'Chribe';
 
 import { useUserTribeStore } from '@/src/store/UserTribeStore';
 import { useAuthStore } from '@/store/AuthStore';
@@ -43,7 +43,7 @@ export default function HomeScreen() {
     }, [userId]);
 
     useEffect(() => {
-        if (params.tab && ['Following', 'Diary', 'Tribe'].includes(params.tab as string)) {
+        if (params.tab && ['Following', 'Diary', 'Chribe'].includes(params.tab as string)) {
             setCurrentTab(params.tab as NavTab);
         }
     }, [params.tab]);
@@ -51,18 +51,18 @@ export default function HomeScreen() {
     // Format date for button (e.g., "Dec 29, 2025")
     const formattedDate = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-    const isTribeThemeActive = currentTab === 'Tribe' && selectedTribe;
+    const isTribeThemeActive = currentTab === 'Chribe' && selectedTribe;
     const dynamicPrimaryColor = currentTab === 'Diary' ? '#DAA520' : '#262525';
     const dateButtonTextColor = currentTab === 'Diary' ? '#262525' : '#EDE8D5';
 
     useEffect(() => {
-        if (currentTab === 'Tribe' && !selectedTribe) {
+        if (currentTab === 'Chribe' && !selectedTribe) {
             setIsTribeModalVisible(true);
         }
     }, [currentTab, selectedTribe]);
 
     const handleTabPress = (tab: NavTab) => {
-        if (tab === 'Tribe' && currentTab === 'Tribe') {
+        if (tab === 'Chribe' && currentTab === 'Chribe') {
             setIsTribeModalVisible(true);
         } else {
             setCurrentTab(tab);
@@ -73,7 +73,7 @@ export default function HomeScreen() {
         switch (currentTab) {
             case 'Following': return <FollowingView selectedDate={selectedDate} />;
             case 'Diary': return <DiaryView selectedDate={selectedDate} />;
-            case 'Tribe': return <TribeView selectedDate={selectedDate} />;
+            case 'Chribe': return <TribeView selectedDate={selectedDate} />;
             default: return <FollowingView selectedDate={selectedDate} />;
         }
     };
@@ -99,7 +99,7 @@ export default function HomeScreen() {
                 <View style={styles.headerRow}>
                     <View style={styles.headerSpacer} />
                     <View style={styles.tabsContainer}>
-                        {(['Following', 'Diary', 'Tribe'] as NavTab[]).map((tab) => {
+                        {(['Following', 'Diary', 'Chribe'] as NavTab[]).map((tab) => {
                             const isActive = currentTab === tab;
                             return (
                                 <TouchableOpacity
@@ -145,7 +145,7 @@ export default function HomeScreen() {
                     </TouchableOpacity>
                 )}
 
-                {currentTab === 'Tribe' && selectedTribe && (
+                {currentTab === 'Chribe' && selectedTribe && (
                     <TouchableOpacity
                         style={[
                             styles.dateButton, 
@@ -226,7 +226,7 @@ export default function HomeScreen() {
                 </Pressable>
             </Modal>
             {/* Scoreboard FAB floating at the bottom right */}
-            {currentTab === 'Tribe' && selectedTribe && (
+            {currentTab === 'Chribe' && selectedTribe && (
                 <TouchableOpacity
                     style={styles.scoreboardTriggerButton}
                     onPress={() => setIsScoreboardVisible(true)}

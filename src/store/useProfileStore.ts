@@ -8,6 +8,7 @@ interface ProfileState {
     fetchProfileMaps: (targetUserId: string, currentUserId: string) => Promise<void>;
     savedProfileMaps: any[];
     fetchSavedMaps: (userId: string) => Promise<void>;
+    hideReportedMap: (mapId: string) => void;
 }
 
 export const useProfileStore = create<ProfileState>((set) => ({
@@ -60,6 +61,13 @@ export const useProfileStore = create<ProfileState>((set) => ({
             console.error('[useProfileStore] Error fetching saved maps:', error);
             set({ savedProfileMaps: [] });
         }
+    },
+
+    hideReportedMap: (mapId) => {
+        set((state) => ({
+            activeProfileMaps: state.activeProfileMaps.filter(m => m.id !== mapId),
+            savedProfileMaps: state.savedProfileMaps.filter(m => m.id !== mapId),
+        }));
     }
 }));
 

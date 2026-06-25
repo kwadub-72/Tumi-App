@@ -194,7 +194,7 @@ export default function ProfileScreen() {
                             keyboardShouldPersistTaps="handled"
                         >
                             <Text style={styles.title}>Create Profile</Text>
-                            <Text style={styles.subtitle}>Set up your Tribe identity.</Text>
+                            <Text style={styles.subtitle}>Set up your Chribe identity.</Text>
 
                             <View style={styles.formContainer}>
                                 <View style={{ alignItems: 'center', marginBottom: 24 }}>

@@ -27,12 +27,12 @@ export default function TribeSelectionModal({ visible, onClose }: TribeSelection
 
     const handleLeavePress = (tribe: Tribe) => {
         Alert.alert(
-            "Leave Tribe",
+            "Leave Chribe",
             `Are you sure you want to leave ${tribe.name}?`,
             [
                 { text: "Cancel", style: "cancel" },
                 {
-                    text: "Leave Tribe",
+                    text: "Leave Chribe",
                     style: "destructive",
                     onPress: () => {
                         if (currentUserId) leaveTribe(currentUserId, tribe.id);
@@ -64,7 +64,7 @@ export default function TribeSelectionModal({ visible, onClose }: TribeSelection
                 <TabonoLogo size={24} color="#DAA520" />
             </View>
             <View style={styles.tribeInfo}>
-                <Text style={[styles.tribeName, { color: '#DAA520' }]}>Create a tribe</Text>
+                <Text style={[styles.tribeName, { color: '#DAA520' }]}>Create a chribe</Text>
             </View>
             <View style={{ borderColor: '#DAA520', borderWidth: 1.5, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#262525' }}>
                 <MaterialCommunityIcons name="pencil-plus-outline" size={20} color="#DAA520" />
@@ -83,7 +83,7 @@ export default function TribeSelectionModal({ visible, onClose }: TribeSelection
                 <Pressable style={styles.modalContent} onPress={e => e.stopPropagation()}>
                     <View style={styles.handle} />
 
-                    <Text style={styles.headerTitle}>Select a Tribe</Text>
+                    <Text style={styles.headerTitle}>Select a Chribe</Text>
 
                     <FlatList
                         data={myTribes}
@@ -169,8 +169,8 @@ export default function TribeSelectionModal({ visible, onClose }: TribeSelection
                         ListEmptyComponent={
                             <View style={{ padding: 40, alignItems: 'center' }}>
                                 <Ionicons name="people-outline" size={48} color="rgba(255,255,255,0.4)" />
-                                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 16, fontWeight: 'bold', marginTop: 12 }}>No Tribes yet</Text>
-                                <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, textAlign: 'center', marginTop: 4 }}>Join a tribe to showcase it on your profile!</Text>
+                                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 16, fontWeight: 'bold', marginTop: 12 }}>No Chribes yet</Text>
+                                <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, textAlign: 'center', marginTop: 4 }}>Join a chribe to showcase it on your profile!</Text>
                             </View>
                         }
                         ListFooterComponent={renderFooter}

@@ -215,6 +215,11 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                             last_name: state.last_name,
                             bio: state.bio,
                             is_private: state.is_private,
+                            show_meals_to_public: !state.is_private,
+                            show_workouts_to_public: !state.is_private,
+                            show_macros_to_public: !state.is_private,
+                            show_measurements_to_public: !state.is_private,
+                            show_likes_to_public: !state.is_private,
                             avatar_url: state.avatarUri,
                         }
                     }
@@ -326,6 +331,11 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
                 lifting_experience: state.liftingExperience,
                 activity: state.activity,
                 is_private: state.is_private,
+                show_meals_to_public: !state.is_private,
+                show_workouts_to_public: !state.is_private,
+                show_macros_to_public: !state.is_private,
+                show_measurements_to_public: !state.is_private,
+                show_likes_to_public: !state.is_private,
                 selected_map_ids: state.selectedMapIds,
                 selected_tribe_ids: state.selectedTribeIds,
                 followed_user_ids: state.followedUserIds,

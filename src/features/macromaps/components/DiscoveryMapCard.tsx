@@ -27,6 +27,7 @@ export interface DiscoveryMapCardProps {
     commentCount?: number;
     subscribeCount?: number;
     shareCount?: number;
+    onPress?: () => void;
 }
 
 export function DiscoveryMapCard({
@@ -41,7 +42,8 @@ export function DiscoveryMapCard({
     likeCount = 0,
     commentCount = 0,
     subscribeCount = 0,
-    shareCount = 0
+    shareCount = 0,
+    onPress
 }: DiscoveryMapCardProps) {
     const router = useRouter();
     const { navigateToProfile } = useProfileNavigation();
@@ -140,7 +142,7 @@ export function DiscoveryMapCard({
     return (
         <TouchableOpacity 
             activeOpacity={0.8}
-            onPress={() => router.push({ pathname: '/map-preview', params: { map_id: map.id, isOnboarding: isOnboarding ? 'true' : undefined } } as any)}
+            onPress={onPress || (() => router.push({ pathname: '/map-preview', params: { map_id: map.id, isOnboarding: isOnboarding ? 'true' : undefined } } as any))}
             style={styles.card}
         >
             {/* Creator Metadata & Title Row Combined */}
@@ -158,7 +160,7 @@ export function DiscoveryMapCard({
                 )}
 
                 {/* Left Column Wrapper */}
-                <View style={{ flex: 1, justifyContent: 'space-between', paddingRight: 12, marginTop: 28 }}>
+                <View style={{ flex: 1, justifyContent: 'space-between', paddingRight: 12, marginTop: onOptionsPress ? 28 : 0 }}>
                     <Pressable 
                         style={styles.creatorInfo} 
                         onPress={isOnboarding ? undefined : () => navigateToProfile({ id: map.creator_id, handle: map.username || map.creator_handle || '' })}
@@ -227,7 +229,7 @@ export function DiscoveryMapCard({
                 </View>
 
                 {/* Right Column Wrapper */}
-                <View style={styles.badgesContainer}>
+                <View style={[styles.badgesContainer, { marginTop: onOptionsPress ? 28 : 0 }]}>
                     <View style={styles.goalBadge}>
                         <Text style={styles.goalText}>{goalText}</Text>
                     </View>

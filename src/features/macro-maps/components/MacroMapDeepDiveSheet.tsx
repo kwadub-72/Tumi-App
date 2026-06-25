@@ -21,10 +21,10 @@ export function MacroMapDeepDiveSheet({ visible, onClose, mapData, isCreator, on
     const { activeMapProgress, fetchMapProgress, jumpToCheckpoint, markCheckpointComplete } = useMapStore();
 
     useEffect(() => {
-        if (visible && mapData.id) {
+        if (visible && mapData?.id) {
             fetchMapProgress(mapData.id);
         }
-    }, [visible, mapData.id, fetchMapProgress]);
+    }, [visible, mapData?.id, fetchMapProgress]);
 
     const toggleFlare = (id: string) => {
         const newSet = new Set(flaredCheckpoints);
@@ -35,14 +35,16 @@ export function MacroMapDeepDiveSheet({ visible, onClose, mapData, isCreator, on
         if (onToggleOutlierFlare) onToggleOutlierFlare(id, isNowFlared);
     };
 
-    const activeCheckpointId = activeMapProgress?.current_checkpoint_id || (mapData.checkpoints.length > 0 ? mapData.checkpoints[0].id : null);
+    if (!mapData || !mapData.checkpoints) return null;
+
+    const activeCheckpointId = activeMapProgress?.current_checkpoint_id || ((mapData?.checkpoints?.length ?? 0) > 0 ? mapData.checkpoints[0].id : null);
     const completed = activeMapProgress?.completed_checkpoint_ids || [];
 
-    const activeCheckpointIndex = mapData.checkpoints.findIndex(cp => cp.id === activeCheckpointId);
-    const activeCheckpoint = activeCheckpointIndex !== -1 ? mapData.checkpoints[activeCheckpointIndex] : (mapData.checkpoints.length > 0 ? mapData.checkpoints[0] : null);
+    const activeCheckpointIndex = mapData?.checkpoints ? mapData.checkpoints.findIndex(cp => cp.id === activeCheckpointId) : -1;
+    const activeCheckpoint = activeCheckpointIndex !== -1 ? mapData.checkpoints[activeCheckpointIndex] : ((mapData?.checkpoints?.length ?? 0) > 0 ? mapData.checkpoints[0] : null);
 
     const currentIndex = activeCheckpointIndex !== -1 ? activeCheckpointIndex : 0;
-    const nextCheckpoint = currentIndex + 1 < mapData.checkpoints.length ? mapData.checkpoints[currentIndex + 1] : null;
+    const nextCheckpoint = currentIndex + 1 < (mapData?.checkpoints?.length ?? 0) ? mapData.checkpoints[currentIndex + 1] : null;
 
     const handleSkip = () => {
         if (nextCheckpoint) {
@@ -135,7 +137,7 @@ export function MacroMapDeepDiveSheet({ visible, onClose, mapData, isCreator, on
     };
 
     const renderTimelineHeader = () => {
-        if (!mapData.checkpoints || mapData.checkpoints.length === 0) return null;
+        if (!mapData?.checkpoints || (mapData?.checkpoints?.length ?? 0) === 0) return null;
 
         return (
             <View style={styles.stepperOuterContainer}>
@@ -183,7 +185,7 @@ export function MacroMapDeepDiveSheet({ visible, onClose, mapData, isCreator, on
                                         {new Date(cp.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                     </Text>
                                 </View>
-                                {idx < mapData.checkpoints.length - 1 && (
+                                {idx < (mapData?.checkpoints?.length ?? 0) - 1 && (
                                     <View style={[
                                         styles.connectorLine,
                                         isCompleted ? styles.connectorCompleted : styles.connectorFuture
@@ -198,7 +200,7 @@ export function MacroMapDeepDiveSheet({ visible, onClose, mapData, isCreator, on
     };
 
     const renderFooter = () => {
-        const isLast = currentIndex === mapData.checkpoints.length - 1;
+        const isLast = currentIndex === (mapData?.checkpoints?.length ?? 0) - 1;
 
         return (
             <View style={{ backgroundColor: Colors.theme.matteBlack, paddingBottom: 25, paddingTop: 10 }}>

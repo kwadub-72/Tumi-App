@@ -514,6 +514,7 @@ export default function AddExerciseScreen() {
                             placeholderTextColor={Colors.theme.dust}
                             selectionColor={Colors.theme.harvestGold}
                             value={query}
+                            selectTextOnFocus={true}
                             onChangeText={setQuery}
                             returnKeyType="search"
                             onFocus={() => setSearchFocused(true)}

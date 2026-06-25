@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import VerifiedModal from '../../components/VerifiedModal';
 import HammerModal from '../../components/HammerModal';
 import CommentSheet from '@/components/CommentSheet';
+import ReportingActionSheet from '@/components/ReportingActionSheet';
 import FeedItem from '@/src/features/feed/components/FeedItem';
 import TribeShareModal from '@/src/features/feed/components/TribeShareModal';
 import { ActivityIcon } from '@/src/shared/components/ActivityIcon';
@@ -36,6 +37,7 @@ import { useUserStore } from '../../store/UserStore';
 import { useUserTribeStore } from '@/src/store/UserTribeStore';
 import { WeightStore } from '@/store/WeightStore';
 import { useProfileStore } from '@/src/store/useProfileStore';
+import { PostStore } from '@/store/PostStore';
 import { DiscoveryMapCard } from '@/src/features/macromaps/components/DiscoveryMapCard';
 import { MetricNormalizer } from '@/src/shared/utils/MetricNormalizer';
 
@@ -61,7 +63,16 @@ export default function ProfileScreen() {
 
     // State
     const [posts, setPosts] = useState<FeedPost[]>([]);
+    const [isReportSheetVisible, setIsReportSheetVisible] = useState(false);
+    const [activeReportTargetId, setActiveReportTargetId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<TabType>('meals');
+
+    const handleReportSuccess = () => {
+        if (activeReportTargetId) {
+            setPosts(prev => prev.filter(p => p.id !== activeReportTargetId));
+            PostStore.deletePost(activeReportTargetId);
+        }
+    };
     const [refreshing, setRefreshing] = useState(false);
     const [isVerifiedModalVisible, setVerifiedModalVisible] = useState(false);
     const [isHammerModalVisible, setHammerModalVisible] = useState(false);
@@ -115,7 +126,7 @@ export default function ProfileScreen() {
                 activityIcon: profileData.activity_icon,
                 followers: counts.followers,
                 following: counts.following,
-                height: profileData.height_cm ? String(profileData.height_cm) : '',
+                height: profileData.height || (profileData.height_cm ? String(profileData.height_cm) : ''),
                 weight: profileData.weight_lbs ?? estimatedWeight ?? 0,
                 bfs: profileData.body_fat_pct,
                 // tribe: profileData.tribe, // Prevent wiping until tribes are implemented in backend
@@ -149,15 +160,20 @@ export default function ProfileScreen() {
         ? `${Math.round(userInfo.weight)} lbs`
         : `${Math.round(userInfo.weight * 0.453592)} kg`;
 
-    const heightCm = parseFloat(userInfo.height) || 0;
-    const displayHeight = heightCm > 0
-        ? (units === 'imperial'
-            ? (() => {
-                const { feet, inches } = MetricNormalizer.cmToImperial(heightCm);
+    const displayHeight = (() => {
+        const h = userInfo.height;
+        if (!h) return '--';
+        if (h.includes("'") || h.includes('cm')) return h;
+        const parsed = parseFloat(h);
+        if (!isNaN(parsed) && parsed > 0) {
+            if (units === 'imperial') {
+                const { feet, inches } = MetricNormalizer.cmToImperial(parsed);
                 return `${feet}'${inches}`;
-              })()
-            : `${Math.round(heightCm)} cm`)
-        : '--';
+            }
+            return `${Math.round(parsed)} cm`;
+        }
+        return h;
+    })();
 
     const mealsCount = posts.filter(p => (p.meal && (p.user.handle === userInfo.handle))).length;
     const workoutsCount = posts.filter(p => (p.workout && (p.user.handle === userInfo.handle))).length;
@@ -195,7 +211,14 @@ export default function ProfileScreen() {
                 }
             });
         } else {
-            options.push({ text: 'Report', style: 'destructive' });
+            options.push({
+                text: 'Report',
+                style: 'destructive',
+                onPress: () => {
+                    setActiveReportTargetId(post.id);
+                    setIsReportSheetVisible(true);
+                }
+            });
         }
 
         Alert.alert('Options', undefined, options);
@@ -466,6 +489,14 @@ export default function ProfileScreen() {
                 visible={isShareModalVisible}
                 onClose={() => { setShareModalVisible(false); setShareTargetPost(null); }}
                 post={shareTargetPost}
+            />
+
+            <ReportingActionSheet
+                isVisible={isReportSheetVisible}
+                onClose={() => setIsReportSheetVisible(false)}
+                targetType="post"
+                targetId={activeReportTargetId!}
+                onSuccess={handleReportSuccess}
             />
 
             <Tabs.Container

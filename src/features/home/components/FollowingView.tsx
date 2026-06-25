@@ -8,7 +8,9 @@ import { Colors } from '@/src/shared/theme/Colors';
 import CommentSheet from '@/components/CommentSheet';
 import HammerModal from '@/components/HammerModal';
 import VerifiedModal from '@/components/VerifiedModal';
+import ReportingActionSheet from '@/components/ReportingActionSheet';
 import { useAuthStore } from '@/store/AuthStore';
+import { PostStore } from '@/store/PostStore';
 import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
 import { supabase } from '@/src/shared/services/supabase';
 import { useMealbookStore } from '@/src/store/useMealbookStore';
@@ -32,6 +34,7 @@ export default function FollowingView({ selectedDate }: FollowingViewProps) {
     const [isHammerModalVisible, setHammerModalVisible] = useState(false);
     const [isCommentSheetVisible, setCommentSheetVisible] = useState(false);
     const [isOptionsModalVisible, setOptionsModalVisible] = useState(false);
+    const [isReportSheetVisible, setReportSheetVisible] = useState(false);
     const [activePost, setActivePost] = useState<FeedPost | null>(null);
     const [showDeleteToast, setShowDeleteToast] = useState(false);
     const [activeStatus, setActiveStatus] = useState<'natural' | 'enhanced' | 'natural-pending' | 'none'>('none');
@@ -301,13 +304,43 @@ export default function FollowingView({ selectedDate }: FollowingViewProps) {
                 onClose={() => { setOptionsModalVisible(false); setActivePost(null); }}
                 isOwner={activePost?.user.id === session?.user.id}
                 onDelete={handleDeletePost}
-                onReport={() => setOptionsModalVisible(false)}
+                onReport={() => {
+                    setOptionsModalVisible(false);
+                    if (activePost) {
+                        if (activePost.user.id === session?.user.id) {
+                            handleDeletePost();
+                        } else {
+                            setReportSheetVisible(true);
+                        }
+                    }
+                }}
                 onShare={() => {
                     if (activePost) {
                         setShareTargetPost(activePost);
                         setShareModalVisible(true);
                     }
                     setOptionsModalVisible(false);
+                }}
+            />
+
+            <ReportingActionSheet
+                isVisible={isReportSheetVisible}
+                onClose={() => {
+                    setReportSheetVisible(false);
+                    setActivePost(null);
+                }}
+                targetType={activePost?.postType?.includes('map') ? 'map' : 'post'}
+                targetId={activePost?.postType?.includes('map') ? (activePost?.macroMap?.id || activePost?.id || '') : (activePost?.id || '')}
+                onSuccess={(type, targetId) => {
+                    if (type === 'map') {
+                        setPosts(prev => prev.filter(p => p.macroMap?.id !== targetId));
+                        if (activePost) {
+                            PostStore.deletePost(activePost.id);
+                        }
+                    } else {
+                        setPosts(prev => prev.filter(p => p.id !== targetId));
+                        PostStore.deletePost(targetId);
+                    }
                 }}
             />
 

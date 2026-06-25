@@ -2,6 +2,7 @@ import { Session } from '@supabase/supabase-js';
 import { create } from 'zustand';
 import { supabase } from '../src/shared/services/supabase';
 import { UserStatus, useUserStore } from './UserStore';
+import { NaturalApplication } from '../src/shared/models/database.types';
 
 export interface DbProfile {
     id: string;
@@ -34,6 +35,12 @@ export interface DbProfile {
     expo_push_token?: string | null;
     first_name?: string | null;
     last_name?: string | null;
+    height_cm?: number | null;
+    gender?: string | null;
+    lifting_experience?: string | null;
+    dob?: string | null;
+    banned_until?: string | null;
+    ban_reason?: string | null;
 }
 
 interface AuthState {
@@ -48,6 +55,9 @@ interface AuthState {
     signOut: () => Promise<void>;
     refreshProfile: () => Promise<void>;
     updateProfile: (updates: Partial<DbProfile>) => Promise<string | null>;
+    cancelPendingApplication: () => Promise<string | null>;
+    fetchUnacknowledgedDecision: () => Promise<NaturalApplication | null>;
+    acknowledgeDecision: (appId: string) => Promise<string | null>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -206,6 +216,65 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             useUserStore.getState().setStatus(updates.status);
         }
 
+        return null;
+    },
+
+    cancelPendingApplication: async (): Promise<string | null> => {
+        let userId = get().session?.user?.id || get().profile?.id;
+        if (!userId) {
+            const { data: { session } } = await supabase.auth.getSession();
+            userId = session?.user?.id;
+        }
+        if (!userId) return 'Not signed in';
+
+        const { error } = await supabase
+            .from('natural_applications')
+            .update({ status: 'canceled' })
+            .eq('user_id', userId)
+            .eq('status', 'pending');
+
+        if (error) {
+            console.error('[AuthStore] cancelPendingApplication database error:', error);
+            return error.message;
+        }
+        return null;
+    },
+
+    fetchUnacknowledgedDecision: async (): Promise<NaturalApplication | null> => {
+        let userId = get().session?.user?.id || get().profile?.id;
+        if (!userId) {
+            const { data: { session } } = await supabase.auth.getSession();
+            userId = session?.user?.id;
+        }
+        if (!userId) return null;
+
+        const { data, error } = await supabase
+            .from('natural_applications')
+            .select('*')
+            .eq('user_id', userId)
+            .in('status', ['approved', 'rejected'])
+            .eq('decision_acknowledged', false)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (error) {
+            console.error('[AuthStore] fetchUnacknowledgedDecision database error:', error);
+            return null;
+        }
+        return data as NaturalApplication | null;
+    },
+
+    acknowledgeDecision: async (appId: string): Promise<string | null> => {
+        const { error } = await supabase
+            .from('natural_applications')
+            .update({ decision_acknowledged: true })
+            .eq('id', appId);
+
+        if (error) {
+            console.error('[AuthStore] acknowledgeDecision database error:', error);
+            return error.message;
+        }
         return null;
     },
 }));

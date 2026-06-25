@@ -1,6 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ActivityIcon } from '@/src/shared/components/ActivityIcon';
 import { useRouter } from 'expo-router';
+import { CustomSwitch } from '@/components/ui/CustomSwitch';
 import React, { useState, useEffect } from 'react';
 import {
     Image,
@@ -24,6 +25,7 @@ import { supabase } from '@/src/shared/services/supabase';
 import { decode } from 'base64-arraybuffer';
 import TribeSelectionModal from '@/src/features/home/components/TribeSelectionModal';
 import { useUserTribeStore } from '@/src/store/UserTribeStore';
+import { MetricNormalizer } from '@/src/shared/utils/MetricNormalizer';
 
 export default function EditProfileScreen() {
     const router = useRouter();
@@ -38,7 +40,35 @@ export default function EditProfileScreen() {
     const [avatarUrl, setAvatarUrl] = useState(userInfo.avatar);
     const [avatarBase64, setAvatarBase64] = useState<string | null>(null);
     const [bio, setBio] = useState(userInfo.bio);
-    const [height, setHeight] = useState(userInfo.height); // "6'3" or "190 cm"
+    const [height, setHeight] = useState(() => {
+        const raw = userInfo.height || '';
+        if (!raw) return '';
+        
+        let heightCm = 0;
+        if (raw.includes("'")) {
+            const match = raw.match(/(\d+)'(\d+)/);
+            if (match) {
+                const feet = parseInt(match[1], 10);
+                const inches = parseInt(match[2], 10);
+                heightCm = Math.round((feet * 30.48) + (inches * 2.54));
+            }
+        } else {
+            const clean = raw.replace(' cm', '').trim();
+            const cmVal = parseFloat(clean);
+            if (!isNaN(cmVal)) {
+                heightCm = Math.round(cmVal);
+            }
+        }
+        
+        if (heightCm <= 0) return '';
+        
+        if (userInfo.units === 'imperial') {
+            const { feet, inches } = MetricNormalizer.cmToImperial(heightCm);
+            return `${feet}'${inches}`;
+        } else {
+            return `${heightCm} cm`;
+        }
+    });
     const [bodyFat, setBodyFat] = useState(userInfo.bfs);
     const [isHeightModalVisible, setIsHeightModalVisible] = useState(false);
     const [isTribeModalVisible, setIsTribeModalVisible] = useState(false);
@@ -121,7 +151,24 @@ export default function EditProfileScreen() {
                      
                 finalAvatarUrl = publicUrlData.publicUrl;
             }
- 
+            let heightCm: number | null = null;
+            if (height) {
+                if (userInfo.units === 'imperial') {
+                    const match = height.match(/(\d+)'(\d+)/);
+                    if (match) {
+                        const feet = parseInt(match[1], 10);
+                        const inches = parseInt(match[2], 10);
+                        heightCm = Math.round((feet * 30.48) + (inches * 2.54));
+                    }
+                } else {
+                    const clean = height.replace(' cm', '').trim();
+                    const cmVal = parseInt(clean, 10);
+                    if (!isNaN(cmVal)) {
+                        heightCm = cmVal;
+                    }
+                }
+            }
+
             // Sync to backend via AuthStore
             await useAuthStore.getState().updateProfile({
                 name: displayName,
@@ -130,6 +177,7 @@ export default function EditProfileScreen() {
                 avatar_url: finalAvatarUrl ? (typeof finalAvatarUrl === 'string' ? finalAvatarUrl : undefined) : undefined,
                 bio,
                 height,
+                height_cm: heightCm,
                 body_fat_pct: bodyFat,
                 activity: userInfo.activity,
                 activity_icon: userInfo.activityIcon,
@@ -365,7 +413,7 @@ export default function EditProfileScreen() {
                     </View>
 
                     {/* Tribe Displayed */}
-                    <View style={styles.fieldRow}>
+                    <View style={styles.tribeFieldColumn}>
                         <Text style={styles.label}>Tribe displayed</Text>
                         <TouchableOpacity 
                             style={[styles.tribePill, selectedTribe ? { backgroundColor: selectedTribe.themeColor } : {}]} 
@@ -386,84 +434,29 @@ export default function EditProfileScreen() {
                     {/* Account Privacy */}
                     <View style={styles.fieldRow}>
                         <Text style={styles.label}>Account privacy</Text>
-                        <TouchableOpacity
-                            style={[styles.switchContainer, profileVisible ? { backgroundColor: Colors.primary, alignItems: 'flex-end' } : { backgroundColor: '#888', alignItems: 'flex-start' }]}
-                            onPress={() => setProfileVisible(!profileVisible)}
-                        >
-                            <View style={styles.switchKnob}>
-                                <Ionicons name={profileVisible ? 'earth' : 'lock-closed'} size={14} color={profileVisible ? Colors.primary : '#888'} />
-                            </View>
-                        </TouchableOpacity>
+                        <CustomSwitch
+                            value={profileVisible}
+                            onValueChange={(val) => {
+                                setProfileVisible(val);
+                                setMealVisible(val);
+                                setWorkoutVisible(val);
+                                setMacroVisible(val);
+                                setLikeVisible(val);
+                            }}
+                        />
                     </View>
 
-                    <Text style={styles.sectionHeader}>Non-tribe member visibility*</Text>
-
-                    {/* Meal Visibility */}
-                    <View style={styles.fieldRow}>
-                        <Text style={styles.label}>Meal visibility</Text>
-                        <TouchableOpacity
-                            style={[styles.switchContainer, mealVisible ? { backgroundColor: Colors.primary, alignItems: 'flex-end' } : { backgroundColor: '#888', alignItems: 'flex-start' }]}
-                            onPress={() => setMealVisible(!mealVisible)}
-                        >
-                            <View style={styles.switchKnob}>
-                                <Ionicons name={mealVisible ? 'earth' : 'lock-closed'} size={14} color={mealVisible ? Colors.primary : '#888'} />
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Workout Visibility */}
-                    <View style={styles.fieldRow}>
-                        <Text style={styles.label}>Workout visibility</Text>
-                        <TouchableOpacity
-                            style={[styles.switchContainer, workoutVisible ? { backgroundColor: Colors.primary, alignItems: 'flex-end' } : { backgroundColor: '#888', alignItems: 'flex-start' }]}
-                            onPress={() => setWorkoutVisible(!workoutVisible)}
-                        >
-                            <View style={styles.switchKnob}>
-                                <Ionicons name={workoutVisible ? 'earth' : 'lock-closed'} size={14} color={workoutVisible ? Colors.primary : '#888'} />
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Macro Visibility */}
-                    <View style={styles.fieldRow}>
-                        <Text style={styles.label}>Macro visibility</Text>
-                        <TouchableOpacity
-                            style={[styles.switchContainer, macroVisible ? { backgroundColor: Colors.primary, alignItems: 'flex-end' } : { backgroundColor: '#888', alignItems: 'flex-start' }]}
-                            onPress={() => setMacroVisible(!macroVisible)}
-                        >
-                            <View style={styles.switchKnob}>
-                                <Ionicons name={macroVisible ? 'earth' : 'lock-closed'} size={14} color={macroVisible ? Colors.primary : '#888'} />
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Like Visibility */}
-                    <View style={styles.fieldRow}>
-                        <Text style={styles.label}>Like visibility</Text>
-                        <TouchableOpacity
-                            style={[styles.switchContainer, likeVisible ? { backgroundColor: Colors.primary, alignItems: 'flex-end' } : { backgroundColor: '#888', alignItems: 'flex-start' }]}
-                            onPress={() => setLikeVisible(!likeVisible)}
-                        >
-                            <View style={styles.switchKnob}>
-                                <Ionicons name={likeVisible ? 'earth' : 'lock-closed'} size={14} color={likeVisible ? Colors.primary : '#888'} />
-                            </View>
-                        </TouchableOpacity>
-                    </View>
+                    <Text style={styles.sectionHeader}>Non-tribe member visibility</Text>
 
                     {/* Measurements */}
                     <View style={styles.fieldRow}>
                         <Text style={styles.label}>Measurements</Text>
-                        <TouchableOpacity
-                            style={[styles.switchContainer, measurementsVisible ? { backgroundColor: Colors.primary, alignItems: 'flex-end' } : { backgroundColor: '#888', alignItems: 'flex-start' }]}
-                            onPress={() => setMeasurementsVisible(!measurementsVisible)}
-                        >
-                            <View style={styles.switchKnob}>
-                                <Ionicons name={measurementsVisible ? 'earth' : 'lock-closed'} size={14} color={measurementsVisible ? Colors.primary : '#888'} />
-                            </View>
-                        </TouchableOpacity>
+                        <CustomSwitch
+                            value={measurementsVisible}
+                            onValueChange={setMeasurementsVisible}
+                        />
                     </View>
 
-                    <Text style={styles.footnote}>*Tribe-member visibility is determined by tribe settings</Text>
 
                     {/* Activity */}
                     <View style={styles.fieldRow}>
@@ -603,6 +596,16 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.primary,
     },
+    tribeFieldColumn: {
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        backgroundColor: Colors.card,
+        borderRadius: 30,
+        paddingHorizontal: 20,
+        paddingVertical: 15,
+        gap: 10,
+    },
     tribePill: {
         flexDirection: 'row',
         backgroundColor: '#3D0C02',
@@ -623,26 +626,6 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         fontSize: 14,
         fontStyle: 'italic',
-    },
-    switchContainer: {
-        width: 56,
-        height: 32,
-        borderRadius: 16,
-        padding: 3,
-        justifyContent: 'center',
-    },
-    switchKnob: {
-        width: 26,
-        height: 26,
-        borderRadius: 13,
-        backgroundColor: 'white',
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 1,
-        elevation: 2,
     },
     goalPill: {
         flexDirection: 'row',
@@ -665,13 +648,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         marginTop: 10,
         marginBottom: -5,
-        marginLeft: 5,
-    },
-    footnote: {
-        color: '#666',
-        fontSize: 12,
-        marginTop: -5,
-        marginBottom: 10,
         marginLeft: 5,
     },
     // Height Modal Styles

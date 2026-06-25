@@ -1,5 +1,5 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import React, { useState } from 'react';
 import {
     SafeAreaView,
@@ -13,12 +13,19 @@ import {
     Alert,
     Switch,
     Modal,
-    Pressable
+    Pressable,
+    ActivityIndicator
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+import { decode } from 'base64-arraybuffer';
 import { Colors } from '@/src/shared/theme/Colors';
 import { useUserStore } from '@/store/UserStore';
 import { useAuthStore } from '@/store/AuthStore';
+import { supabase } from '@/src/shared/services/supabase';
+import { BirthdayPicker, MonthYearPicker } from '@/src/shared/components/AuthInputs';
+
 
 export default function NaturalStatusScreen() {
     const router = useRouter();
@@ -26,6 +33,12 @@ export default function NaturalStatusScreen() {
     const { profile } = useAuthStore();
     const currentStatus = profile?.status || localStatus || 'none';
     const [step, setStep] = useState(1); // 1: Select, 2: Natural Form, 3: Success
+
+    useFocusEffect(
+        React.useCallback(() => {
+            useAuthStore.getState().refreshProfile();
+        }, [])
+    );
 
     const updateStatus = async (newStatus: 'none' | 'natural-pending' | 'natural' | 'enhanced') => {
         try {
@@ -46,21 +59,28 @@ export default function NaturalStatusScreen() {
     const [yearsTraining, setYearsTraining] = useState('');
     const [dob, setDob] = useState('');
     const [age, setAge] = useState<number | null>(null);
+    const [trainingMonth, setTrainingMonth] = useState(new Date().getMonth());
+    const [trainingYear, setTrainingYear] = useState(new Date().getFullYear());
     const [photoStart, setPhotoStart] = useState<string | null>(null);
-    const [timestampStart, setTimestampStart] = useState('');
     const [photoToday, setPhotoToday] = useState<string | null>(null);
-    const [timestampToday, setTimestampToday] = useState('');
-    const [docPolygraph, setDocPolygraph] = useState<string | null>(null);
-    const [docMedical, setDocMedical] = useState<string | null>(null);
+    const [docPolygraph, setDocPolygraph] = useState<string[]>([]);
+    const [docMedical, setDocMedical] = useState<string[]>([]);
     const [emailOptIn, setEmailOptIn] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Calendar Modal State
-    const [isCalendarVisible, setIsCalendarVisible] = useState(false);
-    const [activeDateField, setActiveDateField] = useState<'start' | 'today' | null>(null);
-    const [viewDate, setViewDate] = useState(new Date());
+    const [photoStartMonth, setPhotoStartMonth] = useState(new Date().getMonth());
+    const [photoStartYear, setPhotoStartYear] = useState(new Date().getFullYear());
+    const [photoTodayMonth, setPhotoTodayMonth] = useState(new Date().getMonth());
+    const [photoTodayYear, setPhotoTodayYear] = useState(new Date().getFullYear());
+    const [exifStart, setExifStart] = useState<string | null>(null);
+    const [exifToday, setExifToday] = useState<string | null>(null);
+    const [showPendingModal, setShowPendingModal] = useState(false);
 
     const calculateAge = (dobString: string) => {
-        const birthDate = new Date(dobString);
+        if (!dobString) return null;
+        const parts = dobString.split('-');
+        if (parts.length !== 3) return null;
+        const birthDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
         if (isNaN(birthDate.getTime())) return null;
         const today = new Date();
         let age = today.getFullYear() - birthDate.getFullYear();
@@ -71,43 +91,208 @@ export default function NaturalStatusScreen() {
         return age > 0 ? age : null;
     };
 
-    const handleDobChange = (text: string) => {
-        setDob(text);
-        if (text.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
-            const ageVal = calculateAge(text);
-            setAge(ageVal);
-        } else {
-            setAge(null);
-        }
-    };
-
-    const pickImage = async (setter: (uri: string) => void) => {
+    const pickImage = async (setUri: (uri: string) => void, setExif?: (exif: string | null) => void) => {
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
             allowsEditing: true,
             quality: 1,
+            exif: true,
         });
 
-        if (!result.canceled) {
-            setter(result.assets[0].uri);
+        if (!result.canceled && result.assets[0]) {
+            setUri(result.assets[0].uri);
+            if (setExif) {
+                const exifDate = result.assets[0].exif?.DateTimeOriginal || result.assets[0].exif?.DateTimeDigitized || null;
+                setExif(exifDate);
+            }
         }
     };
 
-    const handleSubmit = () => {
-        if (!yearsTraining || !dob || !photoStart || !timestampStart || !photoToday || !timestampToday) {
+    const handleAddDocument = async (currentDocs: string[], setDocs: (docs: string[]) => void) => {
+        if (currentDocs.length >= 3) {
+            Alert.alert('Limit Reached', 'You can only upload up to 3 documents.');
+            return;
+        }
+
+        Alert.alert(
+            'Upload Document',
+            'Choose a source',
+            [
+                {
+                    text: 'Photo Library',
+                    onPress: async () => {
+                        try {
+                            const result = await ImagePicker.launchImageLibraryAsync({
+                                mediaTypes: ['images'],
+                                allowsEditing: true,
+                                quality: 1,
+                            });
+                            if (!result.canceled && result.assets && result.assets[0]) {
+                                setDocs([...currentDocs, result.assets[0].uri]);
+                            }
+                        } catch (err) {
+                            console.error('[handleAddDocument] Image picker error:', err);
+                            Alert.alert('Error', 'Failed to pick image.');
+                        }
+                    }
+                },
+                {
+                    text: 'Files',
+                    onPress: async () => {
+                        try {
+                            const result = await DocumentPicker.getDocumentAsync({
+                                type: ['application/pdf', 'image/jpeg', 'image/png']
+                            });
+                            if (!result.canceled && result.assets && result.assets[0]) {
+                                setDocs([...currentDocs, result.assets[0].uri]);
+                            }
+                        } catch (err) {
+                            console.error('[handleAddDocument] Document picker error:', err);
+                            Alert.alert('Error', 'Failed to pick document.');
+                        }
+                    }
+                },
+                {
+                    text: 'Cancel',
+                    style: 'cancel'
+                }
+            ]
+        );
+    };
+
+    const handleSubmit = async () => {
+        if (!yearsTraining || !dob || !photoStart || !photoToday) {
             Alert.alert('Required Fields', 'Please complete all required photo, dob and training fields.');
             return;
         }
-        updateStatus('natural-pending');
-        setStep(3);
-    };
 
-    const handleApproveAdmin = () => {
-        updateStatus('natural');
-        Alert.alert('Admin: Approved', 'User status set to Natural.');
+        const userId = useAuthStore.getState().session?.user?.id || profile?.id;
+        if (!userId) {
+            Alert.alert('Error', 'User session not found. Please log in again.');
+            return;
+        }
+
+        setIsSubmitting(true);
+
+        try {
+            // Helper function to handle a single file upload to Supabase storage
+            const uploadFile = async (uri: string, fieldName: string, bucketName: string): Promise<string> => {
+                const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
+                
+                let contentType = 'image/jpeg';
+                if (fileExt === 'png') contentType = 'image/png';
+                else if (fileExt === 'webp') contentType = 'image/webp';
+                else if (fileExt === 'pdf') contentType = 'application/pdf';
+
+                const fileName = `${Date.now()}_${fieldName}.${fileExt}`;
+                const filePath = `${userId}/${fileName}`;
+
+                // Read local file as base64 string
+                const base64Data = await FileSystem.readAsStringAsync(uri, {
+                    encoding: FileSystem.EncodingType.Base64,
+                });
+
+                // Decode base64 to ArrayBuffer
+                const arrayBuffer = decode(base64Data);
+
+                const { error: uploadError } = await supabase.storage
+                    .from(bucketName)
+                    .upload(filePath, arrayBuffer, {
+                        contentType,
+                        upsert: true
+                    });
+
+                if (uploadError) {
+                    throw uploadError;
+                }
+
+                return filePath;
+            };
+
+            // 1. Upload required files
+            const photoStartUrl = await uploadFile(photoStart, 'photo_start', 'natural_applications');
+            const photoTodayUrl = await uploadFile(photoToday, 'photo_today', 'natural_applications');
+
+            // 2. Upload optional files if present
+            let docPolygraphUrl = null;
+            if (docPolygraph.length > 0) {
+                const urls = await Promise.all(
+                    docPolygraph.map((uri, idx) => uploadFile(uri, `doc_polygraph_${idx}`, 'verifications'))
+                );
+                docPolygraphUrl = urls.join(',');
+            }
+
+            let docMedicalUrl = null;
+            if (docMedical.length > 0) {
+                const urls = await Promise.all(
+                    docMedical.map((uri, idx) => uploadFile(uri, `doc_medical_${idx}`, 'verifications'))
+                );
+                docMedicalUrl = urls.join(',');
+            }
+
+            // 4. Insert application record into the database table (dob is already formatted as YYYY-MM-DD from BirthdayPicker)
+            const timestampStartFormatted = `${String(photoStartMonth + 1).padStart(2, '0')}/${photoStartYear}`;
+            const timestampTodayFormatted = `${String(photoTodayMonth + 1).padStart(2, '0')}/${photoTodayYear}`;
+
+            const { error: insertError } = await supabase
+                .from('natural_applications')
+                .insert({
+                    user_id: userId,
+                    years_training: parseInt(yearsTraining, 10),
+                    dob: dob,
+                    photo_start_url: photoStartUrl,
+                    timestamp_start: timestampStartFormatted,
+                    photo_today_url: photoTodayUrl,
+                    timestamp_today: timestampTodayFormatted,
+                    doc_polygraph_url: docPolygraphUrl,
+                    doc_medical_url: docMedicalUrl,
+                    email_opt_in: emailOptIn,
+                    status: 'pending'
+                });
+
+            if (insertError) {
+                throw insertError;
+            }
+
+            // 5. Update user profile status to pending
+            await updateStatus('natural-pending');
+
+            // 6. Navigate to success step
+            setStep(3);
+        } catch (error: any) {
+            console.error('[NaturalStatusScreen] Form submission error:', error);
+            Alert.alert(
+                'Submission Failed',
+                error?.message || 'An error occurred while uploading documents or saving application.'
+            );
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const handleStatusUpdate = (targetStatus: 'natural' | 'enhanced') => {
+        if (currentStatus === 'natural-pending') {
+            if (targetStatus === 'natural') {
+                setShowPendingModal(true);
+            } else {
+                Alert.alert(
+                    'Switch to Enhanced?',
+                    'Are you sure you want to switch to Enhanced status? This will withdraw your pending Natural application.',
+                    [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                            text: 'Yes, Switch',
+                            onPress: async () => {
+                                await useAuthStore.getState().cancelPendingApplication();
+                                await updateStatus('enhanced');
+                            }
+                        }
+                    ]
+                );
+            }
+            return;
+        }
+
         if (currentStatus === targetStatus) {
             // Toggling off the current status
             const currentLabel = currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1);
@@ -161,30 +346,7 @@ export default function NaturalStatusScreen() {
     };
 
     // Calendar Helpers
-    const openCalendar = (field: 'start' | 'today') => {
-        setActiveDateField(field);
-        setIsCalendarVisible(true);
-    };
 
-    const selectDate = (date: Date) => {
-        const dateStr = `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
-        if (activeDateField === 'start') setTimestampStart(dateStr);
-        if (activeDateField === 'today') setTimestampToday(dateStr);
-        setIsCalendarVisible(false);
-    };
-
-    const generateCalendarDays = () => {
-        const year = viewDate.getFullYear();
-        const month = viewDate.getMonth();
-        const firstDay = new Date(year, month, 1);
-        const lastDay = new Date(year, month + 1, 0);
-
-        const days = [];
-        for (let i = 0; i < firstDay.getDay(); i++) days.push(null);
-        for (let i = 1; i <= lastDay.getDate(); i++) days.push(new Date(year, month, i));
-
-        return days;
-    };
 
     if (step === 3) {
         return (
@@ -193,7 +355,7 @@ export default function NaturalStatusScreen() {
                     <Ionicons name="checkmark-circle" size={80} color={Colors.success} />
                     <Text style={styles.successTitle}>Application Submitted</Text>
                     <Text style={styles.successText}>
-                        Tribe will contact the user’s email on file for additional information if needed. Decisions will be sent within 14 days. Thank you for your patience!
+                        Chribe will contact the user’s email on file for additional information if needed. Decisions will be sent within 14 days. Thank you for your patience!
                     </Text>
                     <TouchableOpacity style={styles.backButtonLarge} onPress={() => setStep(1)}>
                         <Text style={styles.backButtonText}>Return to Status Chooser</Text>
@@ -203,7 +365,7 @@ export default function NaturalStatusScreen() {
         );
     }
 
-    if (step === 2) {
+    if (step === 2 && currentStatus !== 'natural-pending') {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.header}>
@@ -221,18 +383,29 @@ export default function NaturalStatusScreen() {
                     {/* Date of Birth */}
                     <View style={styles.fieldGroup}>
                         <View style={styles.labelRow}>
-                            <Text style={styles.label}>Date of birth (MM/DD/YYYY)</Text>
+                            <Text style={styles.label}>Date of Birth</Text>
                             {age !== null && <Text style={styles.ageIndicator}>Age: {age}</Text>}
                         </View>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="MM/DD/YYYY"
-                            keyboardType="numbers-and-punctuation"
+                        <BirthdayPicker
                             value={dob}
-                            onChangeText={handleDobChange}
-                            maxLength={10}
-                            placeholderTextColor={Colors.theme.dust + '55'}
-                            selectionColor={Colors.theme.harvestGold}
+                            onChange={(val) => {
+                                setDob(val);
+                                setAge(calculateAge(val));
+                            }}
+                            hideLabel={true}
+                        />
+                    </View>
+
+                    {/* Weight/Resistance Training Start Date */}
+                    <View style={styles.fieldGroup}>
+                        <Text style={styles.label}>When did you begin weight/resistance training?</Text>
+                        <MonthYearPicker
+                            month={trainingMonth}
+                            year={trainingYear}
+                            onChange={(m, y) => {
+                                setTrainingMonth(m);
+                                setTrainingYear(y);
+                            }}
                         />
                     </View>
 
@@ -254,73 +427,130 @@ export default function NaturalStatusScreen() {
                     <View style={styles.fieldGroup}>
                         <Text style={styles.label}>Photo within 1 year of beginning resistance training</Text>
                         <Text style={styles.subLabel}>
-                            Photos must clearly show the face, front deltoids, and abdomen with no more than one layer of clothing (e.g., a t-shirt or button-down shirt). Photos taken shirtless, in a tank top, or in a sports bra that display the required anatomy may facilitate smoother verification but are not required for approval.
+                            {"To complete verification, upload a clear photo that shows your face and upper body posture.\n\n• Required Visibility: Your face, traps, front delts, and midsection must be fully visible.\n• Approved Attire: A tank top, sleeveless shirt, or rolled-up tee that exposes the core.\n• Strict Policy: Photos must remain strictly within standard athletic/gym attire. Explicit or inappropriate uploads will result in an immediate account ban."}
                         </Text>
-                        <TouchableOpacity style={styles.uploadBox} onPress={() => pickImage(setPhotoStart)}>
+                        <TouchableOpacity style={styles.uploadBox} onPress={() => pickImage(setPhotoStart, setExifStart)}>
                             {photoStart ? (
                                 <Image source={{ uri: photoStart }} style={styles.previewImage} />
                             ) : (
                                 <Ionicons name="camera-outline" size={32} color={Colors.theme.harvestGold} />
                             )}
                         </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.input, { marginTop: 10, justifyContent: 'center' }]}
-                            onPress={() => openCalendar('start')}
-                        >
-                            <Text style={{ color: timestampStart ? Colors.theme.harvestGold : Colors.theme.dust + '55', fontSize: 16 }}>
-                                {timestampStart || "Select timestamp (MM/YYYY)"}
-                            </Text>
-                        </TouchableOpacity>
+                        <Text style={[styles.label, { marginTop: 15 }]}>Date of photo (MM/YYYY)</Text>
+                        <MonthYearPicker
+                            month={photoStartMonth}
+                            year={photoStartYear}
+                            onChange={(m, y) => {
+                                setPhotoStartMonth(m);
+                                setPhotoStartYear(y);
+                            }}
+                        />
                     </View>
 
                     {/* Photo Today */}
                     <View style={styles.fieldGroup}>
                         <Text style={styles.label}>Photo of you today</Text>
                         <Text style={styles.subLabel}>
-                            Photos must be taken shirtless, in a sports bra, or in a tank top, with the face, front deltoids, abdomen, and arms clearly visible with no layers of clothing covering the required anatomy.
+                            {"To complete verification, upload a clear photo that shows your face and upper body posture.\n\n• Required Visibility: Your face, traps, front delts, and midsection must be fully visible.\n• Approved Attire: A tank top, sleeveless shirt, or rolled-up tee that exposes the core.\n• Strict Policy: Photos must remain strictly within standard athletic/gym attire. Explicit or inappropriate uploads will result in an immediate account ban."}
                         </Text>
-                        <TouchableOpacity style={styles.uploadBox} onPress={() => pickImage(setPhotoToday)}>
+                        <TouchableOpacity style={styles.uploadBox} onPress={() => pickImage(setPhotoToday, setExifToday)}>
                             {photoToday ? (
                                 <Image source={{ uri: photoToday }} style={styles.previewImage} />
                             ) : (
                                 <Ionicons name="camera-outline" size={32} color={Colors.theme.harvestGold} />
                             )}
                         </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.input, { marginTop: 10, justifyContent: 'center' }]}
-                            onPress={() => openCalendar('today')}
-                        >
-                            <Text style={{ color: timestampToday ? Colors.theme.harvestGold : Colors.theme.dust + '55', fontSize: 16 }}>
-                                {timestampToday || "Select current timestamp"}
-                            </Text>
-                        </TouchableOpacity>
+                        <Text style={[styles.label, { marginTop: 15 }]}>Date of photo (MM/YYYY)</Text>
+                        <MonthYearPicker
+                            month={photoTodayMonth}
+                            year={photoTodayYear}
+                            onChange={(m, y) => {
+                                setPhotoTodayMonth(m);
+                                setPhotoTodayYear(y);
+                            }}
+                        />
                     </View>
 
                     {/* Optional: Polygraph / League */}
                     <View style={styles.fieldGroup}>
-                        <Text style={styles.label}>Verification (Optional)</Text>
-                        <Text style={styles.subLabel}>Polygraph (within 7 days) or Drug-tested league membership image (NCAA, NBA, OCB, etc.)</Text>
-                        <TouchableOpacity style={styles.uploadBox} onPress={() => pickImage(setDocPolygraph)}>
-                            {docPolygraph ? (
-                                <Image source={{ uri: docPolygraph }} style={styles.previewImage} />
-                            ) : (
-                                <Ionicons name="document-attach-outline" size={32} color={Colors.theme.harvestGold} />
+                        <Text style={styles.label}>Expedite Your Verification (Optional)</Text>
+                        <Text style={styles.subLabel}>
+                            {"While not required for submission, providing verified drug-testing documentation can significantly accelerate your application review. All evidence must be dated within 6 weeks of your application.\n\nAccepted Documentation:\n• Lab Results: Official reports from a urinalysis, blood panel/DBS, or hair follicle test.\n• Polygraph Records: Official certificate or scored results.\n• Federation Proof: Current membership, stage results, or recent competition in a drug-tested competitive league (OCB, NCAA, NBA, etc.)\n\n> Note: Submitting documentation accelerates the review process but does not guarantee automatic application approval."}
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                            {docPolygraph.map((uri, index) => {
+                                const isPdf = uri.toLowerCase().endsWith('.pdf') || uri.includes('/pdf');
+                                return (
+                                    <View key={uri + index} style={styles.thumbnailContainer}>
+                                        {isPdf ? (
+                                            <View style={styles.pdfThumbnail}>
+                                                <Ionicons name="document-text" size={36} color={Colors.theme.harvestGold} />
+                                                <Text numberOfLines={1} style={styles.pdfText}>PDF</Text>
+                                            </View>
+                                        ) : (
+                                            <Image source={{ uri }} style={styles.thumbnailImage} />
+                                        )}
+                                        <TouchableOpacity
+                                            style={styles.removeBtn}
+                                            onPress={() => setDocPolygraph(docPolygraph.filter((_, i) => i !== index))}
+                                        >
+                                            <Ionicons name="close-circle" size={20} color="#FF3B30" />
+                                        </TouchableOpacity>
+                                    </View>
+                                );
+                            })}
+                            {docPolygraph.length < 3 && (
+                                <TouchableOpacity 
+                                    style={[styles.uploadBox, { width: 100, height: 100 }]} 
+                                    onPress={() => handleAddDocument(docPolygraph, setDocPolygraph)}
+                                >
+                                    <Ionicons name="document-attach-outline" size={32} color={Colors.theme.harvestGold} />
+                                </TouchableOpacity>
                             )}
-                        </TouchableOpacity>
+                        </View>
+                        <Text style={[styles.tinyNote, { marginTop: 8 }]}>
+                            {"Users may submit up to three documents.\nSupports PDF, JPG, and PNG"}
+                        </Text>
                     </View>
 
                     {/* Optional: Medical Doc */}
                     <View style={styles.fieldGroup}>
                         <Text style={styles.label}>Medical Documentation (Optional)</Text>
                         <Text style={styles.subLabel}>Official prescription/note confirming treatment for illness. Must have hospital letterhead.</Text>
-                        <TouchableOpacity style={styles.uploadBox} onPress={() => pickImage(setDocMedical)}>
-                            {docMedical ? (
-                                <Image source={{ uri: docMedical }} style={styles.previewImage} />
-                            ) : (
-                                <Ionicons name="medkit-outline" size={32} color={Colors.theme.harvestGold} />
+                        <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                            {docMedical.map((uri, index) => {
+                                const isPdf = uri.toLowerCase().endsWith('.pdf') || uri.includes('/pdf');
+                                return (
+                                    <View key={uri + index} style={styles.thumbnailContainer}>
+                                        {isPdf ? (
+                                            <View style={styles.pdfThumbnail}>
+                                                <Ionicons name="document-text" size={36} color={Colors.theme.harvestGold} />
+                                                <Text numberOfLines={1} style={styles.pdfText}>PDF</Text>
+                                            </View>
+                                        ) : (
+                                            <Image source={{ uri }} style={styles.thumbnailImage} />
+                                        )}
+                                        <TouchableOpacity
+                                            style={styles.removeBtn}
+                                            onPress={() => setDocMedical(docMedical.filter((_, i) => i !== index))}
+                                        >
+                                            <Ionicons name="close-circle" size={20} color="#FF3B30" />
+                                        </TouchableOpacity>
+                                    </View>
+                                );
+                            })}
+                            {docMedical.length < 3 && (
+                                <TouchableOpacity 
+                                    style={[styles.uploadBox, { width: 100, height: 100 }]} 
+                                    onPress={() => handleAddDocument(docMedical, setDocMedical)}
+                                >
+                                    <Ionicons name="medkit-outline" size={32} color={Colors.theme.harvestGold} />
+                                </TouchableOpacity>
                             )}
-                        </TouchableOpacity>
-                        <Text style={styles.tinyNote}>Supports PDF, JPG, IMG</Text>
+                        </View>
+                        <Text style={[styles.tinyNote, { marginTop: 8 }]}>
+                            {"Users may submit up to three documents.\nSupports PDF, JPG, and PNG"}
+                        </Text>
                     </View>
 
                     <View style={styles.optInRow}>
@@ -333,77 +563,55 @@ export default function NaturalStatusScreen() {
                         />
                     </View>
 
-                    <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-                        <Text style={styles.submitBtnText}>Submit Application</Text>
+                    <TouchableOpacity 
+                        style={[styles.submitBtn, isSubmitting && { opacity: 0.7 }]} 
+                        onPress={handleSubmit}
+                        disabled={isSubmitting}
+                    >
+                        {isSubmitting ? (
+                            <ActivityIndicator color={Colors.theme.matteBlack} size="small" />
+                        ) : (
+                            <Text style={styles.submitBtnText}>Submit Application</Text>
+                        )}
                     </TouchableOpacity>
                 </ScrollView>
-
-                {/* Calendar Modal */}
-                <Modal
-                    visible={isCalendarVisible}
-                    transparent
-                    animationType="fade"
-                    onRequestClose={() => setIsCalendarVisible(false)}
-                >
-                    <Pressable style={styles.modalOverlay} onPress={() => setIsCalendarVisible(false)}>
-                        <Pressable style={styles.calendarCard}>
-                            <View style={styles.calendarHeader}>
-                                <TouchableOpacity onPress={() => {
-                                    const d = new Date(viewDate);
-                                    d.setMonth(d.getMonth() - 1);
-                                    setViewDate(d);
-                                }}>
-                                    <Ionicons name="chevron-back" size={20} color={Colors.theme.harvestGold} />
-                                </TouchableOpacity>
-                                <Text style={styles.calendarMonthText}>
-                                    {viewDate.toLocaleString('default', { month: 'long' })} {viewDate.getFullYear()}
-                                </Text>
-                                <TouchableOpacity onPress={() => {
-                                    const d = new Date(viewDate);
-                                    d.setMonth(d.getMonth() + 1);
-                                    setViewDate(d);
-                                }}>
-                                    <Ionicons name="chevron-forward" size={20} color={Colors.theme.harvestGold} />
-                                </TouchableOpacity>
-                            </View>
-                            <View style={styles.calendarGrid}>
-                                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((h, idx) => (
-                                    <Text key={idx} style={styles.dayHeader}>{h}</Text>
-                                ))}
-                                {generateCalendarDays().map((day, i) => {
-                                    if (!day) return <View key={i} style={styles.calendarDayBtn} />;
-                                    return (
-                                        <TouchableOpacity
-                                            key={i}
-                                            style={styles.calendarDayBtn}
-                                            onPress={() => selectDate(day)}
-                                        >
-                                            <Text style={styles.calendarDayText}>{day.getDate()}</Text>
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </View>
-                        </Pressable>
-                    </Pressable>
-                </Modal>
             </SafeAreaView>
         );
     }
 
     return (
         <SafeAreaView style={styles.container}>
+            <Modal
+                transparent={true}
+                visible={showPendingModal}
+                animationType="fade"
+                onRequestClose={() => setShowPendingModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.pendingModalCard}>
+                        <View style={styles.pendingModalIconContainer}>
+                            <Ionicons name="time-outline" size={48} color="#DAA520" />
+                        </View>
+                        <Text style={styles.pendingModalTitle}>Under Review</Text>
+                        <Text style={styles.pendingModalText}>
+                            Your application is currently under review. You will be notified as soon as a decision is made.
+                        </Text>
+                        <TouchableOpacity 
+                            style={styles.pendingModalCloseBtn} 
+                            onPress={() => setShowPendingModal(false)}
+                        >
+                            <Text style={styles.pendingModalCloseBtnText}>Dismiss</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={28} color={Colors.theme.harvestGold} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Status</Text>
-                {currentStatus === 'natural-pending' ? (
-                    <TouchableOpacity onPress={handleApproveAdmin} style={styles.approveBtn}>
-                        <Text style={styles.approveBtnText}>Approve</Text>
-                    </TouchableOpacity>
-                ) : (
-                    <View style={{ width: 60 }} />
-                )}
+                <View style={{ width: 28 }} />
             </View>
 
             <View style={styles.content}>
@@ -453,12 +661,12 @@ export default function NaturalStatusScreen() {
                     {currentStatus === 'enhanced' && <Ionicons name="checkmark-circle" size={24} color={Colors.theme.matteBlack} />}
                 </TouchableOpacity>
 
-                {/* What is Tribe Natural? */}
+                {/* What is Chribe Natural? */}
                 <TouchableOpacity
                     style={styles.definitionLink}
                     onPress={() => router.push('/settings/natural-definition')}
                 >
-                    <Text style={styles.definitionLabel}>What is Tribe natural?</Text>
+                    <Text style={styles.definitionLabel}>What is Chribe natural?</Text>
                     <Ionicons name="leaf" size={30} color={Colors.theme.naturalGreen} style={{ marginTop: 10 }} />
                 </TouchableOpacity>
             </View>
@@ -486,17 +694,6 @@ const styles = StyleSheet.create({
         fontSize: 20,
         fontWeight: 'bold',
         color: Colors.theme.harvestGold,
-    },
-    approveBtn: {
-        backgroundColor: Colors.theme.harvestGold,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 15,
-    },
-    approveBtnText: {
-        color: Colors.theme.matteBlack,
-        fontSize: 12,
-        fontWeight: 'bold',
     },
     content: {
         paddingHorizontal: 20,
@@ -636,6 +833,41 @@ const styles = StyleSheet.create({
         marginTop: 5,
         textAlign: 'right',
     },
+    thumbnailContainer: {
+        width: 100,
+        height: 100,
+        borderRadius: 15,
+        overflow: 'hidden',
+        position: 'relative',
+        backgroundColor: Colors.theme.charcoal,
+        borderWidth: 1,
+        borderColor: 'rgba(218, 165, 32, 0.3)',
+    },
+    thumbnailImage: {
+        width: '100%',
+        height: '100%',
+    },
+    removeBtn: {
+        position: 'absolute',
+        top: 5,
+        right: 5,
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        borderRadius: 12,
+        padding: 2,
+    },
+    pdfThumbnail: {
+        width: '100%',
+        height: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 5,
+    },
+    pdfText: {
+        fontSize: 12,
+        color: Colors.theme.dust,
+        fontWeight: 'bold',
+        marginTop: 4,
+    },
     optInRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -739,5 +971,59 @@ const styles = StyleSheet.create({
     calendarDayText: {
         color: Colors.theme.softWhite,
         fontSize: 14,
+    },
+    pendingModalCard: {
+        backgroundColor: '#121212',
+        width: '85%',
+        borderRadius: 25,
+        padding: 24,
+        borderWidth: 2,
+        borderColor: '#DAA520',
+        alignItems: 'center',
+        shadowColor: '#DAA520',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 16,
+        elevation: 10,
+    },
+    pendingModalIconContainer: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: 'rgba(218, 165, 32, 0.08)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 16,
+        borderWidth: 1.5,
+        borderColor: 'rgba(218, 165, 32, 0.25)',
+    },
+    pendingModalTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#DAA520',
+        marginBottom: 12,
+        textAlign: 'center',
+    },
+    pendingModalText: {
+        fontSize: 15,
+        color: '#EDE8D5',
+        textAlign: 'center',
+        lineHeight: 22,
+        marginBottom: 24,
+    },
+    pendingModalCloseBtn: {
+        backgroundColor: '#000000',
+        borderWidth: 2,
+        borderColor: '#DAA520',
+        borderRadius: 100,
+        paddingVertical: 12,
+        width: '100%',
+        alignItems: 'center',
+    },
+    pendingModalCloseBtnText: {
+        color: '#FFFFFF',
+        fontSize: 14,
+        fontWeight: 'bold',
+        letterSpacing: 1,
     },
 });

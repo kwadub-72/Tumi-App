@@ -17,7 +17,7 @@ export const SupabaseNetworkService = {
             return [];
         }
 
-        return data.map((row: any) => this.mapProfileToUser(row.follower));
+        return (data || []).filter((row: any) => row.follower).map((row: any) => this.mapProfileToUser(row.follower));
     },
 
     async getFollowing(userId: string): Promise<User[]> {
@@ -35,7 +35,7 @@ export const SupabaseNetworkService = {
             return [];
         }
 
-        return data.map((row: any) => this.mapProfileToUser(row.following));
+        return (data || []).filter((row: any) => row.following).map((row: any) => this.mapProfileToUser(row.following));
     },
 
     async getFollowRequests(userId: string): Promise<string[]> {
@@ -68,7 +68,7 @@ export const SupabaseNetworkService = {
             return [];
         }
 
-        return (data || []).map((row: any) => this.mapProfileToUser(row.follower));
+        return (data || []).filter((row: any) => row.follower).map((row: any) => this.mapProfileToUser(row.follower));
     },
 
     async getFollowCounts(userId: string): Promise<{ followers: number; following: number }> {

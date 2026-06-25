@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View, TouchableOpacity, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Colors } from '@/src/shared/theme/Colors';
+import { PostStore } from '@/store/PostStore';
+import ReportingActionSheet from '@/components/ReportingActionSheet';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -16,7 +18,11 @@ interface PostOptionsModalProps {
     onAddToLiftBook?: () => void;
     onAddToMacroBook?: () => void;
     onShare?: () => void;
+    onSaveMap?: () => void;
     isOwner: boolean;
+    postId?: string;
+    postType?: string;
+    onHide?: () => void;
 }
 
 export default function PostOptionsModal({
@@ -29,8 +35,14 @@ export default function PostOptionsModal({
     onAddToLiftBook,
     onAddToMacroBook,
     onShare,
-    isOwner
+    onSaveMap,
+    isOwner,
+    postId,
+    postType,
+    onHide
 }: PostOptionsModalProps) {
+    const [isReportSheetVisible, setReportSheetVisible] = useState(false);
+
     const handleDelete = () => {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         onDelete?.();
@@ -38,123 +50,160 @@ export default function PostOptionsModal({
 
     const handleReport = () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        if (postId) {
+            setReportSheetVisible(true);
+        }
         onReport?.();
     };
 
     return (
-        <Modal
-            visible={visible}
-            transparent
-            animationType="slide"
-            onRequestClose={onClose}
-        >
-            <Pressable style={styles.overlay} onPress={onClose}>
-                <View style={styles.modalContent}>
-                    <View style={styles.header}>
-                        <View style={styles.handle} />
-                        <Text style={styles.headerTitle}>Options</Text>
-                        <View style={styles.divider} />
+        <>
+            <Modal
+                visible={visible}
+                transparent
+                animationType="slide"
+                onRequestClose={onClose}
+            >
+                <Pressable style={styles.overlay} onPress={onClose}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.header}>
+                            <View style={styles.handle} />
+                            <Text style={styles.headerTitle}>Options</Text>
+                            <View style={styles.divider} />
+                        </View>
+                        
+                        <View style={styles.optionsContainer}>
+                            {onShare && (
+                                <>
+                                    <TouchableOpacity 
+                                        style={styles.option} 
+                                        onPress={onShare}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View style={styles.iconContainer}>
+                                            <Ionicons name="share-social" size={28} color={Colors.theme.harvestGold} />
+                                        </View>
+                                        <Text style={[styles.optionText, { color: Colors.theme.harvestGold }]}>Share Chribe Mark</Text>
+                                    </TouchableOpacity>
+                                    <View style={styles.itemDivider} />
+                                </>
+                            )}
+                            {onAddToMealBook && (
+                                <>
+                                    <TouchableOpacity 
+                                        style={styles.option} 
+                                        onPress={onAddToMealBook}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View style={styles.iconContainer}>
+                                            <Ionicons name="book" size={28} color={Colors.theme.softWhite} />
+                                        </View>
+                                        <Text style={[styles.optionText, { color: Colors.theme.softWhite }]}>Add to meal book</Text>
+                                    </TouchableOpacity>
+                                    <View style={styles.itemDivider} />
+                                </>
+                            )}
+                            {onAddToLiftBook && (
+                                <>
+                                    <TouchableOpacity 
+                                        style={styles.option} 
+                                        onPress={onAddToLiftBook}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View style={styles.iconContainer}>
+                                            <Ionicons name="book" size={28} color={Colors.theme.softWhite} />
+                                        </View>
+                                        <Text style={[styles.optionText, { color: Colors.theme.softWhite }]}>Add to lift book</Text>
+                                    </TouchableOpacity>
+                                    <View style={styles.itemDivider} />
+                                </>
+                            )}
+                            {onAddToMacroBook && (
+                                <>
+                                    <TouchableOpacity 
+                                        style={styles.option} 
+                                        onPress={onAddToMacroBook}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View style={styles.iconContainer}>
+                                            <Ionicons name="book" size={28} color={Colors.theme.softWhite} />
+                                        </View>
+                                        <Text style={[styles.optionText, { color: Colors.theme.softWhite }]}>Add to macro book</Text>
+                                    </TouchableOpacity>
+                                    <View style={styles.itemDivider} />
+                                </>
+                            )}
+                            {onSaveMap && (
+                                <>
+                                    <TouchableOpacity 
+                                        style={styles.option} 
+                                        onPress={onSaveMap}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View style={styles.iconContainer}>
+                                            <Ionicons name="bookmark" size={28} color={Colors.theme.harvestGold} />
+                                        </View>
+                                        <Text style={[styles.optionText, { color: Colors.theme.harvestGold }]}>Save to Map book</Text>
+                                    </TouchableOpacity>
+                                    <View style={styles.itemDivider} />
+                                </>
+                            )}
+                            {onSelectItems && (
+                                <>
+                                    <TouchableOpacity 
+                                        style={styles.option} 
+                                        onPress={onSelectItems}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View style={styles.selectIconContainer}>
+                                            <Ionicons name="checkmark" size={18} color={Colors.theme.matteBlack} />
+                                        </View>
+                                        <Text style={[styles.optionText, { color: Colors.theme.softWhite }]}>Select items</Text>
+                                    </TouchableOpacity>
+                                    <View style={styles.itemDivider} />
+                                </>
+                            )}
+                            {isOwner ? (
+                                <TouchableOpacity 
+                                    style={styles.option} 
+                                    onPress={handleDelete}
+                                    activeOpacity={0.7}
+                                >
+                                    <Ionicons name="trash" size={26} color={Colors.theme.burntSienna} />
+                                    <Text style={[styles.optionText, { color: Colors.theme.burntSienna }]}>Delete</Text>
+                                </TouchableOpacity>
+                            ) : (
+                                <TouchableOpacity 
+                                    style={styles.option} 
+                                    onPress={handleReport}
+                                    activeOpacity={0.7}
+                                >
+                                    <Ionicons name="flag" size={26} color={Colors.theme.burntSienna} />
+                                    <Text style={[styles.optionText, { color: Colors.theme.burntSienna }]}>Report</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
                     </View>
-                    
-                    <View style={styles.optionsContainer}>
-                        {onShare && (
-                            <>
-                                <TouchableOpacity 
-                                    style={styles.option} 
-                                    onPress={onShare}
-                                    activeOpacity={0.7}
-                                >
-                                    <View style={styles.iconContainer}>
-                                        <Ionicons name="share-social" size={28} color={Colors.theme.harvestGold} />
-                                    </View>
-                                    <Text style={[styles.optionText, { color: Colors.theme.harvestGold }]}>Share Tribe Mark</Text>
-                                </TouchableOpacity>
-                                <View style={styles.itemDivider} />
-                            </>
-                        )}
-                        {onAddToMealBook && (
-                            <>
-                                <TouchableOpacity 
-                                    style={styles.option} 
-                                    onPress={onAddToMealBook}
-                                    activeOpacity={0.7}
-                                >
-                                    <View style={styles.iconContainer}>
-                                        <Ionicons name="book" size={28} color={Colors.theme.softWhite} />
-                                    </View>
-                                    <Text style={[styles.optionText, { color: Colors.theme.softWhite }]}>Add to meal book</Text>
-                                </TouchableOpacity>
-                                <View style={styles.itemDivider} />
-                            </>
-                        )}
-                        {onAddToLiftBook && (
-                            <>
-                                <TouchableOpacity 
-                                    style={styles.option} 
-                                    onPress={onAddToLiftBook}
-                                    activeOpacity={0.7}
-                                >
-                                    <View style={styles.iconContainer}>
-                                        <Ionicons name="book" size={28} color={Colors.theme.softWhite} />
-                                    </View>
-                                    <Text style={[styles.optionText, { color: Colors.theme.softWhite }]}>Add to lift book</Text>
-                                </TouchableOpacity>
-                                <View style={styles.itemDivider} />
-                            </>
-                        )}
-                        {onAddToMacroBook && (
-                            <>
-                                <TouchableOpacity 
-                                    style={styles.option} 
-                                    onPress={onAddToMacroBook}
-                                    activeOpacity={0.7}
-                                >
-                                    <View style={styles.iconContainer}>
-                                        <Ionicons name="book" size={28} color={Colors.theme.softWhite} />
-                                    </View>
-                                    <Text style={[styles.optionText, { color: Colors.theme.softWhite }]}>Add to macro book</Text>
-                                </TouchableOpacity>
-                                <View style={styles.itemDivider} />
-                            </>
-                        )}
-                        {onSelectItems && (
-                            <>
-                                <TouchableOpacity 
-                                    style={styles.option} 
-                                    onPress={onSelectItems}
-                                    activeOpacity={0.7}
-                                >
-                                    <View style={styles.selectIconContainer}>
-                                        <Ionicons name="checkmark" size={18} color={Colors.theme.matteBlack} />
-                                    </View>
-                                    <Text style={[styles.optionText, { color: Colors.theme.softWhite }]}>Select items</Text>
-                                </TouchableOpacity>
-                                <View style={styles.itemDivider} />
-                            </>
-                        )}
-                        {isOwner ? (
-                            <TouchableOpacity 
-                                style={styles.option} 
-                                onPress={handleDelete}
-                                activeOpacity={0.7}
-                            >
-                                <Ionicons name="trash" size={26} color={Colors.theme.burntSienna} />
-                                <Text style={[styles.optionText, { color: Colors.theme.burntSienna }]}>Delete</Text>
-                            </TouchableOpacity>
-                        ) : (
-                            <TouchableOpacity 
-                                style={styles.option} 
-                                onPress={handleReport}
-                                activeOpacity={0.7}
-                            >
-                                <Ionicons name="flag" size={26} color={Colors.theme.burntSienna} />
-                                <Text style={[styles.optionText, { color: Colors.theme.burntSienna }]}>Report</Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                </View>
-            </Pressable>
-        </Modal>
+                </Pressable>
+            </Modal>
+            <ReportingActionSheet
+                isVisible={isReportSheetVisible}
+                onClose={() => {
+                    setReportSheetVisible(false);
+                    onClose();
+                }}
+                targetType={postType?.includes('map') ? 'map' : 'post'}
+                targetId={postId || ''}
+                onSuccess={(targetType, targetId) => {
+                    if (targetType === 'post') {
+                        PostStore.deletePost(targetId);
+                    }
+                    onDelete?.();
+                    onHide?.();
+                    if (typeof onClose === 'function') onClose();
+                }}
+            />
+        </>
     );
 }
 

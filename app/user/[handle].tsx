@@ -23,8 +23,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import VerifiedModal from '../../components/VerifiedModal';
 import HammerModal from '../../components/HammerModal';
 import CommentSheet from '@/components/CommentSheet';
+import ReportingActionSheet from '@/components/ReportingActionSheet';
 import FeedItem from '@/src/features/feed/components/FeedItem';
 import TribeShareModal from '@/src/features/feed/components/TribeShareModal';
+import PostOptionsModal from '@/src/features/feed/components/PostOptionsModal';
+import GenericOptionsModal from '@/components/GenericOptionsModal';
 import { ActivityIcon } from '@/src/shared/components/ActivityIcon';
 import { supabase } from '@/src/shared/services/supabase';
 import { SupabasePostService } from '@/src/shared/services/SupabasePostService';
@@ -37,7 +40,9 @@ import { useUserStore } from '../../store/UserStore'; // For units
 import { useUserTribeStore } from '@/src/store/UserTribeStore';
 import { useNetworkStore } from '@/src/store/NetworkStore';
 import { useProfileStore } from '@/src/store/useProfileStore';
+import { PostStore } from '@/store/PostStore';
 import { DiscoveryMapCard } from '@/src/features/macromaps/components/DiscoveryMapCard';
+import { MetricNormalizer } from '@/src/shared/utils/MetricNormalizer';
 
 const { width, height } = Dimensions.get('window');
 
@@ -56,7 +61,19 @@ export default function OtherUserProfileScreen() {
 
     // State
     const [posts, setPosts] = useState<FeedPost[]>([]);
+    const [isReportSheetVisible, setIsReportSheetVisible] = useState(false);
+    const [activeReportTargetId, setActiveReportTargetId] = useState<string | null>(null);
+    const [reportTargetType, setReportTargetType] = useState<'profile' | 'post' | 'map'>('post');
     const [activeTab, setActiveTab] = useState<TabType>(initialTab && tabs.includes(initialTab) ? initialTab : 'meals');
+    const [isOptionsModalVisible, setOptionsModalVisible] = useState(false);
+    const [isProfileOptionsVisible, setProfileOptionsVisible] = useState(false);
+
+    const handleReportSuccess = () => {
+        if (activeReportTargetId) {
+            setPosts(prev => prev.filter(p => p.id !== activeReportTargetId));
+            PostStore.deletePost(activeReportTargetId);
+        }
+    };
     const [refreshing, setRefreshing] = useState(false);
     const [loading, setLoading] = useState(true);
     
@@ -302,26 +319,45 @@ export default function OtherUserProfileScreen() {
         ? `${Math.round(targetProfile.weight_lbs ?? 0)} lbs`
         : `${Math.round((targetProfile.weight_lbs ?? 0) * 0.453592)} kg`;
 
-    const displayHeight = targetProfile.height ?? '--';
+    const displayHeight = (() => {
+        const h = targetProfile.height;
+        const hCm = targetProfile.height_cm;
+        if (!h && !hCm) return '--';
+        
+        let heightCm = 0;
+        if (hCm) {
+            heightCm = Math.round(Number(hCm));
+        } else if (h) {
+            if (h.includes("'")) {
+                const match = h.match(/(\d+)'(\d+)/);
+                if (match) {
+                    const feet = parseInt(match[1], 10);
+                    const inches = parseInt(match[2], 10);
+                    heightCm = Math.round((feet * 30.48) + (inches * 2.54));
+                }
+            } else {
+                const clean = h.replace(' cm', '').trim();
+                const cmVal = parseFloat(clean);
+                if (!isNaN(cmVal)) {
+                    heightCm = Math.round(cmVal);
+                }
+            }
+        }
+        
+        if (heightCm <= 0) return h || '--';
+        
+        if (units === 'imperial') {
+            const { feet, inches } = MetricNormalizer.cmToImperial(heightCm);
+            return `${feet}'${inches}`;
+        } else {
+            return `${heightCm} cm`;
+        }
+    })();
     const displayName = targetProfile.name ?? '--';
 
     const handleOptions = (post: FeedPost) => {
-        const options: any[] = [
-            { text: 'Cancel', style: 'cancel' }
-        ];
-        if (post.macroMap) {
-            options.push({
-                text: 'Save to Map book',
-                onPress: async () => {
-                    if (session?.user?.id) {
-                        await SupabasePostService.toggleSaveMap(session.user.id, post.macroMap!.id);
-                        Alert.alert("Success", "Map saved to your Map book!");
-                    }
-                }
-            });
-        }
-        options.push({ text: 'Report', style: 'destructive' });
-        Alert.alert('Options', undefined, options);
+        setActivePost(post);
+        setOptionsModalVisible(true);
     };
 
     const handleCommentPress = (post: FeedPost) => {
@@ -335,6 +371,10 @@ export default function OtherUserProfileScreen() {
         loadData(true);
     };
 
+    const handleProfileOptions = () => {
+        setProfileOptionsVisible(true);
+    };
+
     const renderHeaderContent = () => (
         <View pointerEvents="box-none" style={{ backgroundColor: Colors.theme.matteBlack, paddingTop: insets.top }}>
             {/* Top Bar */}
@@ -343,7 +383,7 @@ export default function OtherUserProfileScreen() {
                     <Ionicons name="arrow-back" size={28} color={Colors.theme.softWhite} />
                 </TouchableOpacity>
                 <View style={{ flex: 1 }} />
-                <TouchableOpacity style={{ padding: 8 }}>
+                <TouchableOpacity onPress={handleProfileOptions} style={{ padding: 8 }}>
                     <Ionicons name="ellipsis-horizontal" size={28} color={Colors.theme.softWhite} />
                 </TouchableOpacity>
             </View>
@@ -598,6 +638,65 @@ export default function OtherUserProfileScreen() {
                 visible={isShareModalVisible}
                 onClose={() => { setShareModalVisible(false); setShareTargetPost(null); }}
                 post={shareTargetPost}
+            />
+
+            <ReportingActionSheet
+                isVisible={isReportSheetVisible}
+                onClose={() => setIsReportSheetVisible(false)}
+                targetType={reportTargetType}
+                targetId={activeReportTargetId!}
+                onSuccess={handleReportSuccess}
+            />
+
+            <PostOptionsModal
+                visible={isOptionsModalVisible}
+                onClose={() => {
+                    setOptionsModalVisible(false);
+                    setActivePost(null);
+                }}
+                isOwner={activePost?.user.id === session?.user.id}
+                onDelete={undefined}
+                onReport={() => {
+                    setOptionsModalVisible(false);
+                    if (activePost) {
+                        setReportTargetType('post');
+                        setActiveReportTargetId(activePost.id);
+                        setIsReportSheetVisible(true);
+                    }
+                }}
+                onSaveMap={activePost?.macroMap ? async () => {
+                    if (session?.user?.id && activePost.macroMap) {
+                        await SupabasePostService.toggleSaveMap(session.user.id, activePost.macroMap.id);
+                        Alert.alert("Success", "Map saved to your Map book!");
+                    }
+                } : undefined}
+                onShare={() => {
+                    if (activePost) {
+                        setShareTargetPost(activePost);
+                        setShareModalVisible(true);
+                    }
+                    setOptionsModalVisible(false);
+                }}
+            />
+
+            <GenericOptionsModal
+                visible={isProfileOptionsVisible}
+                onClose={() => setProfileOptionsVisible(false)}
+                title="Profile Options"
+                options={[
+                    {
+                        label: 'Report Profile',
+                        isDestructive: true,
+                        icon: 'flag',
+                        onPress: () => {
+                            if (targetProfile) {
+                                setReportTargetType('profile');
+                                setActiveReportTargetId(targetProfile.id);
+                                setIsReportSheetVisible(true);
+                            }
+                        }
+                    }
+                ]}
             />
 
             <Tabs.Container

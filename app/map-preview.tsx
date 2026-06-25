@@ -483,41 +483,9 @@ export default function MapPreviewScreen(props: { isOnboarding?: boolean }) {
                         <View style={styles.modalButtonsRow}>
                             <TouchableOpacity 
                                 style={styles.modalCancelBtn}
-                                onPress={async () => {
+                                onPress={() => {
                                     setIsShareModalVisible(false);
-                                    if (session?.user?.id && map_id) {
-                                        try {
-                                            const mapPayload = {
-                                                macroMap: {
-                                                    id: map_id,
-                                                    name: mapData?.name || 'Map Journey',
-                                                    mapType: mapData?.goal_type || 'MAINTENANCE',
-                                                    durationWeeks: mapData?.total_duration_weeks || 0,
-                                                    avgMacroShiftPct: mapData?.global_calorie_shift_pct !== undefined 
-                                                        ? mapData.global_calorie_shift_pct 
-                                                        : (mapData?.avgMacroShiftPct || 0),
-                                                    isLive: mapData?.is_live || false,
-                                                    creator_id: mapData?.creator_id,
-                                                    creator_status_snapshot: mapData?.creator_status_snapshot,
-                                                    creator_activity_snapshot: mapData?.creator_activity_snapshot,
-                                                    creator_activity_icon_snapshot: mapData?.creator_activity_icon_snapshot,
-                                                    engine_type: mapData?.engine_type,
-                                                    generation_type: mapData?.generation_type,
-                                                    checkpoints: checkpoints,
-                                                    profiles: mapData?.profiles ? (Array.isArray(mapData.profiles) ? mapData.profiles : [mapData.profiles]) : []
-                                                }
-                                            };
-                                            await SupabasePostService.addMapPost(
-                                                session.user.id,
-                                                map_id as string,
-                                                'map_silent',
-                                                '',
-                                                mapPayload
-                                            );
-                                        } catch (e) {
-                                            console.error('[MapPreviewScreen] Silent post failed:', e);
-                                        }
-                                    }
+                                    // Silent subscribe: skip posting to the feed entirely
                                     router.push('/(tabs)/profile');
                                 }}
                             >

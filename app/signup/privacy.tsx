@@ -78,14 +78,14 @@ export default function SignupPrivacy() {
                 <View style={styles.settingsList}>
                     <SettingRow label="Account privacy" value={privacySettings.profile} onToggle={() => toggle('profile')} />
                     
-                    <Text style={styles.sectionHeader}>Non-tribe member visibility*</Text>
+                    <Text style={styles.sectionHeader}>Non-chribe member visibility*</Text>
                     
                     <SettingRow label="Meal log visibility" value={privacySettings.mealLog} onToggle={() => toggle('mealLog')} />
                     <SettingRow label="Workout log visibility" value={privacySettings.workoutLog} onToggle={() => toggle('workoutLog')} />
                     <SettingRow label="Macro log visibility" value={privacySettings.macroUpdate} onToggle={() => toggle('macroUpdate')} />
                     <SettingRow label="Body metric visibility" value={privacySettings.bodyStat} onToggle={() => toggle('bodyStat')} />
                     
-                    <Text style={styles.footnote}>*Tribe-member visibility is determined by tribe settings</Text>
+                    <Text style={styles.footnote}>*Chribe-member visibility is determined by chribe settings</Text>
                 </View>
 
                 <TouchableOpacity style={styles.nextButton} onPress={handleNext}>

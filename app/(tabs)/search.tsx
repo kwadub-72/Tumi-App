@@ -1,6 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { FlatList, Keyboard, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView, useWindowDimensions } from 'react-native';
+import { FlatList, Keyboard, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView, useWindowDimensions, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/src/shared/theme/Colors';
 import { User } from '@/src/shared/models/types';
@@ -49,6 +49,7 @@ export default function ExploreScreen(props: { isOnboarding?: boolean }) {
     const currentUserId = session?.user?.id ?? '';
     const effectiveUserId = currentUserId || '00000000-0000-0000-0000-000000000000';
     const { joinTribe, leaveTribe, myTribes, pendingTribes, isMember, isRequested, init: initTribes } = useUserTribeStore();
+    const memberships = useUserTribeStore(state => state.memberships);
     const { selectedTribeIds, setSelectedTribeIds } = useOnboardingStore();
     const { width } = useWindowDimensions();
     const scrollViewRef = useRef<ScrollView>(null);
@@ -113,12 +114,12 @@ export default function ExploreScreen(props: { isOnboarding?: boolean }) {
 
     const [searchQuery, setSearchQuery] = useState('');
     const isSearchEmpty = !searchQuery || searchQuery.trim() === '';
-    const [activeTab, setActiveTab] = useState(isOnboarding ? 'Tribes' : 'Users');
+    const [activeTab, setActiveTab] = useState(isOnboarding ? 'Chribes' : 'Users');
 
     // Scroll to active tab
     useEffect(() => {
         if (isOnboarding) {
-            setActiveTab('Tribes');
+            setActiveTab('Chribes');
         }
     }, [isOnboarding]);
 
@@ -368,7 +369,7 @@ export default function ExploreScreen(props: { isOnboarding?: boolean }) {
                     keyExtractor={item => item.id}
                     ListHeaderComponent={
                         mergedDefaults.length > 0 ? (
-                            <Text style={styles.exploreSectionTitle}>Featured Tribes</Text>
+                            <Text style={styles.exploreSectionTitle}>Featured Chribes</Text>
                         ) : null
                     }
                     ListFooterComponent={
@@ -390,7 +391,7 @@ export default function ExploreScreen(props: { isOnboarding?: boolean }) {
                                                     marginLeft: 20,
                                                     marginBottom: 10
                                                 }}>
-                                                    Your Tribes
+                                                    Your Chribes
                                                 </Text>
                                                 {joinedTribes.map(tribe => (
                                                     <TribeCard
@@ -461,34 +462,51 @@ export default function ExploreScreen(props: { isOnboarding?: boolean }) {
                             })()}
                         </View>
                     }
-                    renderItem={({ item }) => (
-                        <TribeCard
-                            tribe={item}
-                            onPress={() => router.push(`/tribe/${item.id}` as any)}
-                            onPressJoin={() => {
-                                if (isOnboarding) {
-                                    if (selectedTribeIds.includes(item.id)) {
-                                        setSelectedTribeIds(selectedTribeIds.filter(id => id !== item.id));
-                                    } else {
-                                        setSelectedTribeIds([...selectedTribeIds, item.id]);
+                    renderItem={({ item }) => {
+                        const dynamicJoinStatus = isMember(item.id) ? 'member' : isRequested(item.id) ? 'pending' : 'none';
+                        return (
+                            <TribeCard
+                                tribe={item}
+                                onPress={() => router.push(`/tribe/${item.id}` as any)}
+                                onPressJoin={async () => {
+                                    console.log('[onPressJoin] Triggered. currentUserId:', currentUserId, 'tribeId:', item.id);
+                                    if (isOnboarding) {
+                                        console.log('[onPressJoin] Onboarding flow selection for:', item.id);
+                                        if (selectedTribeIds.includes(item.id)) {
+                                            setSelectedTribeIds(selectedTribeIds.filter(id => id !== item.id));
+                                        } else {
+                                            setSelectedTribeIds([...selectedTribeIds, item.id]);
+                                        }
+                                        return;
                                     }
-                                    return;
-                                }
-                                if (item.joinStatus === 'member' || item.joinStatus === 'pending') {
-                                    if (currentUserId) leaveTribe(currentUserId, item.id);
-                                } else {
-                                    const asTribe = {
-                                        ...item,
-                                        avatar: item.avatarUrl,
-                                        type: item.tribeType,
-                                        joinStatus: 'none' as any,
-                                        chief: {} as any,
-                                    };
-                                    if (currentUserId) joinTribe(currentUserId, asTribe as any);
-                                }
-                            }}
-                        />
-                    )}
+                                    
+                                    try {
+                                        if (dynamicJoinStatus === 'member' || dynamicJoinStatus === 'pending') {
+                                            if (currentUserId) {
+                                                console.log('[onPressJoin] Attempting to leave tribe:', item.id);
+                                                await leaveTribe(currentUserId, item.id);
+                                            }
+                                        } else {
+                                            const asTribe = {
+                                                ...item,
+                                                avatar: item.avatarUrl,
+                                                type: item.tribeType,
+                                                joinStatus: 'none' as any,
+                                                chief: {} as any,
+                                            };
+                                            if (currentUserId) {
+                                                console.log('[onPressJoin] Attempting to join tribe:', item.id);
+                                                await joinTribe(currentUserId, asTribe as any);
+                                            }
+                                        }
+                                    } catch (error: any) {
+                                        console.error('[onPressJoin] Error:', error);
+                                        Alert.alert('Error', 'Failed to update membership. Please try again.');
+                                    }
+                                }}
+                            />
+                        );
+                    }}
                     contentContainerStyle={[styles.listContent, isOnboarding && { paddingBottom: 190 }]}
                     showsVerticalScrollIndicator={false}
                     onScrollBeginDrag={Keyboard.dismiss}
@@ -510,38 +528,55 @@ export default function ExploreScreen(props: { isOnboarding?: boolean }) {
             <FlatList
                 data={mergedTribes}
                 keyExtractor={item => item.id}
-                renderItem={({ item }) => (
-                    <TribeCard
-                        tribe={item}
-                        onPress={() => router.push(`/tribe/${item.id}` as any)}
-                        onPressJoin={() => {
-                            if (isOnboarding) {
-                                if (selectedTribeIds.includes(item.id)) {
-                                    setSelectedTribeIds(selectedTribeIds.filter(id => id !== item.id));
-                                } else {
-                                    setSelectedTribeIds([...selectedTribeIds, item.id]);
+                renderItem={({ item }) => {
+                    const dynamicJoinStatus = isMember(item.id) ? 'member' : isRequested(item.id) ? 'pending' : 'none';
+                    return (
+                        <TribeCard
+                            tribe={item}
+                            onPress={() => router.push(`/tribe/${item.id}` as any)}
+                            onPressJoin={async () => {
+                                console.log('[onPressJoin] Triggered (search). currentUserId:', currentUserId, 'tribeId:', item.id);
+                                if (isOnboarding) {
+                                    console.log('[onPressJoin] Onboarding flow selection for (search):', item.id);
+                                    if (selectedTribeIds.includes(item.id)) {
+                                        setSelectedTribeIds(selectedTribeIds.filter(id => id !== item.id));
+                                    } else {
+                                        setSelectedTribeIds([...selectedTribeIds, item.id]);
+                                    }
+                                    return;
                                 }
-                                return;
-                            }
-                            if (item.joinStatus === 'member' || item.joinStatus === 'pending') {
-                                if (currentUserId) leaveTribe(currentUserId, item.id);
-                            } else {
-                                const asTribe = {
-                                    ...item,
-                                    avatar: item.avatarUrl,
-                                    type: item.tribeType,
-                                    joinStatus: 'none' as any,
-                                    chief: {} as any,
-                                };
-                                if (currentUserId) joinTribe(currentUserId, asTribe as any);
-                            }
-                        }}
-                    />
-                )}
+                                
+                                try {
+                                    if (dynamicJoinStatus === 'member' || dynamicJoinStatus === 'pending') {
+                                        if (currentUserId) {
+                                            console.log('[onPressJoin] Attempting to leave tribe (search):', item.id);
+                                            await leaveTribe(currentUserId, item.id);
+                                        }
+                                    } else {
+                                        const asTribe = {
+                                            ...item,
+                                            avatar: item.avatarUrl,
+                                            type: item.tribeType,
+                                            joinStatus: 'none' as any,
+                                            chief: {} as any,
+                                        };
+                                        if (currentUserId) {
+                                            console.log('[onPressJoin] Attempting to join tribe (search):', item.id);
+                                            await joinTribe(currentUserId, asTribe as any);
+                                        }
+                                    }
+                                } catch (error: any) {
+                                    console.error('[onPressJoin] Error (search):', error);
+                                    Alert.alert('Error', 'Failed to update membership. Please try again.');
+                                }
+                            }}
+                        />
+                    );
+                }}
                 ListEmptyComponent={
                     !isLoadingTribes ? (
                         <View style={styles.emptyState}>
-                            <Text style={styles.emptyStateText}>No tribes found for "{searchQuery}".</Text>
+                            <Text style={styles.emptyStateText}>No chribes found for "{searchQuery}".</Text>
                         </View>
                     ) : null
                 }
@@ -709,7 +744,7 @@ export default function ExploreScreen(props: { isOnboarding?: boolean }) {
     return (
         <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             <View style={styles.header}>
-                {activeTab === 'Tribes' && !isOnboarding && (
+                {activeTab === 'Chribes' && !isOnboarding && (
                     <TouchableOpacity
                         style={styles.createTribeBtn}
                         onPress={() => router.push('/create-tribe')}
@@ -752,8 +787,8 @@ export default function ExploreScreen(props: { isOnboarding?: boolean }) {
                     >
                         <Ionicons name="close" size={20} color={Colors.theme.softWhite} />
                     </TouchableOpacity>
-                    <Text style={styles.welcomeTitle}>It's better together. Find a tribe.</Text>
-                    <Text style={styles.welcomeBody}>Search for a tribe that aligns with your goals and activities, or skip for now.</Text>
+                    <Text style={styles.welcomeTitle}>It's better together. Find a chribe.</Text>
+                    <Text style={styles.welcomeBody}>Search for a chribe that aligns with your goals and activities, or skip for now.</Text>
                 </View>
             )}
 
@@ -768,10 +803,10 @@ export default function ExploreScreen(props: { isOnboarding?: boolean }) {
                             <Text style={[styles.tabText, activeTab === 'Users' && styles.activeTabText]}>Users</Text>
                         </TouchableOpacity>
                         <TouchableOpacity 
-                            style={[styles.tabButton, activeTab === 'Tribes' && styles.activeTabButton]}
-                            onPress={() => setActiveTab('Tribes')}
+                            style={[styles.tabButton, activeTab === 'Chribes' && styles.activeTabButton]}
+                            onPress={() => setActiveTab('Chribes')}
                         >
-                            <Text style={[styles.tabText, activeTab === 'Tribes' && styles.activeTabText]}>Tribes</Text>
+                            <Text style={[styles.tabText, activeTab === 'Chribes' && styles.activeTabText]}>Tribes</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -793,7 +828,7 @@ export default function ExploreScreen(props: { isOnboarding?: boolean }) {
                         if (page === 0) {
                             setActiveTab('Users');
                         } else {
-                            setActiveTab('Tribes');
+                            setActiveTab('Chribes');
                         }
                     }}
                     style={{ flex: 1 }}
@@ -811,7 +846,7 @@ export default function ExploreScreen(props: { isOnboarding?: boolean }) {
                 visible={filterVisible}
                 onClose={() => setFilterVisible(false)}
                 onApply={setActiveFilters}
-                mode={activeTab as any}
+                mode={activeTab === 'Chribes' ? 'Tribes' : (activeTab as any)}
             />
 
             <HammerModal

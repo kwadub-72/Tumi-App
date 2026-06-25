@@ -1,10 +1,11 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, ActivityIndicator, SafeAreaView } from 'react-native';
+import React, { useState, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, ActivityIndicator, SafeAreaView, FlatList, Modal, TouchableWithoutFeedback } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../src/shared/theme/Colors';
 import { WeightStore, WeightEntry } from '../store/WeightStore';
-import Svg, { Path, Circle, Line } from 'react-native-svg';
+import Svg, { Path, Circle, Line, Text as SvgText } from 'react-native-svg';
+import { useUserStore } from '../store/UserStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -12,10 +13,75 @@ type RangeType = '4W' | '12W' | '6M' | '1Y';
 
 export default function WeightTrendsDeepDiveScreen() {
     const router = useRouter();
+    const { units } = useUserStore();
     const [selectedRange, setSelectedRange] = useState<RangeType>('4W');
-    const [metric, setMetric] = useState<'avg' | 'change'>('avg');
     const [loading, setLoading] = useState(true);
     const [weights, setWeights] = useState<WeightEntry[]>([]);
+
+    const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+    const [isPickerModalVisible, setIsPickerModalVisible] = useState(false);
+    const [currentMonth, setCurrentMonth] = useState(new Date());
+    const [startDate, setStartDate] = useState<string | null>(null);
+    const [endDate, setEndDate] = useState<string | null>(null);
+    const [displayLimit, setDisplayLimit] = useState(14); // For 2-week lazy loading
+
+    const loggedDates = useMemo(() => new Set(weights.map(w => w.date)), [weights]);
+
+    const getDaysInMonth = (date: Date) => {
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const firstDay = new Date(year, month, 1).getDay();
+        const totalDays = new Date(year, month + 1, 0).getDate();
+        
+        const days = [];
+        // Add empty slots for weekday offset
+        for (let i = 0; i < firstDay; i++) {
+            days.push(null);
+        }
+        for (let i = 1; i <= totalDays; i++) {
+            days.push(new Date(year, month, i));
+        }
+        return days;
+    };
+
+    const prevMonth = () => {
+        setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+    };
+
+    const nextMonth = () => {
+        setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+    };
+
+    const handleDatePress = (day: Date) => {
+        const year = day.getFullYear();
+        const month = String(day.getMonth() + 1).padStart(2, '0');
+        const dateNum = String(day.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${dateNum}`;
+
+        if (!startDate) {
+            setStartDate(dateStr);
+        } else if (startDate && !endDate) {
+            if (dateStr > startDate) {
+                setEndDate(dateStr);
+            } else {
+                setStartDate(dateStr);
+            }
+        } else {
+            setEndDate(null);
+            setStartDate(dateStr);
+        }
+    };
+
+    const filteredRawWeights = useMemo(() => {
+        let filtered = [...weights].sort((a, b) => b.date.localeCompare(a.date)); // Descending
+        if (startDate) {
+            filtered = filtered.filter(w => w.date >= startDate);
+        }
+        if (endDate) {
+            filtered = filtered.filter(w => w.date <= endDate);
+        }
+        return filtered;
+    }, [weights, startDate, endDate]);
 
     const fetchWeights = useCallback(async () => {
         setLoading(true);
@@ -59,101 +125,115 @@ export default function WeightTrendsDeepDiveScreen() {
         }
 
         const cutoffStr = cutoffDate.toISOString().split('T')[0];
-        return sorted.filter(w => w.date >= cutoffStr);
+        const rawFiltered = sorted.filter(w => w.date >= cutoffStr);
+        if (units === 'metric') {
+            return rawFiltered.map(w => ({
+                ...w,
+                weight: w.weight * 0.453592
+            }));
+        }
+        return rawFiltered;
     };
 
     const filtered = getFilteredWeights();
 
-    // Grouping by week and calculating weekly changes
-    const getWeeklyChanges = (filteredData: WeightEntry[]) => {
-        const weeksMap: { [key: string]: number[] } = {};
+    // Grouping by range-specific buckets and calculating averages
+    const getAggregatedPoints = (filteredData: WeightEntry[], range: RangeType) => {
+        if (filteredData.length === 0) return [];
+
+        const buckets: { [key: string]: number[] } = {};
+        const msInDay = 24 * 60 * 60 * 1000;
+
+        const earliestDate = new Date(filteredData[0].date + 'T00:00:00');
+        const earliestTimeMs = earliestDate.getTime();
+
         filteredData.forEach(w => {
             const date = new Date(w.date + 'T00:00:00');
-            const sunday = new Date(date);
-            sunday.setDate(date.getDate() - date.getDay());
-            const sunStr = sunday.toISOString().split('T')[0];
-            if (!weeksMap[sunStr]) {
-                weeksMap[sunStr] = [];
-            }
-            weeksMap[sunStr].push(w.weight);
-        });
+            const timeMs = date.getTime();
 
-        const sortedWeekKeys = Object.keys(weeksMap).sort();
-        const weeklyAvgs = sortedWeekKeys.map(k => {
-            const weightsList = weeksMap[k];
-            const avg = weightsList.reduce((sum, val) => sum + val, 0) / weightsList.length;
-            return { weekStr: k, avg };
-        });
+            const diffDays = Math.floor((timeMs - earliestTimeMs) / msInDay);
+            let bucketKey = '';
 
-        const changes: { dateStr: string; value: number }[] = [];
-        for (let i = 0; i < weeklyAvgs.length; i++) {
-            if (i === 0) {
-                changes.push({ dateStr: weeklyAvgs[i].weekStr, value: 0 });
+            if (range === '4W' || range === '12W') {
+                // 7-day buckets anchored to your first entry
+                const weekIndex = Math.floor(diffDays / 7);
+                const bucketDate = new Date(earliestTimeMs + weekIndex * 7 * msInDay);
+                bucketKey = bucketDate.toISOString().split('T')[0];
+            } else if (range === '6M') {
+                // 14-day buckets anchored to your first entry
+                const periodIndex = Math.floor(diffDays / 14);
+                const bucketDate = new Date(earliestTimeMs + periodIndex * 14 * msInDay);
+                bucketKey = bucketDate.toISOString().split('T')[0];
             } else {
-                const diff = weeklyAvgs[i].avg - weeklyAvgs[i - 1].avg;
-                changes.push({ dateStr: weeklyAvgs[i].weekStr, value: Number(diff.toFixed(1)) });
+                // 30-day "Monthly" buckets anchored to your first entry
+                const monthIndex = Math.floor(diffDays / 30);
+                const bucketDate = new Date(earliestTimeMs + monthIndex * 30 * msInDay);
+                bucketKey = bucketDate.toISOString().split('T')[0];
             }
-        }
-        return changes;
+
+            if (!buckets[bucketKey]) {
+                buckets[bucketKey] = [];
+            }
+            buckets[bucketKey].push(w.weight);
+        });
+
+        const sortedKeys = Object.keys(buckets).sort();
+        return sortedKeys.map(k => {
+            const list = buckets[k];
+            const sum = list.reduce((a, b) => a + b, 0);
+            const averageWeight = sum / list.length;
+
+            const date = new Date(k + 'T00:00:00');
+            let dateLabel = '';
+            if (range === '4W' || range === '12W') {
+                dateLabel = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            } else if (range === '6M') {
+                dateLabel = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            } else {
+                dateLabel = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+            }
+
+            return { dateLabel, averageWeight, rawDate: k, label: k, rawValue: averageWeight };
+        });
     };
 
     // Line Chart drawing logic
     const chartHeight = 220;
-    const paddingLeft = 45;
-    const paddingRight = 20;
+    const paddingLeft = 60;
+    const paddingRight = 40;
     const paddingTop = 30;
     const paddingBottom = 30;
     const chartWidth = SCREEN_WIDTH - 32;
 
-    let points: { x: number; y: number; label: string; rawValue: number }[] = [];
-    let yLabels: string[] = [];
+    const aggregated = getAggregatedPoints(filtered, selectedRange);
 
-    if (metric === 'avg') {
-        const minWeight = filtered.length > 0 ? Math.min(...filtered.map(w => w.weight)) - 2 : 230;
-        const maxWeight = filtered.length > 0 ? Math.max(...filtered.map(w => w.weight)) + 2 : 255;
-        const weightRange = maxWeight - minWeight || 1;
+    const minWeight = aggregated.length > 0 ? Math.min(...aggregated.map(p => p.averageWeight)) - 2 : 230;
+    const maxWeight = aggregated.length > 0 ? Math.max(...aggregated.map(p => p.averageWeight)) + 2 : 255;
+    const weightRange = maxWeight - minWeight || 1;
 
-        points = filtered.map((w, index) => {
-            const x = paddingLeft + (index / (filtered.length - 1 || 1)) * (chartWidth - paddingLeft - paddingRight);
-            const y = paddingTop + (1 - (w.weight - minWeight) / weightRange) * (chartHeight - paddingTop - paddingBottom);
-            return { x, y, label: w.date, rawValue: w.weight };
-        });
+    const points = aggregated.map((p, index) => {
+        const x = paddingLeft + (index / (aggregated.length - 1 || 1)) * (chartWidth - paddingLeft - paddingRight);
+        const y = paddingTop + (1 - (p.averageWeight - minWeight) / weightRange) * (chartHeight - paddingTop - paddingBottom);
+        return { x, y, label: p.rawDate, rawValue: p.averageWeight };
+    });
 
-        yLabels = [0, 0.25, 0.5, 0.75, 1].map(p => (maxWeight - p * weightRange).toFixed(0) + ' lbs');
-    } else {
-        const weeklyChanges = getWeeklyChanges(filtered);
-        const values = weeklyChanges.map(c => c.value);
-        const maxAbs = values.length > 0 ? Math.max(2, ...values.map(Math.abs)) : 5;
+    const yLabels = [0, 0.25, 0.5, 0.75, 1].map(p => (maxWeight - p * weightRange).toFixed(0) + (units === 'metric' ? ' kg' : ' lbs'));
 
-        points = weeklyChanges.map((c, index) => {
-            const x = paddingLeft + (index / (weeklyChanges.length - 1 || 1)) * (chartWidth - paddingLeft - paddingRight);
-            const y = paddingTop + (0.5 - (c.value / (2 * maxAbs))) * (chartHeight - paddingTop - paddingBottom);
-            return { x, y, label: c.dateStr, rawValue: c.value };
-        });
-
-        yLabels = [maxAbs, maxAbs / 2, 0, -maxAbs / 2, -maxAbs].map(v => (v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1)) + ' lbs');
-    }
+    const formatXAxisDate = (dateStr: string) => {
+        const d = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${month}/${day}`; 
+    };
 
     const getPathD = () => {
         if (points.length === 0) return '';
         return `M ${points.map(p => `${p.x} ${p.y}`).join(' L ')}`;
     };
 
-    const renderMacroBlock = (letter: string, percentage: number, change: string, isPositive: boolean) => {
-        return (
-            <View style={styles.macroBlock}>
-                <View style={styles.macroBubble}>
-                    <Text style={styles.macroBubbleText}>{letter}</Text>
-                </View>
-                <Text style={styles.macroText} numberOfLines={1}>
-                    {percentage}% <Text style={{ color: isPositive ? '#FF4B4B' : '#1BB607', fontSize: 13 }}>{change}</Text>
-                </Text>
-            </View>
-        );
-    };
-
     return (
         <SafeAreaView style={styles.container}>
+            {/* Page Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={28} color={Colors.theme.harvestGold} />
@@ -162,226 +242,343 @@ export default function WeightTrendsDeepDiveScreen() {
                 <View style={{ width: 28 }} />
             </View>
 
-            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-                {/* Interval Toggles */}
-                <View style={styles.toggleRow}>
-                    {(['4W', '12W', '6M', '1Y'] as RangeType[]).map((range) => (
-                        <TouchableOpacity
-                            key={range}
-                            style={[styles.toggleBtn, selectedRange === range && styles.toggleBtnActive]}
-                            onPress={() => setSelectedRange(range)}
-                        >
-                            <Text style={[styles.toggleText, selectedRange === range && styles.toggleTextActive]}>
-                                {range}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
+            <FlatList
+                contentContainerStyle={styles.content}
+                showsVerticalScrollIndicator={false}
+                data={filteredRawWeights.slice(0, displayLimit)}
+                keyExtractor={(item) => item.date}
+                onEndReached={() => setDisplayLimit((prev) => prev + 14)}
+                onEndReachedThreshold={0.2}
+                ListHeaderComponent={
+                    <View>
+                        {/* Chart Header */}
+                        <Text style={styles.sectionTitle}>Weekly Average Weight</Text>
 
-                {/* Metric Segment Control with Midnight Gold Borders */}
-                <View style={styles.segmentedControl}>
-                    <TouchableOpacity
-                        style={[styles.segmentBtn, metric === 'avg' && styles.segmentBtnActive]}
-                        onPress={() => setMetric('avg')}
-                    >
-                        <Text style={[styles.segmentText, metric === 'avg' && styles.segmentTextActive]}>
-                            Average Weight
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.segmentBtn, metric === 'change' && styles.segmentBtnActive]}
-                        onPress={() => setMetric('change')}
-                    >
-                        <Text style={[styles.segmentText, metric === 'change' && styles.segmentTextActive]}>
-                            Weekly Change (lbs)
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Line Chart */}
-                <View style={styles.chartContainer}>
-                    {loading ? (
-                        <ActivityIndicator size="large" color={Colors.theme.harvestGold} style={{ height: chartHeight }} />
-                    ) : points.length === 0 ? (
-                        <View style={[styles.emptyChart, { height: chartHeight }]}>
-                            <Text style={styles.emptyText}>No weight entries found for this range.</Text>
+                        {/* Interval Toggles */}
+                        <View style={styles.toggleRow}>
+                            {(['4W', '12W', '6M', '1Y'] as RangeType[]).map((range) => (
+                                <TouchableOpacity
+                                    key={range}
+                                    style={[styles.toggleBtn, selectedRange === range && styles.toggleBtnActive]}
+                                    onPress={() => setSelectedRange(range)}
+                                >
+                                    <Text style={[styles.toggleText, selectedRange === range && styles.toggleTextActive]}>
+                                        {range}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
                         </View>
-                    ) : (
-                        <View style={{ position: 'relative' }}>
-                            <Svg width={chartWidth} height={chartHeight}>
-                                {/* Horizontal grid lines */}
-                                {[0, 0.25, 0.5, 0.75, 1].map((p, i) => {
-                                    const y = paddingTop + p * (chartHeight - paddingTop - paddingBottom);
-                                    return (
-                                        <React.Fragment key={i}>
-                                            <Line
-                                                x1={paddingLeft}
-                                                y1={y}
-                                                x2={chartWidth - paddingRight}
-                                                y2={y}
-                                                stroke="rgba(255, 255, 255, 0.05)"
-                                                strokeWidth={1}
-                                            />
-                                        </React.Fragment>
-                                    );
-                                })}
 
-                                {/* Special Zero Baseline for Weekly Change */}
-                                {metric === 'change' && (
-                                    <Line
-                                        x1={paddingLeft}
-                                        y1={paddingTop + 0.5 * (chartHeight - paddingTop - paddingBottom)}
-                                        x2={chartWidth - paddingRight}
-                                        y2={paddingTop + 0.5 * (chartHeight - paddingTop - paddingBottom)}
-                                        stroke="rgba(218, 165, 32, 0.25)"
-                                        strokeWidth={1.5}
-                                        strokeDasharray="4 4"
-                                    />
-                                )}
+                        {/* Line Chart */}
+                        <View style={styles.chartContainer}>
+                            {loading ? (
+                                <ActivityIndicator size="large" color={Colors.theme.harvestGold} style={{ height: chartHeight }} />
+                            ) : points.length === 0 ? (
+                                <View style={[styles.emptyChart, { height: chartHeight }]}>
+                                    <Text style={styles.emptyText}>No weight entries found for this range.</Text>
+                                </View>
+                            ) : (
+                                <View style={{ position: 'relative' }}>
+                                    <Svg width={chartWidth} height={chartHeight}>
+                                        {/* Horizontal grid lines */}
+                                        {[0, 0.25, 0.5, 0.75, 1].map((p, i) => {
+                                            const y = paddingTop + p * (chartHeight - paddingTop - paddingBottom);
+                                            return (
+                                                <React.Fragment key={i}>
+                                                    <Line
+                                                        x1={paddingLeft}
+                                                        y1={y}
+                                                        x2={chartWidth - paddingRight}
+                                                        y2={y}
+                                                        stroke="rgba(255, 255, 255, 0.05)"
+                                                        strokeWidth={1}
+                                                    />
+                                                </React.Fragment>
+                                            );
+                                        })}
 
-                                {/* Chart Line Path */}
-                                <Path
-                                    d={getPathD()}
-                                    fill="none"
-                                    stroke={Colors.theme.harvestGold}
-                                    strokeWidth={2.5}
-                                />
-
-                                {/* Interactive Data Dots */}
-                                {points.filter((_, idx) => {
-                                    if (selectedRange === '4W') return true;
-                                    if (selectedRange === '12W') return idx % 3 === 0;
-                                    return idx % 7 === 0;
-                                }).map((p, idx) => {
-                                    let dotColor = Colors.theme.harvestGold;
-                                    if (metric === 'change') {
-                                        dotColor = p.rawValue < 0 ? '#1BB607' : p.rawValue > 0 ? '#FF4B4B' : Colors.theme.dust;
-                                    }
-                                    return (
-                                        <Circle
-                                            key={idx}
-                                            cx={p.x}
-                                            cy={p.y}
-                                            r={5}
-                                            fill={Colors.theme.matteBlack}
-                                            stroke={dotColor}
-                                            strokeWidth={2}
+                                        {/* Chart Line Path */}
+                                        <Path
+                                            d={getPathD()}
+                                            fill="none"
+                                            stroke={Colors.theme.harvestGold}
+                                            strokeWidth={2.5}
                                         />
-                                    );
-                                })}
-                            </Svg>
 
-                            {/* Axis Labels rendered in absolute React Native layers to guarantee layout stability */}
-                            <View style={[styles.yAxisContainer, { height: chartHeight }]}>
-                                {[0, 0.25, 0.5, 0.75, 1].map((p, i) => {
-                                    const y = paddingTop + p * (chartHeight - paddingTop - paddingBottom);
-                                    return (
-                                        <Text key={i} style={[styles.axisLabel, { top: y - 7 }]}>
-                                            {yLabels[i]}
-                                        </Text>
-                                    );
-                                })}
-                            </View>
-                        </View>
-                    )}
-                </View>
+                                        {/* Interactive Data Dots */}
+                                        {points.map((p, idx) => {
+                                            return (
+                                                <React.Fragment key={idx}>
+                                                    <Circle
+                                                        cx={p.x}
+                                                        cy={p.y}
+                                                        r={5}
+                                                        fill={Colors.theme.matteBlack}
+                                                        stroke={Colors.theme.harvestGold}
+                                                        strokeWidth={2}
+                                                    />
+                                                    <SvgText
+                                                        x={p.x}
+                                                        y={p.y + 18}
+                                                        fontSize="10"
+                                                        fill={Colors.theme.dust}
+                                                        textAnchor="middle"
+                                                    >
+                                                        {p.rawValue.toFixed(1)}
+                                                    </SvgText>
+                                                    <SvgText
+                                                        x={p.x}
+                                                        y={chartHeight - 10}
+                                                        fontSize="10"
+                                                        fill={Colors.theme.dust}
+                                                        textAnchor="middle"
+                                                    >
+                                                        {formatXAxisDate(p.label)}
+                                                    </SvgText>
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </Svg>
 
-                {/* Weekly Summary Cards Section */}
-                <Text style={styles.sectionTitle}>Weekly Summaries</Text>
-
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.horizontalScroll}
-                    snapToInterval={SCREEN_WIDTH - 60}
-                    decelerationRate="fast"
-                >
-                    {/* Card 1: Calories */}
-                    <View style={styles.summaryCard}>
-                        <View style={styles.cardHeader}>
-                            <Text style={styles.cardTitle}>Calorie Intake</Text>
-                            <View style={styles.intentBadge}>
-                                <MaterialCommunityIcons name="fire" size={14} color={Colors.theme.matteBlack} />
-                                <Text style={styles.intentText}>Avg Cals</Text>
-                            </View>
-                        </View>
-                        <View style={styles.metricsRow}>
-                            <View style={styles.metricItem}>
-                                <Text style={styles.metricLabel}>Daily Average</Text>
-                                <Text style={[styles.metricValue, { color: Colors.theme.harvestGold }]}>2,150 kcal</Text>
-                            </View>
-                            <View style={styles.metricItem}>
-                                <Text style={styles.metricLabel}>Calorie Shift</Text>
-                                <Text style={[styles.metricValue, { color: '#FF4B4B' }]}>-7.5%</Text>
-                            </View>
-                        </View>
-                        <View style={styles.macroContainer}>
-                            <Text style={styles.macroLabel}>Avg Calorie Breakdown</Text>
-                            <View style={styles.macroValues}>
-                                {renderMacroBlock('P', 35, '(+3%)', true)}
-                                {renderMacroBlock('C', 45, '(-2%)', false)}
-                                {renderMacroBlock('F', 20, '(-1%)', false)}
-                            </View>
-                        </View>
-                    </View>
-
-                    {/* Card 2: Protein */}
-                    <View style={styles.summaryCard}>
-                        <View style={styles.cardHeader}>
-                            <Text style={styles.cardTitle}>Protein Targets</Text>
-                            <View style={styles.intentBadge}>
-                                <MaterialCommunityIcons name="food-drumstick" size={14} color={Colors.theme.matteBlack} />
-                                <Text style={styles.intentText}>High Pro</Text>
-                            </View>
-                        </View>
-                        <View style={styles.metricsRow}>
-                            <View style={styles.metricItem}>
-                                <Text style={styles.metricLabel}>Daily Average</Text>
-                                <Text style={[styles.metricValue, { color: Colors.theme.harvestGold }]}>188 g</Text>
-                            </View>
-                            <View style={styles.metricItem}>
-                                <Text style={styles.metricLabel}>Protein Shift</Text>
-                                <Text style={[styles.metricValue, { color: '#1BB607' }]}>+4.2%</Text>
-                            </View>
-                        </View>
-                        <View style={styles.macroContainer}>
-                            <Text style={styles.macroLabel}>Avg Calorie Breakdown</Text>
-                            <View style={styles.macroValues}>
-                                {renderMacroBlock('P', 38, '(+5%)', true)}
-                                {renderMacroBlock('C', 42, '(-3%)', false)}
-                                {renderMacroBlock('F', 20, '(-2%)', false)}
-                            </View>
-                        </View>
-                    </View>
-                </ScrollView>
-
-                {/* Raw Weight History Log */}
-                <Text style={styles.sectionTitle}>Raw Weight History</Text>
-                <View style={styles.historyContainer}>
-                    {weights.length === 0 ? (
-                        <Text style={styles.emptyText}>No logged weights yet.</Text>
-                    ) : (
-                        [...weights]
-                            .sort((a, b) => b.date.localeCompare(a.date))
-                            .map((item, idx) => {
-                                const formattedDate = new Date(item.date + 'T00:00:00').toLocaleDateString('en-US', {
-                                    weekday: 'short',
-                                    month: 'short',
-                                    day: 'numeric',
-                                });
-                                return (
-                                    <View key={idx} style={styles.historyRow}>
-                                        <View style={styles.historyDateCol}>
-                                            <MaterialCommunityIcons name="calendar-check" size={16} color={Colors.theme.harvestGold} style={{ marginRight: 8 }} />
-                                            <Text style={styles.historyDateText}>{formattedDate}</Text>
-                                        </View>
-                                        <Text style={styles.historyWeightText}>{item.weight.toFixed(1)} lbs</Text>
+                                    {/* Axis Labels rendered in absolute React Native layers to guarantee layout stability */}
+                                    <View style={[styles.yAxisContainer, { height: chartHeight }]}>
+                                        {[0, 0.25, 0.5, 0.75, 1].map((p, i) => {
+                                            const y = paddingTop + p * (chartHeight - paddingTop - paddingBottom);
+                                            return (
+                                                <Text key={i} style={[styles.axisLabel, { top: y - 7 }]}>
+                                                    {yLabels[i]}
+                                                </Text>
+                                            );
+                                        })}
                                     </View>
-                                );
-                            })
-                    )}
-                </View>
-            </ScrollView>
+                                </View>
+                            )}
+                        </View>
+
+                        {/* Raw Weight History Log Header with Calendar Trigger */}
+                        <View style={styles.historyHeaderRow}>
+                            <Text style={styles.sectionTitle}>Raw Weight History</Text>
+                            <TouchableOpacity onPress={() => setIsCalendarOpen(true)} style={styles.calendarTriggerBtn}>
+                                <Ionicons name="calendar" size={20} color={Colors.theme.harvestGold} />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                }
+                renderItem={({ item, index }) => {
+                    const formattedDate = new Date(item.date + 'T00:00:00').toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                    });
+                    const isFirst = index === 0;
+                    const isLast = index === Math.min(filteredRawWeights.length, displayLimit) - 1;
+                    return (
+                        <View style={[
+                            styles.historyRow,
+                            {
+                                backgroundColor: Colors.theme.charcoal,
+                                paddingHorizontal: 16,
+                                borderLeftWidth: 1,
+                                borderRightWidth: 1,
+                                borderColor: 'rgba(255, 255, 255, 0.05)',
+                            },
+                            isFirst && {
+                                borderTopLeftRadius: 20,
+                                borderTopRightRadius: 20,
+                                borderTopWidth: 1,
+                                paddingTop: 16,
+                            },
+                            isLast && {
+                                borderBottomLeftRadius: 20,
+                                borderBottomRightRadius: 20,
+                                borderBottomWidth: 1,
+                                paddingBottom: 16,
+                                marginBottom: 20,
+                            }
+                        ]}>
+                            <View style={styles.historyDateCol}>
+                                <MaterialCommunityIcons name="calendar-check" size={16} color={Colors.theme.harvestGold} style={{ marginRight: 8 }} />
+                                <Text style={styles.historyDateText}>{formattedDate}</Text>
+                            </View>
+                            <Text style={styles.historyWeightText}>
+                                {(units === 'metric' ? item.weight * 0.453592 : item.weight).toFixed(1)} {units === 'metric' ? 'kg' : 'lbs'}
+                            </Text>
+                        </View>
+                    );
+                }}
+                ListEmptyComponent={
+                    <View style={styles.emptyContainer}>
+                        <Text style={styles.emptyText}>No logged weights found for this range.</Text>
+                    </View>
+                }
+            />
+
+            {/* Custom Date Range Calendar Modal */}
+            <Modal visible={isCalendarOpen} animationType="slide" transparent={false}>
+                <SafeAreaView style={styles.calendarModalContainer}>
+                    {/* Header */}
+                    <View style={styles.calendarModalHeader}>
+                        <TouchableOpacity onPress={() => setIsCalendarOpen(false)} style={styles.calendarCloseBtn}>
+                            <Ionicons name="close" size={28} color={Colors.theme.softWhite} />
+                        </TouchableOpacity>
+                        <Text style={styles.calendarModalHeaderTitle}>Select Date Range</Text>
+                        <View style={{ width: 28 }} />
+                    </View>
+
+                    <ScrollView contentContainerStyle={styles.calendarModalContentScroll} showsVerticalScrollIndicator={false}>
+                        <Text style={styles.calendarLabel}>Select Date Range</Text>
+                        
+                        <View style={styles.calendarContainer}>
+                            <View style={styles.calendarHeader}>
+                                <TouchableOpacity onPress={prevMonth} style={styles.calendarNavBtn}>
+                                    <Ionicons name="chevron-back" size={20} color={Colors.theme.softWhite} />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => setIsPickerModalVisible(true)}>
+                                    <Text style={styles.calendarMonthText}>
+                                        {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][currentMonth.getMonth()]} {currentMonth.getFullYear()}
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={nextMonth} style={styles.calendarNavBtn}>
+                                    <Ionicons name="chevron-forward" size={20} color={Colors.theme.softWhite} />
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Weekdays Row */}
+                            <View style={styles.weekdaysRow}>
+                                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => (
+                                    <Text key={idx} style={styles.weekdayText}>{day}</Text>
+                                ))}
+                            </View>
+
+                            {/* Days Grid */}
+                            <View style={styles.daysGrid}>
+                                {getDaysInMonth(currentMonth).map((day, index) => {
+                                    if (!day) {
+                                        return <View key={`empty-${index}`} style={styles.dayCellEmpty} />;
+                                    }
+
+                                    const year = day.getFullYear();
+                                    const month = String(day.getMonth() + 1).padStart(2, '0');
+                                    const dateNum = String(day.getDate()).padStart(2, '0');
+                                    const dateStr = `${year}-${month}-${dateNum}`;
+
+                                    const isLogged = loggedDates.has(dateStr);
+                                    const isSelectedStart = startDate === dateStr;
+                                    const isSelectedEnd = endDate === dateStr;
+                                    const isInRange = startDate && endDate && dateStr > startDate && dateStr < endDate;
+
+                                    let cellStyle: any = [styles.dayCell];
+                                    let textStyle: any = [styles.dayText];
+
+                                    if (!isLogged) {
+                                        cellStyle.push(styles.dayCellDisabled);
+                                        textStyle.push(styles.dayTextDisabled);
+                                    } else {
+                                        cellStyle.push(styles.dayCellLogged);
+                                        textStyle.push(styles.dayTextLogged);
+
+                                        if (isSelectedStart || isSelectedEnd) {
+                                            cellStyle.push(styles.dayCellSelected);
+                                            textStyle.push(styles.dayTextSelected);
+                                        } else if (isInRange) {
+                                            cellStyle.push(styles.dayCellInRange);
+                                            textStyle.push(styles.dayTextInRange);
+                                        }
+                                    }
+
+                                    return (
+                                        <TouchableOpacity
+                                            key={`day-${dateStr}`}
+                                            style={cellStyle}
+                                            disabled={!isLogged}
+                                            onPress={() => handleDatePress(day)}
+                                        >
+                                            <Text style={textStyle}>{day.getDate()}</Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        </View>
+
+                        {/* Selection summary */}
+                        <View style={styles.selectionSummaryCard}>
+                            <View style={styles.selectionSummaryRow}>
+                                <View style={styles.selectionSummaryBlock}>
+                                    <Text style={styles.selectionSummaryLabel}>Start Date</Text>
+                                    <Text style={styles.selectionSummaryValue}>
+                                        {startDate ? new Date(startDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Not selected'}
+                                    </Text>
+                                </View>
+                                <View style={styles.selectionSummaryBlock}>
+                                    <Text style={styles.selectionSummaryLabel}>End Date</Text>
+                                    <Text style={styles.selectionSummaryValue}>
+                                        {endDate ? new Date(endDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Not selected'}
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+
+                        {/* Modal Action Buttons */}
+                        <View style={styles.modalActionsRow}>
+                            <TouchableOpacity
+                                style={styles.modalResetBtn}
+                                onPress={() => {
+                                    setStartDate(null);
+                                    setEndDate(null);
+                                    setDisplayLimit(14);
+                                }}
+                            >
+                                <Text style={styles.modalResetBtnText}>Reset</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={styles.modalApplyBtn}
+                                onPress={() => setIsCalendarOpen(false)}
+                            >
+                                <Text style={styles.modalApplyBtnText}>Apply</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </ScrollView>
+
+                    {/* Month/Year selector popup */}
+                    <Modal visible={isPickerModalVisible} transparent animationType="fade">
+                        <TouchableOpacity style={styles.pickerModalOverlay} activeOpacity={1} onPress={() => setIsPickerModalVisible(false)}>
+                            <TouchableWithoutFeedback>
+                                <View style={styles.pickerModalContent}>
+                                    <Text style={styles.pickerModalTitle}>Select Month & Year</Text>
+                                    <View style={styles.pickerRow}>
+                                        <ScrollView style={styles.pickerCol} showsVerticalScrollIndicator={false}>
+                                            {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, idx) => (
+                                                <TouchableOpacity 
+                                                    key={m} 
+                                                    style={[styles.pickerItem, currentMonth.getMonth() === idx && styles.pickerItemSelected]}
+                                                    onPress={() => setCurrentMonth(new Date(currentMonth.getFullYear(), idx, 1))}
+                                                >
+                                                    <Text style={[styles.pickerItemText, currentMonth.getMonth() === idx && styles.pickerItemTextSelected]}>{m}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </ScrollView>
+                                        <ScrollView style={styles.pickerCol} showsVerticalScrollIndicator={false}>
+                                            {Array.from({ length: 11 }, (_, i) => new Date().getFullYear() - 5 + i).map(y => (
+                                                <TouchableOpacity 
+                                                    key={y} 
+                                                    style={[styles.pickerItem, currentMonth.getFullYear() === y && styles.pickerItemSelected]}
+                                                    onPress={() => setCurrentMonth(new Date(y, currentMonth.getMonth(), 1))}
+                                                >
+                                                    <Text style={[styles.pickerItemText, currentMonth.getFullYear() === y && styles.pickerItemTextSelected]}>{y}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </ScrollView>
+                                    </View>
+                                    <TouchableOpacity style={styles.pickerDoneBtn} onPress={() => setIsPickerModalVisible(false)}>
+                                        <Text style={styles.pickerDoneBtnText}>Done</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </TouchableWithoutFeedback>
+                        </TouchableOpacity>
+                    </Modal>
+                </SafeAreaView>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -437,31 +634,7 @@ const styles = StyleSheet.create({
     toggleTextActive: {
         color: Colors.theme.matteBlack,
     },
-    segmentedControl: {
-        flexDirection: 'row',
-        borderWidth: 1,
-        borderColor: Colors.theme.harvestGold,
-        borderRadius: 12,
-        overflow: 'hidden',
-        marginBottom: 20,
-    },
-    segmentBtn: {
-        flex: 1,
-        paddingVertical: 10,
-        alignItems: 'center',
-        backgroundColor: 'transparent',
-    },
-    segmentBtnActive: {
-        backgroundColor: Colors.theme.harvestGold,
-    },
-    segmentText: {
-        color: Colors.theme.softWhite,
-        fontWeight: 'bold',
-        fontSize: 13,
-    },
-    segmentTextActive: {
-        color: Colors.theme.matteBlack,
-    },
+
     chartContainer: {
         backgroundColor: 'rgba(255,255,255,0.02)',
         borderRadius: 20,
@@ -502,110 +675,265 @@ const styles = StyleSheet.create({
         marginBottom: 16,
         letterSpacing: 0.5,
     },
-    horizontalScroll: {
-        paddingRight: 32,
-        gap: 16,
-        marginBottom: 25,
-    },
-    summaryCard: {
-        width: SCREEN_WIDTH - 60,
-        backgroundColor: Colors.theme.charcoal,
-        borderRadius: 16,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.05)',
-    },
-    cardHeader: {
+    historyHeaderRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 16,
     },
-    cardTitle: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: Colors.theme.softWhite,
-    },
-    intentBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: Colors.theme.harvestGold,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
-        gap: 4,
-    },
-    intentText: {
-        color: Colors.theme.matteBlack,
-        fontSize: 11,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-    },
-    metricsRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 16,
-        paddingBottom: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255, 255, 255, 0.05)',
-    },
-    metricItem: {
-        flex: 1,
-    },
-    metricLabel: {
-        color: Colors.theme.dust,
-        fontSize: 12,
-        marginBottom: 4,
-    },
-    metricValue: {
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    macroContainer: {
-        marginBottom: 8,
-    },
-    macroLabel: {
-        color: Colors.theme.dust,
-        fontSize: 12,
-        marginBottom: 8,
-    },
-    macroValues: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    macroBlock: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flexShrink: 1,
-    },
-    macroBubble: {
-        width: 20,
-        height: 20,
+    calendarTriggerBtn: {
+        padding: 8,
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
         borderRadius: 10,
-        backgroundColor: Colors.theme.harvestGold,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
     },
-    macroBubbleText: {
-        color: Colors.theme.matteBlack,
-        fontSize: 10,
-        fontWeight: 'bold',
-    },
-    macroText: {
-        color: Colors.theme.softWhite,
-        fontSize: 13,
-        fontWeight: 'bold',
-        flexShrink: 1,
-    },
-    historyContainer: {
+    emptyContainer: {
         backgroundColor: Colors.theme.charcoal,
         borderRadius: 20,
-        padding: 16,
+        padding: 30,
+        alignItems: 'center',
+        justifyContent: 'center',
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.05)',
         marginBottom: 20,
+    },
+    calendarModalContainer: {
+        flex: 1,
+        backgroundColor: Colors.theme.matteBlack,
+    },
+    calendarModalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    },
+    calendarCloseBtn: {
+        padding: 5,
+    },
+    calendarModalHeaderTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: Colors.theme.softWhite,
+    },
+    calendarModalContentScroll: {
+        padding: 20,
+        paddingBottom: 40,
+    },
+    calendarLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: Colors.theme.dust,
+        marginBottom: 10,
+    },
+    calendarContainer: {
+        backgroundColor: Colors.theme.charcoal,
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.05)',
+    },
+    calendarHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    calendarNavBtn: {
+        padding: 6,
+        backgroundColor: Colors.theme.matteBlack,
+        borderRadius: 8,
+    },
+    calendarMonthText: {
+        fontSize: 15,
+        fontWeight: 'bold',
+        color: Colors.theme.softWhite,
+    },
+    weekdaysRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        marginBottom: 8,
+    },
+    weekdayText: {
+        width: 38,
+        textAlign: 'center',
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: Colors.theme.dust,
+    },
+    daysGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-around',
+        gap: 6,
+    },
+    dayCell: {
+        width: 38,
+        height: 38,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginVertical: 2,
+    },
+    dayCellEmpty: {
+        width: 38,
+        height: 38,
+        marginVertical: 2,
+    },
+    dayCellDisabled: {
+        backgroundColor: 'rgba(255,255,255,0.02)',
+        opacity: 0.25,
+    },
+    dayCellLogged: {
+        backgroundColor: 'rgba(218, 165, 32, 0.05)',
+        borderWidth: 1,
+        borderColor: 'rgba(218, 165, 32, 0.2)',
+    },
+    dayCellSelected: {
+        backgroundColor: Colors.theme.harvestGold,
+        borderColor: Colors.theme.harvestGold,
+    },
+    dayCellInRange: {
+        backgroundColor: 'rgba(218, 165, 32, 0.2)',
+        borderColor: 'rgba(218, 165, 32, 0.4)',
+        borderWidth: 1,
+    },
+    dayText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: Colors.theme.softWhite,
+    },
+    dayTextDisabled: {
+        color: Colors.theme.dust,
+    },
+    dayTextLogged: {
+        color: Colors.theme.harvestGold,
+        fontWeight: 'bold',
+    },
+    dayTextSelected: {
+        color: Colors.theme.matteBlack,
+        fontWeight: 'bold',
+    },
+    dayTextInRange: {
+        color: Colors.theme.harvestGold,
+    },
+    selectionSummaryCard: {
+        backgroundColor: Colors.theme.charcoal,
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.05)',
+    },
+    selectionSummaryRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    selectionSummaryBlock: {
+        flex: 1,
+    },
+    selectionSummaryLabel: {
+        fontSize: 11,
+        color: Colors.theme.dust,
+        marginBottom: 4,
+        textTransform: 'uppercase',
+    },
+    selectionSummaryValue: {
+        fontSize: 15,
+        fontWeight: 'bold',
+        color: Colors.theme.softWhite,
+    },
+    modalActionsRow: {
+        flexDirection: 'row',
+        gap: 16,
+    },
+    modalResetBtn: {
+        flex: 1,
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        paddingVertical: 14,
+        borderRadius: 12,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+    },
+    modalResetBtnText: {
+        color: Colors.theme.softWhite,
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    modalApplyBtn: {
+        flex: 2,
+        backgroundColor: Colors.theme.harvestGold,
+        paddingVertical: 14,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    modalApplyBtnText: {
+        color: Colors.theme.matteBlack,
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    pickerModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    pickerModalContent: {
+        width: '80%',
+        backgroundColor: Colors.theme.charcoal,
+        borderRadius: 16,
+        padding: 20,
+        maxHeight: '60%',
+        borderWidth: 1,
+        borderColor: Colors.theme.harvestGold,
+    },
+    pickerModalTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: Colors.theme.harvestGold,
+        marginBottom: 16,
+        textAlign: 'center',
+    },
+    pickerRow: {
+        flexDirection: 'row',
+        height: 200,
+        gap: 16,
+    },
+    pickerCol: {
+        flex: 1,
+    },
+    pickerItem: {
+        paddingVertical: 12,
+        alignItems: 'center',
+        borderRadius: 8,
+    },
+    pickerItemSelected: {
+        backgroundColor: 'rgba(218, 165, 32, 0.15)',
+    },
+    pickerItemText: {
+        fontSize: 16,
+        color: Colors.theme.dust,
+    },
+    pickerItemTextSelected: {
+        color: Colors.theme.harvestGold,
+        fontWeight: 'bold',
+    },
+    pickerDoneBtn: {
+        marginTop: 20,
+        backgroundColor: Colors.theme.harvestGold,
+        paddingVertical: 12,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    pickerDoneBtnText: {
+        color: Colors.theme.matteBlack,
+        fontSize: 16,
+        fontWeight: 'bold',
     },
     historyRow: {
         flexDirection: 'row',

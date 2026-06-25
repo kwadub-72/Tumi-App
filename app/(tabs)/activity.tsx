@@ -5,7 +5,6 @@ import { Animated, Dimensions, LayoutAnimation, PanResponder, ScrollView, StyleS
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NutritionService } from '../../src/shared/services/NutritionService';
 import { Colors } from '../../src/shared/theme/Colors';
-import { PostStore } from '../../store/PostStore';
 import { WeightEntry, WeightStore } from '../../store/WeightStore';
 import { useUserStore } from '../../store/UserStore';
 import { useAuthStore } from '../../store/AuthStore';
@@ -142,13 +141,6 @@ export default function DashboardScreen() {
         };
     }, []);
 
-    const handleReset = async () => {
-        await PostStore.clearPosts();
-        await WeightStore.clearWeights();
-        await PostStore.clearPostLikes(profile?.handle || userInfo.handle);
-        userInfo.setStatus('none');
-    };
-
     const panResponder = useRef(
         PanResponder.create({
             onStartShouldSetPanResponder: () => false,
@@ -249,9 +241,7 @@ export default function DashboardScreen() {
     return (
         <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             <View style={styles.topHeader}>
-                <TouchableOpacity onPress={handleReset} style={styles.iconBtn}>
-                    <Ionicons name="refresh" size={24} color={Colors.theme.harvestGold} />
-                </TouchableOpacity>
+                <View style={{ width: 44 }} />
                 <TabonoLogo size={40} color={Colors.theme.harvestGold} />
                 <View style={{ width: 44 }} />
             </View>
@@ -328,7 +318,10 @@ export default function DashboardScreen() {
                             
                             <View style={styles.weightBadge}>
                                 <Text style={styles.weightBadgeText}>
-                                    {estimatedWeight ? `${estimatedWeight.toFixed(1)} lbs` : `${TARGET_WEIGHT.toFixed(1)} lbs`}
+                                    {estimatedWeight 
+                                        ? (userInfo.units === 'metric' ? `${(estimatedWeight * 0.453592).toFixed(1)} kg` : `${estimatedWeight.toFixed(1)} lbs`) 
+                                        : (userInfo.units === 'metric' ? `${(TARGET_WEIGHT * 0.453592).toFixed(1)} kg` : `${TARGET_WEIGHT.toFixed(1)} lbs`)
+                                    }
                                 </Text>
                             </View>
 
@@ -377,7 +370,9 @@ export default function DashboardScreen() {
                                             : dotCenterPx + DOT_RADIUS + GAP;
                                         const labelLeftPx = YAXIS_W + (xPercent / 100) * plotWidth - 30;
 
-                                        const displayWeight = parseFloat(w.weight.toString()).toFixed(1);
+                                        const displayWeight = parseFloat(
+                                            (userInfo.units === 'metric' ? w.weight * 0.453592 : w.weight).toString()
+                                        ).toFixed(1);
 
                                         return (
                                             <View key={i}>

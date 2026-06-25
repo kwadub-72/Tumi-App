@@ -24,7 +24,7 @@ export default function SignupMaintenanceStrategy() {
         if (strategy === 'manual') {
             router.push('/signup/manual-macros');
         } else {
-            // Tribe-generated
+            // Chribe-generated
             router.push('/signup/tribe-macros');
         }
     };
@@ -60,9 +60,9 @@ export default function SignupMaintenanceStrategy() {
                 <View style={styles.cardsContainer}>
                     <OptionCard
                         type="tribe"
-                        title="Tribe-generated"
+                        title="Chribe-generated"
                         subtitle="Recommended"
-                        desc="Let Tribe generate your macros based on height, weight, bodyfat estimate, lifestyle, and training focus"
+                        desc="Let Chribe generate your macros based on height, weight, bodyfat estimate, lifestyle, and training focus"
                         isSelected={strategy === 'tribe'}
                         onPress={() => setStrategy('tribe')}
                     />

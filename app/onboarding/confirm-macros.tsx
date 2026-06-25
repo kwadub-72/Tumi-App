@@ -28,7 +28,7 @@ export default function ConfirmMacrosScreen() {
                 contentContainerStyle={styles.scrollContent}
             >
                 <Text style={styles.title}>Confirm macros</Text>
-                <Text style={styles.subtitle}>Here are your Tribe-generated starting targets.</Text>
+                <Text style={styles.subtitle}>Here are your Chribe-generated starting targets.</Text>
 
                 {/* Total Calories Locked Card */}
                 <View style={styles.calorieCard}>

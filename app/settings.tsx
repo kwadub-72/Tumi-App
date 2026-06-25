@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import {
     SafeAreaView,
     ScrollView,
@@ -12,9 +12,11 @@ import {
 } from 'react-native';
 import { Colors } from '@/src/shared/theme/Colors';
 import { useAuthStore } from '@/store/AuthStore';
+import ReportingActionSheet from '../components/ReportingActionSheet';
 
 export default function SettingsScreen() {
     const router = useRouter();
+    const [isBugReportVisible, setIsBugReportVisible] = useState(false);
 
     const { signOut } = useAuthStore();
 
@@ -33,14 +35,6 @@ export default function SettingsScreen() {
                     }
                 }
             ]
-        );
-    };
-
-    const handleHelp = () => {
-        Alert.alert(
-            'Help & Support',
-            'For inquiries and complaints, please contact us at:\ntribe2025@gmail.com',
-            [{ text: 'OK' }]
         );
     };
 
@@ -72,13 +66,19 @@ export default function SettingsScreen() {
                 {renderItem('Natural/Enhanced status', false, () => router.push('/settings/natural-status'))}
                 {renderItem('Change email address', false, () => router.push('/settings/change-email'))}
                 {renderItem('Change password', false, () => router.push('/settings/change-password'))}
-                {renderItem('Units of measurement', false, () => router.push('/settings/units'))}
                 {renderItem('Link Instagram', false, () => router.push('/settings/social/instagram'))}
                 {renderItem('Link TikTok', false, () => router.push('/settings/social/tiktok'))}
                 {renderItem('Blocked', false, () => router.push('/settings/blocked'))}
-                {renderItem('Help', false, handleHelp)}
+                {renderItem('Report a Bug', false, () => setIsBugReportVisible(true))}
                 {renderItem('Logout', true, handleLogout)}
             </ScrollView>
+
+            <ReportingActionSheet
+                isVisible={isBugReportVisible}
+                onClose={() => setIsBugReportVisible(false)}
+                targetType="app_bug"
+                targetId="settings"
+            />
         </SafeAreaView>
     );
 }

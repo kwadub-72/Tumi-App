@@ -6,6 +6,7 @@ import { DiscoveryTribe } from '@/src/features/explore/types';
 import TribeInfoModal from './TribeInfoModal';
 import { ACTIVITIES, resolveActivityIcon } from '@/src/shared/constants/Activities';
 import { TabonoLogo } from '@/src/shared/components/TabonoLogo';
+import { useUserTribeStore } from '@/src/store/UserTribeStore';
 
 // ─── Midnight Gold Palette ─────────────────────────────────────────────────────
 const GOLD = '#DAA520';            // Harvest Gold
@@ -71,9 +72,12 @@ export default function TribeCard({ tribe, onPress, onPressJoin }: TribeCardProp
     // naturalStatus: null = not specified, true = natural, false = enhanced
     const hasNaturalStatus = tribe.naturalStatus !== null && tribe.naturalStatus !== undefined;
 
-    // ── Join button state ─────────────────────────────────────────────────────
-    const isMember  = tribe.joinStatus === 'member';
-    const isPending = tribe.joinStatus === 'pending';
+    const storeIsMember = useUserTribeStore(state => state.isMember(tribe.id));
+    const storeIsRequested = useUserTribeStore(state => state.isRequested(tribe.id));
+
+    // Strictly rely on the reactive store.
+    const isMember  = storeIsMember;
+    const isPending = storeIsRequested;
 
     const joinBg    = isMember  ? GOLD  : isPending ? '#5A5A5A' : 'transparent';
     const joinBorder= isMember  ? GOLD  : isPending ? '#5A5A5A' : GOLD;
@@ -205,8 +209,12 @@ export default function TribeCard({ tribe, onPress, onPressJoin }: TribeCardProp
                 {/* ── Join button ───────────────────────────────────────────── */}
                 <TouchableOpacity
                     style={[styles.joinBtn, { backgroundColor: joinBg, borderColor: joinBorder }]}
-                    onPress={onPressJoin}
-                    activeOpacity={0.8}
+                    onPress={(e) => {
+                        e.stopPropagation(); // Prevent the parent card from catching this tap
+                        if (onPressJoin) onPressJoin();
+                    }}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} // Make it easier to tap
                 >
                     <MaterialCommunityIcons name={joinIcon as any} size={22} color={joinColor} />
                 </TouchableOpacity>

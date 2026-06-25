@@ -29,8 +29,8 @@ export default function TribeScreen() {
             </View>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                <Text style={styles.title}>Find a Tribe</Text>
-                <Text style={styles.subtitle}>Accountability is everything. Join a tribe or go it alone.</Text>
+                <Text style={styles.title}>Find a Chribe</Text>
+                <Text style={styles.subtitle}>Accountability is everything. Join a chribe or go it alone.</Text>
 
                 <View style={styles.cardsContainer}>
                     <TouchableOpacity 
@@ -41,7 +41,7 @@ export default function TribeScreen() {
                             <MaterialCommunityIcons name="account-group-outline" size={32} color={selectedPath === 'search' ? Colors.theme.harvestGold : Colors.theme.dust} />
                             {selectedPath === 'search' && <Ionicons name="checkmark-circle" size={24} color={Colors.theme.harvestGold} />}
                         </View>
-                        <Text style={[styles.cardTitle, selectedPath === 'search' && styles.cardTitleSelected]}>Search for a tribe</Text>
+                        <Text style={[styles.cardTitle, selectedPath === 'search' && styles.cardTitleSelected]}>Search for a chribe</Text>
                         <Text style={styles.cardDescription}>Join a group of like-minded individuals to compete and share your journey.</Text>
                         <View style={styles.recommendedBadge}>
                             <Text style={styles.recommendedText}>RECOMMENDED</Text>
@@ -57,7 +57,7 @@ export default function TribeScreen() {
                             {selectedPath === 'solo' && <Ionicons name="checkmark-circle" size={24} color={Colors.theme.harvestGold} />}
                         </View>
                         <Text style={[styles.cardTitle, selectedPath === 'solo' && styles.cardTitleSelected]}>Start solo</Text>
-                        <Text style={styles.cardDescription}>Keep your journey focused. You can always join a tribe later.</Text>
+                        <Text style={styles.cardDescription}>Keep your journey focused. You can always join a chribe later.</Text>
                     </TouchableOpacity>
                 </View>
             </ScrollView>

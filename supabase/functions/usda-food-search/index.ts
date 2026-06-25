@@ -29,8 +29,13 @@ serve(async (req) => {
       usdaUrl += `&pageSize=${pageSize}`;
     }
     if (dataType) {
-      const dataTypeStr = Array.isArray(dataType) ? dataType.join(',') : String(dataType);
-      usdaUrl += `&dataType=${encodeURIComponent(dataTypeStr)}`;
+      if (Array.isArray(dataType)) {
+        dataType.forEach(dt => {
+          usdaUrl += `&dataType=${encodeURIComponent(String(dt))}`;
+        });
+      } else {
+        usdaUrl += `&dataType=${encodeURIComponent(String(dataType))}`;
+      }
     }
 
     // Make the fetch call to https://api.nal.usda.gov/fdc/v1/foods/search

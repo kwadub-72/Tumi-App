@@ -38,7 +38,7 @@ export default function MaintenanceScreen() {
                             <MaterialCommunityIcons name="calculator-variant-outline" size={32} color={selectedPath === 'generated' ? Colors.theme.harvestGold : Colors.theme.dust} />
                             {selectedPath === 'generated' && <Ionicons name="checkmark-circle" size={24} color={Colors.theme.harvestGold} />}
                         </View>
-                        <Text style={[styles.cardTitle, selectedPath === 'generated' && styles.cardTitleSelected]}>Tribe-generated</Text>
+                        <Text style={[styles.cardTitle, selectedPath === 'generated' && styles.cardTitleSelected]}>Chribe-generated</Text>
                         <Text style={styles.cardDescription}>We'll use your height, weight, activity level, and lifting experience to generate your starting macros.</Text>
                         <View style={styles.recommendedBadge}>
                             <Text style={styles.recommendedText}>RECOMMENDED</Text>

@@ -216,9 +216,10 @@ export const PasswordInput = forwardRef<TextInput, BaseInputProps>((props, ref) 
 export interface BirthdayPickerProps {
     value?: string;
     onChange?: (value: string) => void;
+    hideLabel?: boolean;
 }
 
-export const BirthdayPicker = ({ value, onChange }: BirthdayPickerProps) => {
+export const BirthdayPicker = ({ value, onChange, hideLabel }: BirthdayPickerProps) => {
     const currentDate = new Date(2026, 4, 1); // Fixed to May 2026
 
     const getInitialDates = () => {
@@ -292,7 +293,7 @@ export const BirthdayPicker = ({ value, onChange }: BirthdayPickerProps) => {
 
     return (
         <View style={styles.container}>
-            <Text style={styles.label}>Date of Birth</Text>
+            {!hideLabel && <Text style={styles.label}>Date of Birth</Text>}
             <View style={[styles.pickerRow, hasError && styles.errorBorder]}>
                 <View style={[styles.pickerWrapper, { flex: 2 }]}>
                     <Picker
@@ -337,6 +338,45 @@ export const BirthdayPicker = ({ value, onChange }: BirthdayPickerProps) => {
         </View>
     );
 };
+
+export const MonthYearPicker = ({ month, year, onChange }: { month: number; year: number; onChange: (m: number, y: number) => void }) => {
+    const currentDate = new Date(2026, 4, 1);
+    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const currentYear = currentDate.getFullYear();
+    const years = Array.from({ length: 100 }, (_, i) => currentYear - i);
+
+    return (
+        <View style={styles.container}>
+            <View style={styles.pickerRow}>
+                <View style={[styles.pickerWrapper, { flex: 2 }]}>
+                    <Picker
+                        selectedValue={month}
+                        onValueChange={(val: any) => onChange(val, year)}
+                        style={styles.picker}
+                        itemStyle={styles.pickerItem}
+                    >
+                        {months.map((m, i) => (
+                            <Picker.Item key={m} label={m} value={i} color="#FFFFFF" />
+                        ))}
+                    </Picker>
+                </View>
+                <View style={[styles.pickerWrapper, { flex: 1.5 }]}>
+                    <Picker
+                        selectedValue={year}
+                        onValueChange={(val: any) => onChange(month, val)}
+                        style={styles.picker}
+                        itemStyle={styles.pickerItem}
+                    >
+                        {years.map((y) => (
+                            <Picker.Item key={y} label={String(y)} value={y} color="#FFFFFF" />
+                        ))}
+                    </Picker>
+                </View>
+            </View>
+        </View>
+    );
+};
+
 
 const styles = StyleSheet.create({
     container: {

@@ -463,7 +463,7 @@ export default function FeedItem({
                         mealStore.addItem({ 
                             ...ing, 
                             id: Date.now().toString() + Math.random(),
-                            name: `${ing.name} (Tribe)`
+                            name: `${ing.name} (Chribe)`
                         });
                     });
 
@@ -1344,7 +1344,7 @@ export default function FeedItem({
                                 setTimeout(() => onPressShare?.(), 300); // Tribe Mark Overlay
                             }}
                         >
-                            <Text style={{ color: Colors.theme.matteBlack, fontSize: 16, fontWeight: 'bold', textAlign: 'center' }}>Share Tribe Mark</Text>
+                            <Text style={{ color: Colors.theme.matteBlack, fontSize: 16, fontWeight: 'bold', textAlign: 'center' }}>Share Chribe Mark</Text>
                         </TouchableOpacity>
 
                         {post.user.id === session?.user?.id && (
@@ -1542,21 +1542,20 @@ export default function FeedItem({
                 </>
             ) : (
                 discoveryMapData && (
-                    <TouchableOpacity onPress={() => setIsMacroMapSheetVisible(true)}>
-                        <DiscoveryMapCard 
-                            map={discoveryMapData as any} 
-                            onCommentPress={onPressComment}
-                            onLikePress={handleLike}
-                            onOptionsPress={onPressOptions}
-                            onSharePress={handleMapSharePress}
-                            onCopyPress={handleMapCopyPress}
-                            isLiked={isLiked}
-                            likeCount={likesCount}
-                            commentCount={post.stats.comments}
-                            subscribeCount={(post.stats as any).copies || 0}
-                            shareCount={post.stats.shares || 0}
-                        />
-                    </TouchableOpacity>
+                    <DiscoveryMapCard 
+                        map={discoveryMapData as any} 
+                        onCommentPress={onPressComment}
+                        onLikePress={handleLike}
+                        onOptionsPress={onPressOptions}
+                        onSharePress={handleMapSharePress}
+                        onCopyPress={handleMapCopyPress}
+                        isLiked={isLiked}
+                        likeCount={likesCount}
+                        commentCount={post.stats.comments}
+                        subscribeCount={(post.stats as any).copies || 0}
+                        shareCount={post.stats.shares || 0}
+                        onPress={() => setIsMacroMapSheetVisible(true)}
+                    />
                 )
             )}
         </Animated.View>

@@ -140,7 +140,7 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
     // ── Check for Concluded Competition Winner Celebration ────────────────────
     useEffect(() => {
         if (!tribeId || !tribe) {
-            console.log("[WinnerCheck] Skip: tribeId or tribe is missing", { tribeId, tribe: !!tribe });
+            console.log("[WinnerCheck] Skip: tribeId or chribe is missing", { tribeId, tribe: !!tribe });
             return;
         }
 
@@ -323,8 +323,8 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
     }, [isLoadingMore, daysBack, fetchPosts]);
 
     const isUserChief     = tribe ? (!!currentUserId && (isChief(tribe.id) || currentUserId === tribe.chief?.id)) : false;
-    const isUserMember    = tribe ? (currentUserId ? isMember(tribe.id) : (tribe.privacy === 'public' && selectedTribeIds.includes(tribe.id))) : false;
-    const isUserRequested = tribe ? (currentUserId ? isRequested(tribe.id) : (tribe.privacy === 'private' && selectedTribeIds.includes(tribe.id))) : false;
+    const isUserMember    = useUserTribeStore(state => state.isMember(tribe?.id ?? '')) || (tribe && !currentUserId ? (tribe.privacy === 'public' && selectedTribeIds.includes(tribe.id)) : false);
+    const isUserRequested = useUserTribeStore(state => state.isRequested(tribe?.id ?? '')) || (tribe && !currentUserId ? (tribe.privacy === 'private' && selectedTribeIds.includes(tribe.id)) : false);
     const isPrivate       = tribe ? tribe.privacy === 'private' : false;
     const canView         = !isPrivate || isUserMember || isUserChief;
 
@@ -346,7 +346,10 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
     const handleJoinPress = useCallback(async () => {
         if (!tribe) return;
 
+        console.log('[handleJoinPress] Triggered. currentUserId:', currentUserId);
+
         if (!currentUserId) {
+            console.warn('[handleJoinPress] No currentUserId found. Falling back to local selection.');
             if (selectedTribeIds.includes(tribe.id)) {
                 setSelectedTribeIds(selectedTribeIds.filter(id => id !== tribe.id));
             } else {
@@ -358,36 +361,56 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
             return;
         }
 
-        if (isUserMember) {
-            Alert.alert('Leave Tribe', 'Are you sure you want to leave this tribe?', [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Leave', style: 'destructive',
-                    onPress: async () => {
-                        await leaveTribe(currentUserId, tribe.id);
-                        await fetchTribe();
+        try {
+            if (isUserMember) {
+                Alert.alert('Leave Chribe', 'Are you sure you want to leave this chribe?', [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'Leave', style: 'destructive',
+                        onPress: async () => {
+                            try {
+                                await leaveTribe(currentUserId, tribe.id);
+                                await fetchTribe();
+                            } catch (error) {
+                                console.error('[handleJoinPress] Leave error:', error);
+                                Alert.alert('Error', 'Failed to leave the chribe. Please try again.');
+                            }
+                        },
                     },
-                },
-            ]);
-            return;
-        }
-        if (isUserRequested) {
-            Alert.alert('Cancel Request', 'Do you want to cancel your join request?', [
-                { text: 'No', style: 'cancel' },
-                {
-                    text: 'Yes', style: 'destructive',
-                    onPress: async () => {
-                        await leaveTribe(currentUserId, tribe.id);
-                        await fetchTribe();
+                ]);
+                return;
+            }
+            if (isUserRequested) {
+                Alert.alert('Cancel Request', 'Do you want to cancel your join request?', [
+                    { text: 'No', style: 'cancel' },
+                    {
+                        text: 'Yes', style: 'destructive',
+                        onPress: async () => {
+                            try {
+                                await leaveTribe(currentUserId, tribe.id);
+                                await fetchTribe();
+                            } catch (error) {
+                                console.error('[handleJoinPress] Cancel request error:', error);
+                                Alert.alert('Error', 'Failed to cancel join request. Please try again.');
+                            }
+                        },
                     },
-                },
-            ]);
-            return;
+                ]);
+                return;
+            }
+
+            console.log('[handleJoinPress] Attempting to join tribe:', tribe.id);
+            await joinTribe(currentUserId, tribe);
+            await fetchTribe();
+            
+            if (tribe.privacy === 'private') {
+                Alert.alert('Requested', 'Your join request has been sent.');
+            }
+        } catch (error: any) {
+            console.error('[handleJoinPress] Error:', error);
+            Alert.alert('Error', 'Failed to update membership. Please try again.');
         }
-        await joinTribe(currentUserId, tribe);
-        await fetchTribe();
-        if (isPrivate) Alert.alert('Requested', 'Your join request has been sent.');
-    }, [currentUserId, isUserMember, isUserRequested, isPrivate, tribe, joinTribe, leaveTribe, fetchTribe, selectedTribeIds, setSelectedTribeIds]);
+    }, [currentUserId, isUserMember, isUserRequested, tribe, joinTribe, leaveTribe, fetchTribe, selectedTribeIds, setSelectedTribeIds]);
 
     const switchTab = (tab: TabId, index: number) => {
         setActiveTab(tab);
@@ -413,13 +436,13 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
         const type = tribe.type ?? tribe.focusType;
         const descriptions: Record<string, string> = {
             'accountability': 'Members hold each other accountable to their fitness goals.',
-            'head-to-head':   'Tribe members compete directly against one another.',
-            'tribe-vs-tribe': 'Your tribe battles other tribes for supremacy.',
+            'head-to-head':   'Chribe members compete directly against one another.',
+            'tribe-vs-tribe': 'Your chribe battles other chribes for supremacy.',
         };
         const labels: Record<string, string> = {
             'accountability': 'Accountability',
             'head-to-head':   'Head-to-Head',
-            'tribe-vs-tribe': 'Tribe Battle',
+            'tribe-vs-tribe': 'Chribe Battle',
         };
         const icons: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
             'accountability': 'calendar-check',
@@ -443,7 +466,7 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
         
         const isNatural = tribe.naturalStatus === true;
         const title = isNatural ? 'Natural' : 'Enhanced';
-        const description = isNatural ? 'This tribe is 100% natural.' : 'This tribe is enhanced.';
+        const description = isNatural ? 'This chribe is 100% natural.' : 'This chribe is enhanced.';
         const iconName = isNatural ? 'leaf' : 'lightning-bolt';
         const color = isNatural ? Colors.natural : Colors.theme.burntSienna;
 
@@ -481,8 +504,9 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
         if (isUserChief) {
             return (
                 <TouchableOpacity
-                    style={styles.actionButton}
+                    style={[styles.actionButton, { zIndex: 9999, elevation: 10 }]}
                     onPress={() => router.push({ pathname: '/create-tribe', params: { mode: 'edit', tribeId: tribe.id } } as any)}
+                    activeOpacity={0.7}
                 >
                     <Ionicons name="pencil" size={14} color={Colors.theme.harvestGold} style={{ marginRight: 4 }} />
                     <Text style={styles.actionButtonText} numberOfLines={1}>Edit</Text>
@@ -491,7 +515,11 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
         }
         if (isUserMember) {
             return (
-                <TouchableOpacity style={[styles.actionButton, styles.actionButtonActive]} onPress={handleJoinPress}>
+                <TouchableOpacity 
+                    style={[styles.actionButton, styles.actionButtonActive, { zIndex: 9999, elevation: 10 }]} 
+                    onPress={handleJoinPress}
+                    activeOpacity={0.7}
+                >
                     <Ionicons name="checkmark-circle" size={16} color={Colors.theme.matteBlack} style={{ marginRight: 6 }} />
                     <Text style={[styles.actionButtonText, { color: Colors.theme.matteBlack }]}>Member</Text>
                 </TouchableOpacity>
@@ -499,13 +527,21 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
         }
         if (isUserRequested) {
             return (
-                <TouchableOpacity style={[styles.actionButton, styles.actionButtonRequested]} onPress={handleJoinPress}>
+                <TouchableOpacity 
+                    style={[styles.actionButton, styles.actionButtonRequested, { zIndex: 9999, elevation: 10 }]} 
+                    onPress={handleJoinPress}
+                    activeOpacity={0.7}
+                >
                     <Text style={[styles.actionButtonText, { color: Colors.theme.matteBlack }]}>Requested</Text>
                 </TouchableOpacity>
             );
         }
         return (
-            <TouchableOpacity style={styles.actionButton} onPress={handleJoinPress}>
+            <TouchableOpacity 
+                style={[styles.actionButton, { zIndex: 9999, elevation: 10 }]} 
+                onPress={handleJoinPress}
+                activeOpacity={0.7}
+            >
                 <Text style={styles.actionButtonText}>{isPrivate ? 'Request' : 'Join'}</Text>
             </TouchableOpacity>
         );
@@ -551,7 +587,7 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
                 {renderTypeIcon()}
                 <TouchableOpacity onPress={() => openModal({
                     title: tribe.privacy === 'private' ? 'Private' : 'Public',
-                    description: tribe.privacy === 'private' ? 'You must request to join this tribe.' : 'Anyone can join this tribe.',
+                    description: tribe.privacy === 'private' ? 'You must request to join this chribe.' : 'Anyone can join this chribe.',
                     iconName: tribe.privacy === 'private' ? 'lock-outline' : 'earth'
                 })}>
                     <MaterialCommunityIcons 
@@ -598,8 +634,8 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
                 >
                     <Text style={styles.actionButtonText}>
                         {tribe.privacy === 'public' && (tribe.memberCount ?? 0) > 100 
-                            ? 'Tribe Announcements' 
-                            : 'Tribe chat'}
+                            ? 'Chribe Announcements' 
+                            : 'Chribe chat'}
                     </Text>
                 </TouchableOpacity>
                 <View style={{ flex: 1 }}>{renderMemberButton()}</View>
@@ -610,7 +646,7 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
                 style={{ alignItems: 'center', marginBottom: 16 }}
                 onPress={() => {
                     if (canView) router.push(`/tribe/${tribe.id}/members` as any);
-                    else Alert.alert('Private Tribe', 'Join the tribe to view its members.');
+                    else Alert.alert('Private Chribe', 'Join the chribe to view its members.');
                 }}
             >
                 <Text style={styles.memberCount}>{tribe.memberCount ?? 0}</Text>
@@ -770,7 +806,7 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
                     {renderHeader()}
                     <View style={styles.privateLock}>
                         <MaterialCommunityIcons name="lock" size={60} color={Colors.theme.dust} />
-                        <Text style={styles.lockText}>Join this tribe to view its feed</Text>
+                        <Text style={styles.lockText}>Join this chribe to view its feed</Text>
                         <TouchableOpacity style={[styles.actionButton, { marginTop: 20, paddingHorizontal: 32 }]} onPress={handleJoinPress}>
                             <Text style={styles.actionButtonText}>{isUserRequested ? 'Request Sent' : 'Request to Join'}</Text>
                         </TouchableOpacity>
@@ -802,7 +838,7 @@ export default function TribeProfileScreen({ tribeId }: { tribeId: string }) {
                 <Pressable style={styles.overlay} onPress={() => setShowChiefTooltip(false)}>
                     <View style={styles.modalContent}>
                         <View style={styles.capsule}>
-                            <Text style={styles.activityText}>Tribe Chief</Text>
+                            <Text style={styles.activityText}>Chribe Chief</Text>
                             <MaterialCommunityIcons
                                 name="crown"
                                 size={28}

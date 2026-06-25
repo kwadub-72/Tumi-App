@@ -101,7 +101,7 @@ export default function MacrosScreen() {
                 keyboardShouldPersistTaps="handled"
                 scrollEventThrottle={16}
             >
-                <Text style={styles.title}>Tribe-generated macros</Text>
+                <Text style={styles.title}>Chribe-generated macros</Text>
                 <Text style={styles.subtitle}>
                     We’ll use your physiology and activity data to calculate custom baseline targets.
                 </Text>

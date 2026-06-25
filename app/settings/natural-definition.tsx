@@ -30,9 +30,9 @@ export default function NaturalDefinitionScreen() {
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                    <Ionicons name="arrow-back" size={28} color={Colors.primary} />
+                    <Ionicons name="arrow-back" size={28} color={Colors.theme.harvestGold} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Tribe Natural</Text>
+                <Text style={styles.headerTitle}>Chribe Natural</Text>
                 <View style={{ width: 28 }} />
             </View>
 
@@ -40,22 +40,19 @@ export default function NaturalDefinitionScreen() {
                 <View style={styles.introCard}>
                     <Text style={styles.definitionTitle}>Natural Status Definition and Eligibility</Text>
                     <Text style={styles.introText}>
-                        Natural status is defined as never having used, at any point in one’s lifetime, any of the substances or therapies listed below for non-medical purposes. Applicants who can provide verifiable medical documentation demonstrating a legitimate medical need for such substances may still be considered for natural status at Tribe’s discretion.
+                        Natural status is defined as never having used, at any point in one’s lifetime, any of the substances or therapies listed below for non-medical purposes. Applicants who can provide verifiable medical documentation demonstrating a legitimate medical need for such substances may still be considered for natural status at Chribe’s discretion.
                     </Text>
                     <Text style={styles.introText}>
-                        Once approved, natural status is valid for a period of one (1) year, after which reapplication is required to maintain eligibility.
+                        Once approved, natural status is valid for a period of six (6) months, after which reapplication is required to maintain eligibility.
                     </Text>
                     <Text style={styles.introText}>
-                        Users may be reported at any time by other community members. Reported users may be required to submit additional documentation, undergo a polygraph examination, reapply for natural status, or respond to inquiries from Tribe, at Tribe’s sole discretion.
+                        Users may be reported at any time by other community members. Reported users may be required to submit additional documentation, undergo a polygraph examination, reapply for natural status, or respond to inquiries from Chribe.
                     </Text>
                     <Text style={styles.introText}>
-                        Tribe reserves the right to investigate or revoke natural status at any time and for any reason, at its discretion.
+                        Chribe reserves the right to investigate or revoke natural status at any time and for any reason.
                     </Text>
                     <Text style={styles.introText}>
-                        Submission of a polygraph examination dated within seven (7) days of the application may increase the likelihood of approval, but does not guarantee acceptance.
-                    </Text>
-                    <Text style={styles.introText}>
-                        Tribe also reserves the right to restrict or ban users with significant followings on Tribe (defined as 100 or more followers) who claim natural status on Tribe or other social platforms (e.g., Instagram, TikTok) without having submitted a natural status application or after having been denied natural status.
+                        Chribe also reserves the right to restrict or ban users with significant followings on Chribe (defined as 100 or more followers) who claim natural status on Chribe or other social platforms (e.g., Instagram, TikTok) without having submitted a natural status application or after having been denied natural status.
                     </Text>
                 </View>
 
@@ -126,7 +123,7 @@ export default function NaturalDefinitionScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: Colors.background,
+        backgroundColor: Colors.theme.charcoal,
     },
     header: {
         flexDirection: 'row',
@@ -142,27 +139,30 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: Colors.primary,
+        color: Colors.theme.harvestGold,
     },
     scrollContent: {
         paddingHorizontal: 20,
         paddingBottom: 60,
     },
     introCard: {
-        backgroundColor: 'rgba(255,255,255,0.5)',
-        borderRadius: 25,
+        backgroundColor: Colors.theme.matteBlack,
+        borderColor: 'rgba(218, 165, 32, 0.15)',
+        borderWidth: 1,
+        borderRadius: 16,
         padding: 20,
         marginBottom: 30,
     },
     definitionTitle: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: Colors.primary,
+        color: Colors.theme.harvestGold,
         marginBottom: 15,
     },
     introText: {
         fontSize: 14,
-        color: Colors.primary,
+        color: Colors.theme.softWhite,
+        opacity: 0.9,
         lineHeight: 22,
         marginBottom: 15,
         textAlign: 'justify',
@@ -173,22 +173,25 @@ const styles = StyleSheet.create({
     mainHeading: {
         fontSize: 22,
         fontWeight: 'bold',
-        color: Colors.primary,
+        color: Colors.theme.harvestGold,
+        marginTop: 10,
         marginBottom: 20,
         textAlign: 'center',
     },
     section: {
         marginBottom: 25,
-        backgroundColor: Colors.card,
-        borderRadius: 20,
+        backgroundColor: Colors.theme.matteBlack,
+        borderColor: 'rgba(255, 255, 255, 0.05)',
+        borderWidth: 1,
+        borderRadius: 16,
         padding: 20,
     },
     sectionTitle: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: Colors.primary,
+        color: Colors.theme.harvestGold,
         marginBottom: 12,
-        textDecorationLine: 'underline',
+        textDecorationLine: 'none',
     },
     itemRow: {
         marginBottom: 10,
@@ -196,12 +199,11 @@ const styles = StyleSheet.create({
     itemName: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: Colors.primary,
+        color: Colors.theme.softWhite,
     },
     itemDesc: {
         fontSize: 14,
-        color: Colors.primary,
-        opacity: 0.8,
+        color: Colors.theme.dust,
         lineHeight: 20,
         marginTop: 2,
     },

@@ -11,6 +11,8 @@ import { ActivityIcon } from '@/src/shared/components/ActivityIcon';
 import { DiscoveryMapCard } from '@/src/features/macromaps/components/DiscoveryMapCard';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { MapFilterSheet } from '@/src/features/macromaps/components/MapFilterSheet';
+import ReportingActionSheet from '@/components/ReportingActionSheet';
+import GenericOptionsModal from '@/components/GenericOptionsModal';
 
 export default function DiscoveryFeedScreen() {
     const router = useRouter();
@@ -34,8 +36,26 @@ export default function DiscoveryFeedScreen() {
         toggleActivityFilter,
         searchQuery,
         setSearchQuery,
-        clearFilters
+        clearFilters,
+        hideReportedMap
     } = useMarketplaceStore();
+
+    const [isReportSheetVisible, setIsReportSheetVisible] = useState(false);
+    const [activeReportTargetId, setActiveReportTargetId] = useState<string | null>(null);
+
+    const handleReportSuccess = () => {
+        if (activeReportTargetId) {
+            hideReportedMap(activeReportTargetId);
+        }
+    };
+
+    const [isOptionsModalVisible, setOptionsModalVisible] = useState(false);
+    const [selectedMap, setSelectedMap] = useState<DiscoveryMap | null>(null);
+
+    const handleOptions = (map: DiscoveryMap) => {
+        setSelectedMap(map);
+        setOptionsModalVisible(true);
+    };
 
     useEffect(() => {
         fetchDiscoveryFeed();
@@ -63,6 +83,7 @@ export default function DiscoveryFeedScreen() {
                         placeholder="Search maps..."
                         placeholderTextColor={Colors.theme.dust}
                         value={searchQuery}
+                        selectTextOnFocus={true}
                         onChangeText={setSearchQuery}
                         autoCapitalize="none"
                     />
@@ -100,7 +121,12 @@ export default function DiscoveryFeedScreen() {
                 <ScrollView contentContainerStyle={[styles.feedContent, isOnboarding && { paddingBottom: 190 }]}>
                     {filteredMaps.length > 0 ? (
                         filteredMaps.map(map => (
-                            <DiscoveryMapCard key={map.id} map={map} isOnboarding={isOnboarding} />
+                            <DiscoveryMapCard 
+                                key={map.id} 
+                                map={map} 
+                                isOnboarding={isOnboarding} 
+                                onOptionsPress={() => handleOptions(map)}
+                            />
                         ))
                     ) : (
                         <View style={styles.emptyState}>
@@ -129,6 +155,34 @@ export default function DiscoveryFeedScreen() {
                     </TouchableOpacity>
                 </View>
             )}
+            <ReportingActionSheet
+                isVisible={isReportSheetVisible}
+                onClose={() => setIsReportSheetVisible(false)}
+                targetType="map"
+                targetId={activeReportTargetId!}
+                onSuccess={handleReportSuccess}
+            />
+            <GenericOptionsModal
+                visible={isOptionsModalVisible}
+                onClose={() => {
+                    setOptionsModalVisible(false);
+                    setSelectedMap(null);
+                }}
+                title="Map Options"
+                options={[
+                    {
+                        label: 'Report Map',
+                        isDestructive: true,
+                        icon: 'flag',
+                        onPress: () => {
+                            if (selectedMap) {
+                                setActiveReportTargetId(selectedMap.id);
+                                setIsReportSheetVisible(true);
+                            }
+                        }
+                    }
+                ]}
+            />
         </SafeAreaView>
     );
 }

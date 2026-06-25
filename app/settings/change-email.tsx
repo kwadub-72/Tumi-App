@@ -13,15 +13,17 @@ import {
     Keyboard
 } from 'react-native';
 import { Colors } from '@/src/shared/theme/Colors';
-import { useUserStore } from '@/store/UserStore';
+import { useAuthStore } from '@/store/AuthStore';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/src/shared/services/supabase';
 import { createClient } from '@supabase/supabase-js';
 
 export default function ChangeEmailScreen() {
     const router = useRouter();
-    const { email } = useUserStore();
+    const session = useAuthStore(state => state.session);
+    const email = session?.user?.email || '';
     const [newEmail, setNewEmail] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isChecking, setIsChecking] = useState(false);
 
     const handleSave = async () => {
         if (!newEmail || !newEmail.includes('@')) {
@@ -78,7 +80,7 @@ export default function ChangeEmailScreen() {
 
             Alert.alert(
                 'Check Your Inbox',
-                `A confirmation link has been sent to ${newEmail}. \n\nIMPORTANT: If you have "Secure Email Change" enabled in Supabase, you must also click the link sent to your CURRENT email (${email}) to confirm the switch.`,
+                'Check your new email address to confirm the change. Your current email will remain active until you verify the new one.',
                 [
                     { text: 'Got it', onPress: () => router.back() }
                 ]
@@ -88,6 +90,42 @@ export default function ChangeEmailScreen() {
             Alert.alert('Error', e.message || 'An unexpected error occurred. Please check your network connection.');
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleCheckVerification = async () => {
+        setIsChecking(true);
+        try {
+            const { data, error } = await supabase.auth.getUser();
+            if (error) {
+                console.error('[ChangeEmail] Verification check error:', error);
+                Alert.alert('Verification Check Failed', error.message);
+                return;
+            }
+            if (data?.user) {
+                const currentSession = useAuthStore.getState().session;
+                useAuthStore.setState({
+                    session: {
+                        ...currentSession,
+                        user: data.user,
+                    } as any,
+                });
+
+                if (data.user.email !== email) {
+                    Alert.alert("Verified!", "Your email address has been successfully updated.");
+                    setNewEmail('');
+                } else {
+                    Alert.alert(
+                        "Pending Verification",
+                        "We haven't received confirmation yet. Please check your inbox and click the verification link. Your current email remains active."
+                    );
+                }
+            }
+        } catch (e: any) {
+            console.error('[ChangeEmail] Unexpected verification check error:', e);
+            Alert.alert('Error', e.message || 'An unexpected error occurred. Please check your network connection.');
+        } finally {
+            setIsChecking(false);
         }
     };
 
@@ -110,7 +148,7 @@ export default function ChangeEmailScreen() {
                 <View style={styles.inputGroup}>
                     <Text style={styles.label}>New Email Address</Text>
                     <TextInput
-                        style={styles.input}
+                        style={styles.inputContainer}
                         placeholder="Enter new email"
                         placeholderTextColor="#999"
                         value={newEmail}
@@ -130,6 +168,18 @@ export default function ChangeEmailScreen() {
                         <ActivityIndicator color="white" />
                     ) : (
                         <Text style={styles.saveButtonText}>Save Changes</Text>
+                    )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={styles.checkButton}
+                    onPress={handleCheckVerification}
+                    disabled={isChecking || isLoading}
+                >
+                    {isChecking ? (
+                        <ActivityIndicator color={Colors.primary} />
+                    ) : (
+                        <Text style={styles.checkButtonText}>Check Verification Status</Text>
                     )}
                 </TouchableOpacity>
             </View>
@@ -163,11 +213,11 @@ const styles = StyleSheet.create({
         gap: 25,
     },
     currentEmailCard: {
-        backgroundColor: Colors.card,
+        backgroundColor: Colors.theme.charcoal,
         borderRadius: 25,
         padding: 20,
         borderWidth: 1,
-        borderColor: 'rgba(45, 58, 38, 0.1)',
+        borderColor: Colors.theme.dust + '66',
     },
     label: {
         fontSize: 14,
@@ -184,15 +234,15 @@ const styles = StyleSheet.create({
     inputGroup: {
         gap: 8,
     },
-    input: {
-        backgroundColor: Colors.card,
+    inputContainer: {
+        backgroundColor: Colors.theme.charcoal,
         borderRadius: 20,
         height: 60,
         paddingHorizontal: 20,
         color: Colors.primary,
         fontSize: 16,
         borderWidth: 1,
-        borderColor: 'rgba(45, 58, 38, 0.1)',
+        borderColor: Colors.theme.dust + '66',
     },
     saveButton: {
         backgroundColor: Colors.primary,
@@ -206,7 +256,19 @@ const styles = StyleSheet.create({
         opacity: 0.7,
     },
     saveButtonText: {
-        color: 'white',
+        color: Colors.theme.matteBlack,
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    checkButton: {
+        height: 60,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 5,
+        padding: 10,
+    },
+    checkButtonText: {
+        color: Colors.theme.harvestGold,
         fontSize: 16,
         fontWeight: 'bold',
     },

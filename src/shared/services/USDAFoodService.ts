@@ -48,6 +48,31 @@ function toTitleCase(str: string): string {
  * Values from the API are per-serving; we normalise to per-100g.
  */
 function mapFood(raw: any): USDAFoodItem {
+    // Hardcoded override for Highland Pop, Slim Kim Popcorn (FDC ID: 2664487)
+    // to correct the manufacturer's incorrect USDA entry.
+    if (raw.fdcId === 2664487) {
+        return {
+            fdcId: 2664487,
+            name: "Highland pop, slim kim popcorn",
+            brand: "Highland Pop",
+            servingSizeG: 34,
+            servingSizeText: "34g",
+            caloriesPer100g: 441, // 150 kcal per 34g -> (150/34)*100
+            macrosPer100g: {
+                p: 8.8,   // 3g per 34g -> (3/34)*100
+                c: 61.8,  // 21g per 34g -> (21/34)*100 (Total Carbs)
+                f: 17.6,  // 6g per 34g -> (6/34)*100
+            },
+            netCarbsPer100g: 50.0, // (21 - 4) / 34 * 100 = 50.0
+            servingUnits: [
+                { label: '1 g', amount: 1, unit: 'g', gramsPerUnit: 1 },
+                { label: '1 oz', amount: 1, unit: 'oz', gramsPerUnit: 28.35 },
+                { label: '1 ml', amount: 1, unit: 'ml', gramsPerUnit: 1 },
+                { label: '1 serving (34g)', amount: 1, unit: 'serving', gramsPerUnit: 34 }
+            ]
+        };
+    }
+
     const nutrients: any[] = raw.foodNutrients ?? [];
     let servingG = Number(raw.servingSize) || 100;
     let unitLabel = (raw.servingSizeUnit || '').trim();
@@ -55,18 +80,16 @@ function mapFood(raw: any): USDAFoodItem {
         servingG = servingG * 28.35;
         unitLabel = 'oz';
     }
-    const scale = 100 / servingG;
+    // USDA reports nutrients per 100g. They do not need to be scaled in mapping.
+    const pPer100g = extractNutrient(nutrients, NUTRIENT_PROTEIN);
+    const fPer100g = extractNutrient(nutrients, NUTRIENT_FAT);
+    const totalCarbsPer100g = extractNutrient(nutrients, NUTRIENT_CARBS);
+    const fiberPer100g = extractNutrient(nutrients, NUTRIENT_FIBER);
 
-    // Macros
-    const pPerServing = extractNutrient(nutrients, NUTRIENT_PROTEIN);
-    const fPerServing = extractNutrient(nutrients, NUTRIENT_FAT);
-    const totalCarbsPerServing = extractNutrient(nutrients, NUTRIENT_CARBS);
-    const fiberPerServing = extractNutrient(nutrients, NUTRIENT_FIBER);
-
-    const netCarbsPerServing = Math.max(0, totalCarbsPerServing - fiberPerServing);
+    const netCarbsPer100g = Math.max(0, totalCarbsPer100g - fiberPer100g);
     
-    // Custom calorie calculation as requested: (total carbs * 4) + (protein * 4) + (fats * 9)
-    const calPerServing = (totalCarbsPerServing * 4) + (pPerServing * 4) + (fPerServing * 9);
+    // Custom calorie calculation using total carbs: (total carbs * 4) + (protein * 4) + (fats * 9)
+    const caloriesPer100g = (totalCarbsPer100g * 4) + (pPer100g * 4) + (fPer100g * 9);
 
     // Casing and shorter description logic
     let rawName = raw.description || 'Unknown';
@@ -123,13 +146,13 @@ function mapFood(raw: any): USDAFoodItem {
         brand,
         servingSizeG: servingG,
         servingSizeText: household || `${servingG}g`,
-        caloriesPer100g: Math.round(calPerServing * scale),
+        caloriesPer100g: Math.round(caloriesPer100g),
         macrosPer100g: {
-            p: Math.round(pPerServing * scale * 10) / 10,
-            c: Math.round(totalCarbsPerServing * scale * 10) / 10,
-            f: Math.round(fPerServing * scale * 10) / 10,
+            p: Math.round(pPer100g * 10) / 10,
+            c: Math.round(totalCarbsPer100g * 10) / 10,
+            f: Math.round(fPer100g * 10) / 10,
         },
-        netCarbsPer100g: Math.round(netCarbsPerServing * scale * 10) / 10,
+        netCarbsPer100g: Math.round(netCarbsPer100g * 10) / 10,
         servingUnits
     };
 }
@@ -140,10 +163,6 @@ export interface USDASearchResult {
 }
 
 export class USDAFoodService {
-    private static readonly BASE = 'https://api.nal.usda.gov/fdc/v1';
-    private static readonly KEY = 'ZvnkYoppXH2RTrdri4TQrMTGKaIQbe1KJNp5QKBN';
-    // Prioritise Branded as requested
-    private static readonly DATA_TYPES = 'Branded,Foundation,SR%20Legacy';
 
     /**
      * Search foods with a cap on results.
@@ -200,11 +219,24 @@ export class USDAFoodService {
      */
     static async findByBarcode(barcode: string): Promise<USDAFoodItem | null> {
         try {
-            console.log('Outgoing USDA Edge Function Barcode Request:', { barcode });
+            const raw = barcode.trim();
+            if (!raw) return null;
+
+            // Generate variants to handle USDA database inconsistencies:
+            // 1. Raw scanned barcode (e.g. 12-digit UPC or 13-digit EAN)
+            // 2. 14-digit padded GTIN (standard for many USDA records)
+            // 3. Leading-zero-stripped version (in case stored without zeros)
+            const padded = raw.padStart(14, '0');
+            const stripped = raw.replace(/^0+/, '');
+            
+            // Create a space-separated search query containing all variants
+            const searchQuery = Array.from(new Set([raw, padded, stripped])).join(' ');
+
+            console.log('Outgoing USDA Edge Function Barcode Request:', { barcode, searchQuery });
 
             const { data, error } = await supabase.functions.invoke('usda-food-search', {
                 body: { 
-                    query: barcode, 
+                    query: searchQuery, 
                     pageSize: 1,
                     dataType: ['Branded', 'Foundation', 'SR Legacy']
                 }

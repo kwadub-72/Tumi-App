@@ -139,7 +139,7 @@ export default function TribeShareModal({ visible, onClose, post, onShareRecorde
                     await Linking.openURL(igUrl);
                     shared = true;
                 } else {
-                    const result = await Share.share({ url: uri, message: `Check out this Tribe Mark overlay from ${post.user.handle}!` });
+                    const result = await Share.share({ url: uri, message: `Check out this Chribe Mark overlay from ${post.user.handle}!` });
                     if (result.action === Share.sharedAction) {
                         shared = true;
                     }
@@ -151,7 +151,7 @@ export default function TribeShareModal({ visible, onClose, post, onShareRecorde
                     await Linking.openURL(ttUrl);
                     shared = true;
                 } else {
-                    const result = await Share.share({ url: uri, message: `Tribe Mark from ${post.user.handle}` });
+                    const result = await Share.share({ url: uri, message: `Chribe Mark from ${post.user.handle}` });
                     if (result.action === Share.sharedAction) {
                         shared = true;
                     }
@@ -160,8 +160,8 @@ export default function TribeShareModal({ visible, onClose, post, onShareRecorde
                 // Default System Clipboard Buffer / Share Sheet integration
                 const result = await Share.share({
                     url: uri,
-                    title: 'Tribe Mark Overlay',
-                    message: Platform.OS === 'android' ? `Tribe Mark from ${post.user.handle}` : undefined
+                    title: 'Chribe Mark Overlay',
+                    message: Platform.OS === 'android' ? `Chribe Mark from ${post.user.handle}` : undefined
                 });
                 if (result.action === Share.sharedAction) {
                     shared = true;
@@ -236,7 +236,7 @@ export default function TribeShareModal({ visible, onClose, post, onShareRecorde
                                     letterSpacing: 1,
                                     marginLeft: 6,
                                     ...textShadowStyle
-                                }}>TRIBE</Text>
+                                }}>CHRIBE</Text>
                             </View>
                             <View style={{
                                 backgroundColor: Colors.theme.burntSienna,
@@ -358,7 +358,7 @@ export default function TribeShareModal({ visible, onClose, post, onShareRecorde
                                     letterSpacing: 1,
                                     marginLeft: 6,
                                     ...textShadowStyle
-                                }}>TRIBE</Text>
+                                }}>CHRIBE</Text>
                             </View>
                             <View style={{
                                 backgroundColor: Colors.theme.burntSienna,
@@ -391,7 +391,7 @@ export default function TribeShareModal({ visible, onClose, post, onShareRecorde
                 <View style={[styles.logoWrap, dropShadowStyle]}>
                     <TabonoLogo size={24} color={Colors.theme.harvestGold} hasDropShadow={true} />
                 </View>
-                <Text style={[styles.brandText, textShadowStyle]}>TRIBE</Text>
+                <Text style={[styles.brandText, textShadowStyle]}>CHRIBE</Text>
                 <View style={styles.handleBadge}>
                     <Text style={[styles.handleBadgeText, textShadowStyle]}>{post.user.handle}</Text>
                 </View>
@@ -580,7 +580,7 @@ export default function TribeShareModal({ visible, onClose, post, onShareRecorde
                             {/* Page 1: Floating Style (Alpha Transparent PNG export) */}
                             <View style={styles.pageFrame}>
                                 <View style={{ paddingHorizontal: 8, marginBottom: 10 }}>
-                                    <Text style={styles.previewStyleTag}>Tribe Mark - Floating</Text>
+                                    <Text style={styles.previewStyleTag}>Chribe Mark - Floating</Text>
                                     <Text style={{ fontSize: 11, color: '#EDE8D5', marginTop: 2 }}>Transparent background–good for pasting on Instagram stories and TikToks</Text>
                                 </View>
                                 <View style={styles.viewShotOuterBounds}>
@@ -597,7 +597,7 @@ export default function TribeShareModal({ visible, onClose, post, onShareRecorde
                             {/* Page 2: Canvas Style (Embedded Post Media overlay) */}
                             <View style={styles.pageFrame}>
                                 <View style={{ paddingHorizontal: 8, marginBottom: 10, alignSelf: 'flex-start' }}>
-                                    <Text style={styles.previewStyleTag}>Tribe Mark - Canvas</Text>
+                                    <Text style={styles.previewStyleTag}>Chribe Mark - Canvas</Text>
                                     <Text style={{ fontSize: 11, color: '#EDE8D5', marginTop: 2 }}>Photo background—good for sharing directly to social media (e.g., Instagram, TikTok)</Text>
                                 </View>
                                 <View style={styles.viewShotOuterBounds}>

@@ -81,7 +81,7 @@ export default function AboutScreen() {
                         >
                             <Text style={styles.title}>Tell us a bit about yourself</Text>
                             <Text style={styles.subtitle}>
-                                We’ll use this to match you with tribes, users, and maps tailored to your goals. Choose whether to show this on your profile anytime in your privacy settings.
+                                We’ll use this to match you with chribes, users, and maps tailored to your goals. Choose whether to show this on your profile anytime in your privacy settings.
                             </Text>
 
                             <View style={styles.section} pointerEvents="box-none">

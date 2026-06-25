@@ -155,3 +155,23 @@ export interface HistoricalMealAverage {
   fats_ratio: number;
   calorie_delta_pct: number;
 }
+
+export interface NaturalApplication {
+  id: string;
+  user_id: string;
+  status: 'pending' | 'approved' | 'rejected' | 'info_requested' | 'canceled';
+  years_training: number;
+  dob: string;
+  photo_start_url: string;
+  timestamp_start: string;
+  photo_today_url: string;
+  timestamp_today: string;
+  doc_polygraph_url: string | null;
+  doc_medical_url: string | null;
+  email_opt_in: boolean;
+  admin_notes: string | null;
+  created_at?: string;
+  updated_at?: string;
+  decision_acknowledged?: boolean;
+}
+

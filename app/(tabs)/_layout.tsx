@@ -123,16 +123,20 @@ export default function TabLayout() {
             }
         }
 
+        const savedWeight = units === 'metric' 
+            ? weightNum / 0.453592 
+            : weightNum;
+
         await WeightStore.addWeight({
             date: selectedDate,
-            weight: weightNum,
+            weight: savedWeight,
             timestamp: Date.now(),
         });
 
         // Update bio if it's the current date
         const todayStr = getLocalDateString(new Date());
         if (selectedDate === todayStr) {
-            useUserStore.getState().setProfile({ weight: weightNum });
+            useUserStore.getState().setProfile({ weight: savedWeight });
         }
 
         setIsWeightModalVisible(false);
@@ -145,7 +149,14 @@ export default function TabLayout() {
             const loadCurrent = async () => {
                 const weights = await WeightStore.loadWeights();
                 const current = weights.find(w => w.date === selectedDate);
-                setTempWeight(current ? current.weight.toString() : '');
+                if (current) {
+                    const displayVal = units === 'metric' 
+                        ? current.weight * 0.453592 
+                        : current.weight;
+                    setTempWeight(parseFloat(displayVal.toFixed(1)).toString());
+                } else {
+                    setTempWeight('');
+                }
             };
             loadCurrent();
         }

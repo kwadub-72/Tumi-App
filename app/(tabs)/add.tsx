@@ -563,6 +563,7 @@ export default function AddMealScreen() {
                                 placeholderTextColor={Colors.theme.dust}
                                 selectionColor={Colors.theme.harvestGold}
                                 value={searchQuery}
+                                selectTextOnFocus={true}
                                 onChangeText={(t) => {
                                     setSearchQuery(t);
                                     if (!t.trim()) {
